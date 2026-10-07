@@ -2296,6 +2296,35 @@ export interface Config {
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-plugin-package-inventory-deepseek -->
 
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-production-studio -->
+<a id="deepseek-aidsh-production-studio"></a>
+
+## `@deepseek-ai/dsh-production-studio`
+
+- `inject`: `agents` · `tools` · `subagents` · `fs` · `storageDomain`
+- `source`: [`packages/workflow/production-studio/src/index.ts:26`](../packages/workflow/production-studio/src/index.ts)
+
+```ts config-catalog
+/** Deployment limits; per-run budgets are stored in each immutable graph. */
+export interface Config {
+  /** Default whole-run node execution cap, 80; copied into each new draft and never raised during a run. */
+  defaultMaxExecutions?: number
+  /** Default independent-task concurrency, three; native AEA calls still serialize under the global lease. */
+  defaultMaxConcurrent?: number
+  /** Real child provider name, `fork` by default; unavailable providers cannot simulate agent completion. */
+  subagentProvider?: string
+  /** Maximum retained objective evidence in bytes per node, 262144; exceeding it prevents certification. */
+  maxEvidenceBytes?: number
+  /** Maximum binary bytes read for each selected file, 4194304; larger files fail readback until deployment config changes. */
+  maxFileBytes?: number
+  /** Retained transition history entries per run, 400; older entries are removed after the cap. */
+  maxHistoryEntries?: number
+  /** Retained runs per conversation, 20; reaching the cap blocks new runs while preserving existing history. */
+  maxRetainedRuns?: number
+}
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-production-studio -->
+
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-ptc-runtime-node -->
 <a id="deepseek-aidsh-ptc-runtime-node"></a>
 
@@ -4361,6 +4390,7 @@ export interface Config {
 | `@deepseek-ai/dsh-client-ui-open-in-app` | — | [`packages/client/ui-open-in-app/src/index.ts`](../packages/client/ui-open-in-app/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-permission-presets` | — | [`packages/client/ui-permission-presets/src/index.ts`](../packages/client/ui-permission-presets/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-plan` | — | [`packages/client/ui-plan/src/index.ts`](../packages/client/ui-plan/src/index.ts) |
+| `@deepseek-ai/dsh-client-ui-production-studio` | — | [`packages/client/ui-production-studio/src/index.ts`](../packages/client/ui-production-studio/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-reference` | — | [`packages/client/ui-reference/src/index.ts`](../packages/client/ui-reference/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-renderer` | — | [`packages/client/ui-renderer/src/index.ts`](../packages/client/ui-renderer/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-schedule` | — | [`packages/client/ui-schedule/src/index.ts`](../packages/client/ui-schedule/src/index.ts) |

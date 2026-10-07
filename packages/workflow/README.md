@@ -1,5 +1,5 @@
 ---
-description: "The workflow group map: model-authored orchestration scripts that fan out subagents, for users and maintainers navigating the group."
+description: "The workflow group map: model-authored subagent scripts and durable production graphs, for users and maintainers navigating the group."
 kind: "package-group"
 ---
 
@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-The workflow group lets an agent run orchestration scripts that delegate work to subagents and return a final value. The `workflow` tool supports scripted fan-out; the opt-in `ralph` tool runs a fixed sequence of fresh agents. Scripts use the shared PTC Node process runtime under the calling Session's file policy. Workflow hooks and child lifecycle remain owned by the workflow engine.
+The workflow group supports orchestration scripts and production graphs. The `workflow` tool delegates scripted work to subagents; the opt-in `ralph` tool runs a fixed sequence of fresh agents. Production Studio runs explicit production graphs with durable monitoring and delivery evidence. Scripts use the shared PTC Node process runtime under the calling Session's file policy; each runtime owns its execution and child lifecycle.
 
 ## Table of Contents
 
@@ -28,6 +28,7 @@ The workflow group lets an agent run orchestration scripts that delegate work to
 | [`workflow-ptc`](workflow-ptc/README.md) | Runs workflow scripts through the shared sandboxed PTC Node process runtime | registers on `ctx.workflowEngine` |
 | [`tool-workflow`](tool-workflow/README.md) | Gives the model the `workflow` tool for scripted multi-agent orchestration | registers on `ctx.tools` |
 | [`tool-ralph`](tool-ralph/README.md) | Gives the model the `ralph` tool for fresh-agent iterative loops | registers on `ctx.tools` |
+| [`production-studio`](production-studio/README.md) | Runs durable production graphs with objective checks and explicit human decisions | `ctx.productionStudio` |
 
 -----
 

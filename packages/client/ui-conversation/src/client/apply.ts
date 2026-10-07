@@ -16,7 +16,7 @@ import type { ShortcutCommandId, ShortcutFixedCommand } from '@deepseek-ai/dsh-c
 import { UiConversation } from './conversation/assembly.ts'
 import type { ViewTab } from './contract/views.ts'
 import type {
-  ComposerBarInjected, ConversationInjected, ConversationSessionHeaderInjected,
+  ComposerBarInjected, ConversationInjected, ConversationNavigationInjected, ConversationSessionHeaderInjected,
   ConversationSessionInjected, DraftFileUploads,
 } from './contract/slots.ts'
 import type { InputNotice } from './contract/input.ts'
@@ -76,6 +76,10 @@ const ABSENT_NOTICES = {
 }
 const ABSENT_BLOCK = {
   getSnapshot: (): ComposerBlock | undefined => undefined,
+  subscribe: () => () => {},
+}
+const ABSENT_VIEW = {
+  getSnapshot: (): string | undefined => undefined,
   subscribe: () => () => {},
 }
 const EMPTY_LEXICON: ReadonlyMap<'/' | '@', readonly string[]> = new Map()
@@ -190,9 +194,22 @@ export function apply(ctx: Context, config: Config = Config({})): void {
     }
     return tabs
   }
+  const activeViews = new Map<SessionId, ReturnType<typeof createSnapshotStore<string | undefined>>>()
+  const activeViewSource = (sessionId: SessionId) => {
+    let source = activeViews.get(sessionId)
+    if (source === undefined) {
+      source = createSnapshotStore(resolveActiveView(viewTabs(), readConversationViewPreference(sessionId))?.id)
+      activeViews.set(sessionId, source)
+    }
+    return source
+  }
+  const navigation = (sessionId: SessionId | undefined): ConversationNavigationInjected => ({
+    hooks: { activeView: sessionId === undefined ? ABSENT_VIEW : activeViewSource(sessionId) },
+  })
   const activateView = (sessionId: SessionId, preferred: string | null): void => {
     const active = resolveActiveView(viewTabs(), preferred)
     if (active !== undefined) uiConversation.binding(sessionId).activate(active.id)
+    activeViewSource(sessionId).set(active?.id)
   }
   const restoreView = (sessionId: SessionId): void => {
     activateView(sessionId, readConversationViewPreference(sessionId))
@@ -204,7 +221,10 @@ export function apply(ctx: Context, config: Config = Config({})): void {
     if (trackedBindings.has(binding)) return
     trackedBindings.add(binding)
     bindings.add(binding)
-    binding.ctx.effect(() => () => { bindings.delete(binding) }, 'ui-conversation: active Provider binding')
+    binding.ctx.effect(() => () => {
+      bindings.delete(binding)
+      activeViews.delete(binding.sessionId)
+    }, 'ui-conversation: active Provider binding')
   }
   const refreshViews = (): void => {
     const current = conversationViews.getSnapshot()
@@ -301,6 +321,7 @@ export function apply(ctx: Context, config: Config = Config({})): void {
 
   const registerConversationRoot = () => slots.register({
     name: 'main.conversation',
+    inject: navigation,
     children: {
       'conversation.header': { kind: 'single', scope: 'session-maybe' },
     },
@@ -391,6 +412,7 @@ export function apply(ctx: Context, config: Config = Config({})): void {
 
   const registerHeader = () => slots.register({
     name: 'conversation.header',
+    inject: navigation,
     children: {
       'conversation.header.leading': { kind: 'single', scope: 'root' },
       'conversation.session.header': { kind: 'single', scope: 'session' },

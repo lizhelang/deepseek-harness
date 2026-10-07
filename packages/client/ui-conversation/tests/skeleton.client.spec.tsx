@@ -36,6 +36,7 @@ import type {
   ConversationViewsProps,
 } from '../src/client/contract/slots.ts'
 import type { ViewTab } from '../src/client/contract/views.ts'
+import { resolveActiveView } from '../src/client/view-selection.ts'
 
 // Every session-scope fixture carries the resource hook the resources plugin merges into GlobalStandardProps.
 const useResource = (() => ({ status: 'none' as const, value: undefined, failure: undefined })) as GlobalStandardProps['useResource']
@@ -189,6 +190,9 @@ function mount(
     { id: 'trajectory', label: 'Trajectory' },
   ]
   const useConversationViews: SessionSlotProps['useConversationViews'] = selector => selector(viewTabs)
+  const useViewStore = bindSnapshotSelector(store)
+  const useActiveView: ConversationSlotProps['useActiveView'] = selector =>
+    useViewStore(state => selector(sessionId === undefined ? undefined : resolveActiveView(viewTabs, state.view)?.id))
   /** Owner share handed to the two composer tool-row seats, per render. */
   const seatOwners: { key: string; owner: unknown }[] = []
   let pickerOwner: unknown
@@ -203,7 +207,7 @@ function mount(
       return opts?.fallback ?? null
     }
     if (key === 'conversation.header') {
-      return <ConversationHeader {...runtimeProps} renderSlot={renderSlot as never} />
+      return <ConversationHeader {...runtimeProps} useActiveView={useActiveView} renderSlot={renderSlot as never} />
     }
     if (key === 'conversation.session.header') {
       return (
@@ -370,7 +374,7 @@ function mount(
     useInput,
     inputActions,
   }
-  const props: ConversationSlotProps = { ...runtimeProps, renderSlot, renderFactorySlot }
+  const props: ConversationSlotProps = { ...runtimeProps, useActiveView, renderSlot, renderFactorySlot }
   const view = render(<ConversationMainPanel {...props} />)
   return {
     view, store, wiring, sink, retargetWorkspace, session, conversation, slotCalls, lineageOwners, seatOwners, open,
@@ -530,7 +534,7 @@ describe('ConversationRoot resident composer', () => {
     expect(seat?.contains(fallback)).toBe(true)
   })
 
-  it('hero phase: keeps sidebar controls accessible while hiding conversation chrome', () => {
+  it('hero phase: keeps sidebar and View navigation accessible while hiding Chat title controls', () => {
     const b = mount(
       sessionSnapshotOf({ blank: true }),
       [
@@ -544,7 +548,8 @@ describe('ConversationRoot resident composer', () => {
     expect(host).not.toBeNull()
     expect(header?.getAttribute('aria-hidden')).not.toBe('true')
     expect(b.view.getByTestId('view-conversation.session.header.corner')).toBeTruthy()
-    expect(b.view.queryByRole('tablist')).toBeNull()
+    expect(b.view.getByRole('tab', { name: 'Chat' }).getAttribute('aria-selected')).toBe('true')
+    expect(b.view.getByRole('tab', { name: 'Trajectory' })).toBeTruthy()
     expect(b.slotCalls).not.toContain('conversation.session.header.utilities')
     expect(b.slotCalls).not.toContain('conversation.session.header.actions')
     expect(b.view.getByText('探索未至之境')).toBeTruthy()
@@ -633,6 +638,63 @@ describe('ConversationRoot resident composer', () => {
     expect(b.view.container.querySelector('[data-conversation-scroll]')?.contains(after)).toBe(true)
     expect(b.view.queryByTestId('hero-headline')).toBeNull()
     expect(b.view.getByTestId('view-chat')).toBeTruthy()
+  })
+
+  it('opens custom Views in a blank Session and restores the welcome Chat without sending its draft', () => {
+    const b = mount(sessionSnapshotOf({ blank: true }), undefined, undefined, {
+      viewTabs: [
+        { id: 'chat', label: 'Chat' },
+        { id: 'monitor', label: 'Monitor' },
+        { id: 'workflow', label: 'Workflow' },
+      ],
+    })
+    const composer = b.view.getByRole('textbox')
+    act(() => { b.wiring.setDraft('unsent model and requirements') })
+    for (const [label, id] of [['Monitor', 'monitor'], ['Workflow', 'workflow']] as const) {
+      fireEvent.click(b.view.getByRole('tab', { name: label }))
+      expect(b.view.getByTestId(`view-${id}`)).toBeTruthy()
+      expect(b.view.getByRole('tab', { name: label }).getAttribute('aria-selected')).toBe('true')
+      expect(b.view.queryByText('探索未至之境')).toBeNull()
+      expect(b.view.getByRole('textbox')).toBe(composer)
+      expect(b.view.container.querySelector('[data-phase]')?.getAttribute('data-phase')).toBe('active')
+    }
+    fireEvent.click(b.view.getByRole('tab', { name: 'Chat' }))
+    expect(b.view.getByText('探索未至之境')).toBeTruthy()
+    expect(b.view.queryByTestId('view-chat')).toBeNull()
+    expect(b.view.getByRole('textbox')).toBe(composer)
+    expect(b.wiring.snapshot.draft).toBe('unsent model and requirements')
+    expect(b.store.store.getSnapshot().draft).toBe('unsent model and requirements')
+    expect(b.session.getSnapshot().blank).toBe(true)
+    expect(b.sink).not.toHaveBeenCalled()
+  })
+
+  it('honors a blank Session focus request and falls back to its welcome Chat when the View disappears', () => {
+    const viewTabs: ViewTab[] = [
+      { id: 'chat', label: 'Chat' },
+      { id: 'monitor', label: 'Monitor' },
+    ]
+    const b = mount(sessionSnapshotOf({ blank: true }), undefined, undefined, { viewTabs })
+    act(() => { b.store.actions.openView('monitor', 'run-1') })
+    expect(b.view.getByTestId('view-monitor')).toBeTruthy()
+    expect(b.store.store.getSnapshot().viewRequest).toEqual({ view: 'monitor', focus: 'run-1' })
+    viewTabs.pop()
+    b.rerender()
+    expect(b.view.queryByTestId('view-monitor')).toBeNull()
+    expect(b.view.getByText('探索未至之境')).toBeTruthy()
+    expect(b.view.queryByRole('tablist')).toBeNull()
+    expect(b.session.getSnapshot().blank).toBe(true)
+    expect(b.sink).not.toHaveBeenCalled()
+  })
+
+  it('keeps a selected custom View accessible while blank Chat history is still loading', () => {
+    const b = mount(sessionSnapshotOf({ blank: true, openState: 'loading' }), undefined, undefined, {
+      viewTabs: [{ id: 'chat', label: 'Chat' }, { id: 'workflow', label: 'Workflow' }],
+    })
+    fireEvent.click(b.view.getByRole('tab', { name: 'Workflow' }))
+    expect(b.view.getByTestId('view-workflow')).toBeTruthy()
+    expect(b.view.container.querySelector('[data-phase]')?.getAttribute('data-phase')).toBe('active')
+    expect(b.view.queryByText('探索未至之境')).toBeNull()
+    expect(b.sink).not.toHaveBeenCalled()
   })
 
   it('keeps the Chat fallback selected by id when a view is inserted before it', () => {

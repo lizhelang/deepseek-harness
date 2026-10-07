@@ -818,6 +818,14 @@ const SERVICE_ROLES: ServiceRole[] = [
     note: 'One engine per context, as in bash, with no named-provider registry; the general workflow and fixed Ralph consumers start runs whose agent() calls fan out through ctx.subagents.',
   },
   {
+    key: 'productionStudio',
+    pkg: 'production-studio',
+    title: 'Durable production graph runtime',
+    mode: 'core',
+    consumers: ['client-ui-production-studio'],
+    note: 'Runs frozen production graphs with revision-checked controls, independent persisted state and Host-verified software delivery evidence.',
+  },
+  {
     key: 'webhookRuntime',
     pkg: 'webhook',
     title: 'Webhook rule runtime',

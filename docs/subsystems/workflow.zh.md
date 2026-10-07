@@ -135,6 +135,97 @@ interface WorkflowRun {
 
 Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnpm run verify-cordis-catalog` in doc-sync; regenerate with `pnpm run gen-cordis-catalog`) — the language sides differ only in locale-specific paired document paths. Signature blocks use a `ts cordis-catalog` fence and keep the original source JSDoc; dispatch modes are defined in the [primer](../cordis-primer.zh.md#dispatch-modes), and the framework-inherited `ctx` API lives in [cordis-api/inherited.md](../cordis-api/inherited.md).
 
+<a id="ctxproductionstudio--productionstudio"></a>
+
+### `ctx.productionStudio` — `ProductionStudio`
+
+Production Studio Host service and its authenticated Remote controller.
+
+```ts cordis-catalog
+/**
+ * Register trusted tool providers that mark the actual native dispatch point.
+ * The provider owns the returned disposer through its plugin effect.
+ * @param toolNames - exact registered tool names implementing the dispatch marker.
+ * @returns disposer removing only this provider's declaration.
+ */
+registerNativeBoundaryProvider(toolNames: readonly string[]): () => void
+
+/**
+ * Commit the exact invocation's native dispatch before its provider starts native work.
+ * A validation error before this call proves no native work was entered.
+ * @param operationId - ToolRuntime call ID of the currently leased invocation.
+ * @returns after the native dispatch marker is durable.
+ */
+async noteNativeDispatch(operationId: ToolCallIdentity): Promise<void>
+
+/**
+ * Read state; interrupted persisted executions become unknown and are never replayed.
+ * @param sessionId - owning live conversation.
+ * @returns current graph and runs.
+ */
+@Remote async get(sessionId: SessionId): Promise<ProductionSnapshot>
+
+/**
+ * Save only the draft; active runs retain their captured graph version.
+ * @param sessionId - owning conversation.
+ * @param request - expected version and edited draft.
+ * @returns committed state.
+ */
+@Remote async saveGraph(sessionId: SessionId, request: SaveProductionGraphRequest): Promise<ProductionSnapshot>
+
+/**
+ * Start new explicitly authorized work with a frozen graph version.
+ * @param sessionId - owning conversation.
+ * @param request - graph version, objective and source input.
+ * @returns initial persisted run.
+ */
+@Remote async start(sessionId: SessionId, request: StartProductionRunRequest): Promise<ProductionSnapshot>
+
+/**
+ * Pause a branch or whole run; in-flight outcomes remain unknown until reconciled.
+ * @param sessionId - owning conversation.
+ * @param ref - expected run revision and optional node.
+ * @returns committed state.
+ */
+@Remote async pause(sessionId: SessionId, ref: ProductionRef): Promise<ProductionSnapshot>
+
+/**
+ * Resume only paused work; unknown work refuses replay.
+ * @param sessionId - owning conversation.
+ * @param ref - expected run revision and optional branch.
+ * @returns committed state.
+ */
+@Remote async resume(sessionId: SessionId, ref: ProductionRef): Promise<ProductionSnapshot>
+
+/**
+ * Supply a human decision without certifying objective evidence.
+ * @param sessionId - owning conversation.
+ * @param request - exact waiting branch and decision.
+ * @returns committed dependent state.
+ */
+@Remote async answer(sessionId: SessionId, request: AnswerProductionRequest): Promise<ProductionSnapshot>
+
+/**
+ * Report whether an exact Host reconciliation provider is available for an interrupted invocation.
+ * @param sessionId - owning conversation.
+ * @param ref - expected unknown branch.
+ * @returns observed state; unresolved outcomes stay unknown.
+ */
+@Remote async reconcile(sessionId: SessionId, ref: ProductionRef): Promise<ProductionSnapshot>
+
+/**
+ * Reconnect-safe projection stream for the same conversation.
+ * @param sessionId - owning conversation.
+ * @param signal - subscription lifetime.
+ * @returns initial and committed subsequent snapshots.
+ */
+@Remote({ mode: 'stream' }) async *follow(sessionId: SessionId, signal: AbortSignal): AsyncIterable<ProductionSnapshot>
+```
+
+Types: [SessionId](core.zh.md) · [ToolCallIdentity](core.zh.md)
+
+Source: [`packages/workflow/production-studio/src/index.ts`](../../packages/workflow/production-studio/src/index.ts)
+
 <a id="ctxworkflowengine--workflowengine-abstract-seam"></a>
 
 ### `ctx.workflowEngine` — `WorkflowEngine` (abstract seam)

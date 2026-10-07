@@ -1,5 +1,5 @@
 ---
-description: "workflow 组地图：由模型编写的、可扇出 subagent 的编排脚本，供浏览本组的用户与维护者阅读。"
+description: "workflow 组地图：模型编写的子 agent 脚本与持久生产流程图，供浏览本组的用户与维护者阅读。"
 kind: "package-group"
 ---
 
@@ -9,7 +9,7 @@ kind: "package-group"
 
 ## 概述
 
-workflow 组让 agent（智能体）可以运行编排脚本，将工作委派给 subagent 并返回最终值。`workflow` 工具支持脚本化扇出；需显式启用的 `ralph` 工具运行固定的全新 agent 序列。脚本使用共享 PTC Node 进程运行时，遵守调用 Session 的文件策略。工作流钩子和子 agent 生命周期仍由工作流引擎负责。
+workflow 组支持编排脚本与生产流程图。`workflow` 工具将脚本中的工作委派给 subagent；需显式启用的 `ralph` 工具运行固定的全新 agent 序列。Production Studio 运行显式生产流程图，保存监控状态与交付证据。脚本使用共享 PTC Node 进程运行时，遵守调用 Session 的文件策略；各自运行时负责执行与子 agent 生命周期。
 
 ## 目录
 
@@ -28,6 +28,7 @@ workflow 组让 agent（智能体）可以运行编排脚本，将工作委派�
 | [`workflow-ptc`](workflow-ptc/README.zh.md) | 通过共享的沙箱化 PTC Node 进程运行时执行工作流脚本 | 注册到 `ctx.workflowEngine` |
 | [`tool-workflow`](tool-workflow/README.zh.md) | 把 `workflow` 工具交给模型，用于脚本化多 agent 编排 | 注册到 `ctx.tools` |
 | [`tool-ralph`](tool-ralph/README.zh.md) | 把 `ralph` 工具交给模型，用于全新 agent 迭代循环 | 注册到 `ctx.tools` |
+| [`production-studio`](production-studio/README.zh.md) | 运行持久生产流程图，执行客观检查并接受明确的人工决策 | `ctx.productionStudio` |
 
 -----
 

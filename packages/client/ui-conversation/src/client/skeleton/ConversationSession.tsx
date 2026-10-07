@@ -53,7 +53,7 @@ function equalBreadcrumbs(left: readonly Breadcrumb[], right: readonly Breadcrum
 /**
  * Renders Session header chrome above the resident conversation scrollport.
  * @param props - Strict Session store, view ledger, navigation, render, and locale shares.
- * @returns Session navigation controls, with title and tabs after conversation starts.
+ * @returns View navigation for every bound Session, with optional title controls.
  */
 export function ConversationSessionHeader({
   sessionId, hideChrome, useSessions, useConversationViews, useStore,
@@ -63,7 +63,7 @@ export function ConversationSessionHeader({
   const selectedId = useStore(s => s.view)
   const active = resolveActiveView(tabs, selectedId)
   const ancestry = useSessions(s => deriveAncestry(s, sessionId), equalBreadcrumbs)
-  const showTabs = !hideChrome && tabs.length > 1
+  const showTabs = tabs.length > 1
   return (
     <>
       <div className={css.titleRow}>
@@ -163,7 +163,7 @@ export function ConversationSessionHeader({
  * Renders the active Session view inside the resident scrollport and keeps
  * the input draft mirrored while blank Hero chrome is visible.
  * @param props - Strict Session input/store, view ledger, and render shares.
- * @returns the active view area, or null while the Session remains blank.
+ * @returns the active view area, or null for the empty Session's welcome Chat View.
  */
 export function ConversationSession(props: ConversationSessionProps) {
   return <DefaultConversationViews {...props} />

@@ -14,7 +14,7 @@ import {
 } from '@deepseek-ai/dsh-client-test-runtime'
 import type { SessionBehaviorOverrides } from '@deepseek-ai/dsh-client-test-runtime'
 import {
-  apply, inject, type ComposerBarInjected, type ConversationInjected,
+  apply, inject, type ComposerBarInjected, type ConversationInjected, type ConversationNavigationInjected,
   type ConversationSessionHeaderInjected, type ConversationSessionInjected, type ViewTab,
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
@@ -101,7 +101,7 @@ async function bench() {
 
   const feature = await runtime.mount({ inject: [...inject], apply })
   runtime.renderRoot()
-  const entryOf = (key: 'main.conversation' | 'conversation.session' | 'conversation.session.header' | 'conversation.composer.bar') =>
+  const entryOf = (key: 'main.conversation' | 'conversation.header' | 'conversation.session' | 'conversation.session.header' | 'conversation.composer.bar') =>
     runtime.slots.entries(key)[0]!
   const conversationApi = (id: SessionId) => {
     const entry = entryOf('conversation.session')
@@ -272,10 +272,23 @@ describe('Conversation inject API', () => {
     )
     await Promise.resolve()
     activate.mockClear()
+    const mainNavigation = (b.entryOf('main.conversation').inject as unknown as
+      (id: SessionId | undefined) => ConversationNavigationInjected)(ROOT)
+    const headerNavigation = (b.entryOf('conversation.header').inject as unknown as
+      (id: SessionId | undefined) => ConversationNavigationInjected)(ROOT)
+    const noSessionNavigation = (b.entryOf('main.conversation').inject as unknown as
+      (id: SessionId | undefined) => ConversationNavigationInjected)(undefined)
+    const selectedView = mainNavigation.hooks.activeView
+    expect(headerNavigation.hooks.activeView).toBe(selectedView)
+    expect(noSessionNavigation.hooks.activeView.getSnapshot()).toBeUndefined()
+    expect(selectedView.getSnapshot()).toBe('chat')
+    const changed = vi.fn()
+    const unsubscribe = selectedView.subscribe(changed)
 
     const body = b.conversationApi(ROOT)
     body.injected.openView('trajectory', 'call-1')
     expect(activate).toHaveBeenLastCalledWith('trajectory')
+    expect(selectedView.getSnapshot()).toBe('trajectory')
     expect(body.instance.store.getSnapshot()).toMatchObject({
       view: 'trajectory',
       viewRequest: { view: 'trajectory', focus: 'call-1' },
@@ -284,15 +297,25 @@ describe('Conversation inject API', () => {
     const header = b.headerApi(ROOT)
     header.injected.selectView('chat')
     expect(activate).toHaveBeenLastCalledWith('chat')
+    expect(selectedView.getSnapshot()).toBe('chat')
     expect(header.instance.store.getSnapshot().view).toBe('chat')
 
+    body.injected.openView('trajectory', 'removed-call')
     removeTrajectory()
     await b.runtime.flush()
+    expect(selectedView.getSnapshot()).toBe('chat')
+    activate.mockClear()
+    header.injected.selectView('chat')
     activate.mockClear()
     body.injected.openView('trajectory', 'hidden-call')
     expect(activate).not.toHaveBeenCalled()
     expect(body.instance.store.getSnapshot().view).toBe('chat')
     removeChat()
+    await b.runtime.flush()
+    expect(selectedView.getSnapshot()).toBeUndefined()
+    expect(changed).toHaveBeenCalled()
+    expect(b.sessionFake.prompt).not.toHaveBeenCalled()
+    unsubscribe()
     await b.runtime.dispose()
   })
 

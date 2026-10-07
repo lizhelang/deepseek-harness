@@ -142,7 +142,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
       kind: 'single'
       scope: 'session'
       owner: {
-        /** Parent-owned visibility shared with the header container styling. */
+        /** Hide blank Chat title controls; registered View tabs remain available. */
         hideChrome: boolean
       }
     }
@@ -325,6 +325,12 @@ export interface ConvViewOwnerProps {
 /** Base props of one target-owned Conversation View entry. */
 export type ConvViewProps = PropsRuntime<'conversation.view'>
 
+/** Session-addressed View selection supplied to the optional-Session shell. */
+export interface ConversationNavigationInjected {
+  /** Resolved registered View identity; absent without a Session or usable View. */
+  readonly hooks: { readonly activeView: ObservableSnapshot<string | undefined> }
+}
+
 /** Business callbacks injected into the resident Conversation shell. */
 export interface ConversationInjected {
   /** Connect and open a blank Session in the selected Workspace. */
@@ -454,6 +460,7 @@ export type ConversationSlotProps =
   PropsRuntime<'main.conversation'>
   & PropsRenderSlots<'conversation.header'>
   & PropsRenderFactories
+  & InjectFace<ConversationNavigationInjected>
 
 /** Inputs shared by main and embedded Conversation content occurrences. */
 export interface ConversationContentInputProps {
@@ -494,6 +501,7 @@ export type ConversationSessionSlotProps =
 export type ConversationHeaderProps =
   PropsRuntime<'conversation.header'>
   & PropsRenderSlots<'conversation.header.leading' | 'conversation.session.header'>
+  & InjectFace<ConversationNavigationInjected>
 
 /** Full props of the strict Session header. */
 export type ConversationSessionHeaderSlotProps =

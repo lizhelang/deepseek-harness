@@ -1,0 +1,43 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/client/ui-production-studio/README.md
+/:
+  en: bf19227be60f3150
+  zh: 91c00272dc0e7a71
+/deepseek-ai-dsh-client-ui-production-studio:
+  en: d7dd5f595d9dbb0a
+  zh: 95248d5fb9ef090a
+/deepseek-ai-dsh-client-ui-production-studio/summary:
+  en: 7e0b9252c49ec2bc
+  zh: 04754c122231ce24
+/deepseek-ai-dsh-client-ui-production-studio/table-of-contents:
+  en: 122f0d41696980b1
+  zh: 3a2c027b0ba8d7a7
+/deepseek-ai-dsh-client-ui-production-studio/use-this-package:
+  en: 20d262fd6f16ee9f
+  zh: 99d2cbbbe7afba27
+/deepseek-ai-dsh-client-ui-production-studio/understand-the-implementation:
+  en: c349d118ebf999c6
+  zh: 98c1f0b50303b671
+/deepseek-ai-dsh-client-ui-production-studio/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-client-ui-production-studio/model-experience/explicit-task-starts-and-human-answers:
+  en: 2626718c4d45e083
+  zh: f2b21b162782ffad
+/deepseek-ai-dsh-client-ui-production-studio/model-experience/explicit-task-starts-and-human-answers/what-the-model-sees:
+  en: 5c7423fb8c091808
+  zh: c3e161f983a4cb02
+/deepseek-ai-dsh-client-ui-production-studio/model-experience/explicit-task-starts-and-human-answers/token-effect:
+  en: 547edbb3ee770f0a
+  zh: 9811bec04c69801e
+/deepseek-ai-dsh-client-ui-production-studio/model-experience/explicit-task-starts-and-human-answers/kv-cache-effect:
+  en: 7a21539d90695837
+  zh: fc8b4c8fec9a3f52
+/deepseek-ai-dsh-client-ui-production-studio/known-limitations-and-deferred-work:
+  en: c6cfc2a337e5b0a7
+  zh: bf003165c430ca09
+/deepseek-ai-dsh-client-ui-production-studio/dev-note:
+  en: b75c8458928b72b9
+  zh: 003ba4e17b4b5269

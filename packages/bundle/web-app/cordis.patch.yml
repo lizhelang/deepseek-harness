@@ -125,6 +125,8 @@
     # the roster rides the session control stream above.
     - id: job-controller
       name: '@deepseek-ai/dsh-api-job-controller'
+    - id: production-studio
+      name: '@deepseek-ai/dsh-production-studio'
     # Workspace file service: bounded read, directory listing, and the
     # agent-write change feed inside the session workspace root.
     - id: terminal-controller
@@ -426,6 +428,10 @@
 
     - id: ui-trajectory
       name: '@deepseek-ai/dsh-client-ui-trajectory'
+
+    # Session-local production runs, priority monitor and editable workflow graph.
+    - id: ui-production-studio
+      name: '@deepseek-ai/dsh-client-ui-production-studio'
 
 # ── the agent plane moves behind agent presets ─────────────────────────────
 #

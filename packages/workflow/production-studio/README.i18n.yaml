@@ -1,0 +1,49 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/workflow/production-studio/README.md
+/:
+  en: 8914de7e10a5e8b4
+  zh: 94cbc45341a18318
+/deepseek-ai-dsh-production-studio:
+  en: 5707796371c79d0d
+  zh: 5f04a801cca4e9d3
+/deepseek-ai-dsh-production-studio/summary:
+  en: 30514f8878f6dd18
+  zh: 98bfa77508b82b31
+/deepseek-ai-dsh-production-studio/table-of-contents:
+  en: 2e89ddb1e73218cb
+  zh: c17dcc1cd5267d82
+/deepseek-ai-dsh-production-studio/use-this-package:
+  en: 77f58ae5f12ac8e4
+  zh: 1c9dd713e5a84b72
+/deepseek-ai-dsh-production-studio/use-this-package/state-and-controls:
+  en: 7f94b75ca4e1fdc6
+  zh: d1415febe9e46af7
+/deepseek-ai-dsh-production-studio/use-this-package/evidence-and-native-boundaries:
+  en: f0254f5d4f079fa2
+  zh: 8ee7baee24a93898
+/deepseek-ai-dsh-production-studio/model-experience:
+  en: 215e7ba838619b7b
+  zh: 215e7ba838619b7b
+/deepseek-ai-dsh-production-studio/model-experience/agent-node-child-input:
+  en: 79726027e4e0df66
+  zh: 2b61d32a658c6e7d
+/deepseek-ai-dsh-production-studio/model-experience/agent-node-child-input/what-the-model-sees:
+  en: efaebd9db5d6a972
+  zh: 6c176379d6fa40a4
+/deepseek-ai-dsh-production-studio/model-experience/agent-node-child-input/what-the-model-sees/execution-instruction:
+  en: 33d03bfbc4d5e24b
+  zh: 55572138aa1bdbe6
+/deepseek-ai-dsh-production-studio/model-experience/agent-node-child-input/token-effect:
+  en: eb12d6a423ab2e89
+  zh: d888290ceb8f562b
+/deepseek-ai-dsh-production-studio/model-experience/agent-node-child-input/kv-cache-effect:
+  en: 31dd052f19947988
+  zh: 80a01b6daa5d990c
+/deepseek-ai-dsh-production-studio/known-limitations-and-deferred-work:
+  en: 55355b627ff6816a
+  zh: 7dd9ef02313aa19e
+/deepseek-ai-dsh-production-studio/dev-note:
+  en: b75c8458928b72b9
+  zh: 003ba4e17b4b5269

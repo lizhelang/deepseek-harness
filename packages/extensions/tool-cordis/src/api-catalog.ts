@@ -1748,6 +1748,73 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'productionStudio',
+    summary: 'Production Studio Host service and its authenticated Remote controller.',
+    description: 'Production Studio Host service and its authenticated Remote controller.',
+    methods: [
+      {
+        signature: 'registerNativeBoundaryProvider(toolNames: readonly string[]): () => void',
+        description: 'Register trusted tool providers that mark the actual native dispatch point. The provider owns the returned disposer through its plugin effect.',
+        parameters: [{ name: 'toolNames', description: 'exact registered tool names implementing the dispatch marker.' }],
+        returns: 'disposer removing only this provider\'s declaration.',
+      },
+      {
+        signature: 'async noteNativeDispatch(operationId: ToolCallIdentity): Promise<void>',
+        description: 'Commit the exact invocation\'s native dispatch before its provider starts native work. A validation error before this call proves no native work was entered.',
+        parameters: [{ name: 'operationId', description: 'ToolRuntime call ID of the currently leased invocation.' }],
+        returns: 'after the native dispatch marker is durable.',
+      },
+      {
+        signature: '@Remote async get(sessionId: SessionId): Promise<ProductionSnapshot>',
+        description: 'Read state; interrupted persisted executions become unknown and are never replayed.',
+        parameters: [{ name: 'sessionId', description: 'owning live conversation.' }],
+        returns: 'current graph and runs.',
+      },
+      {
+        signature: '@Remote async saveGraph(sessionId: SessionId, request: SaveProductionGraphRequest): Promise<ProductionSnapshot>',
+        description: 'Save only the draft; active runs retain their captured graph version.',
+        parameters: [{ name: 'sessionId', description: 'owning conversation.' }, { name: 'request', description: 'expected version and edited draft.' }],
+        returns: 'committed state.',
+      },
+      {
+        signature: '@Remote async start(sessionId: SessionId, request: StartProductionRunRequest): Promise<ProductionSnapshot>',
+        description: 'Start new explicitly authorized work with a frozen graph version.',
+        parameters: [{ name: 'sessionId', description: 'owning conversation.' }, { name: 'request', description: 'graph version, objective and source input.' }],
+        returns: 'initial persisted run.',
+      },
+      {
+        signature: '@Remote async pause(sessionId: SessionId, ref: ProductionRef): Promise<ProductionSnapshot>',
+        description: 'Pause a branch or whole run; in-flight outcomes remain unknown until reconciled.',
+        parameters: [{ name: 'sessionId', description: 'owning conversation.' }, { name: 'ref', description: 'expected run revision and optional node.' }],
+        returns: 'committed state.',
+      },
+      {
+        signature: '@Remote async resume(sessionId: SessionId, ref: ProductionRef): Promise<ProductionSnapshot>',
+        description: 'Resume only paused work; unknown work refuses replay.',
+        parameters: [{ name: 'sessionId', description: 'owning conversation.' }, { name: 'ref', description: 'expected run revision and optional branch.' }],
+        returns: 'committed state.',
+      },
+      {
+        signature: '@Remote async answer(sessionId: SessionId, request: AnswerProductionRequest): Promise<ProductionSnapshot>',
+        description: 'Supply a human decision without certifying objective evidence.',
+        parameters: [{ name: 'sessionId', description: 'owning conversation.' }, { name: 'request', description: 'exact waiting branch and decision.' }],
+        returns: 'committed dependent state.',
+      },
+      {
+        signature: '@Remote async reconcile(sessionId: SessionId, ref: ProductionRef): Promise<ProductionSnapshot>',
+        description: 'Report whether an exact Host reconciliation provider is available for an interrupted invocation.',
+        parameters: [{ name: 'sessionId', description: 'owning conversation.' }, { name: 'ref', description: 'expected unknown branch.' }],
+        returns: 'observed state; unresolved outcomes stay unknown.',
+      },
+      {
+        signature: '@Remote({ mode: \'stream\' }) async *follow(sessionId: SessionId, signal: AbortSignal): AsyncIterable<ProductionSnapshot>',
+        description: 'Reconnect-safe projection stream for the same conversation.',
+        parameters: [{ name: 'sessionId', description: 'owning conversation.' }, { name: 'signal', description: 'subscription lifetime.' }],
+        returns: 'initial and committed subsequent snapshots.',
+      },
+    ],
+  },
+  {
     key: 'productTelemetry',
     summary: 'Host analytics sender.',
     description: 'Host analytics sender. Mounting alone sends nothing; the owning fiber drains it on unload.',
@@ -4518,6 +4585,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type AgentStatus = \'idle\' | \'running\';',
   },
   {
+    name: 'AnswerProductionRequest',
+    declaration: 'export interface AnswerProductionRequest extends ProductionRef {\n    nodeId: string;\n    answer: string;\n    accepted: boolean;\n}',
+  },
+  {
     name: 'ApiKeyRecord',
     declaration: 'export interface ApiKeyRecord {\n    readonly kind: \'api-key\';\n    readonly key?: string;\n    readonly env?: Readonly<Record<string, string>>;\n}',
   },
@@ -6034,6 +6105,62 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface ProductEventMap {\n    desktop_app_launch: Record<string, never>;\n    auth_page_view: Record<string, never>;\n    auth_page_click: {\n        button_name: \'sign_in\' | \'api-key\';\n    };\n    api_key_save_click: Record<string, never>;\n    onboarding_page_view: {\n        page_name: OnboardingPage;\n    };\n    onboarding_page_click: {\n        page_name: OnboardingPage;\n        button_name: \'next\' | \'back\' | \'skip\' | \'charge\' | \'later\' | \'continue\';\n        selected_content?: \'office\' | \'code\' | \'code_office\' | \'focus_result\' | \'key_detail\' | \'full_process\';\n    };\n    onboarding_popup_view: {\n        popup_name: \'skip_charge\' | \'skip_setting\';\n    };\n    onboarding_popup_click: {\n        popup_name: \'skip_charge\' | \'skip_setting\';\n        button_name: \'charge\' | \'know\' | \'enter\' | \'setting\' | \'close\';\n    };\n    desktop_upgrade_click: Record<string, never>;\n    desktop_upgrade_download_result: {\n        is_success: boolean;\n        error_reason?: string;\n    };\n    desktop_upgrade_install_restart_click: Record<string, never>;\n    send_button_click: {\n        session_id?: SessionId;\n        model_name?: string;\n        thinking_effort?: string;\n        run_mode: \'plan\' | \'goal\' | \'default\';\n        msg_type: \'default\' | \'steer\' | \'queue\';\n    };\n    model_switch: {\n        session_id?: SessionId;\n        switch_from: string;\n        switch_to: string;\n    };\n    thinking_level_switch: {\n        session_id?: SessionId;\n        switch_from: string;\n        switch_to: str /* …truncated — full shape in source */',
   },
   {
+    name: 'ProductionEdge',
+    declaration: 'export interface ProductionEdge {\n    id: string;\n    fromNode: string;\n    fromPort: string;\n    toNode: string;\n    toPort: string;\n}',
+  },
+  {
+    name: 'ProductionEvidence',
+    declaration: 'export interface ProductionEvidence {\n    kind: \'tool\' | \'file\' | \'human\' | \'agent\';\n    nodeId: string;\n    attempt: number;\n    toolName?: string;\n    data: JsonValue;\n    observedAt: number;\n}',
+  },
+  {
+    name: 'ProductionGraph',
+    declaration: 'export interface ProductionGraph {\n    version: number;\n    name: string;\n    nodes: ProductionNode[];\n    edges: ProductionEdge[];\n    maxExecutions: number;\n    maxConcurrent: number;\n}',
+  },
+  {
+    name: 'ProductionHistory',
+    declaration: 'export interface ProductionHistory {\n    nodeId: string;\n    attempt: number;\n    phase: ProductionNodePhase;\n    message: string;\n    time: number;\n}',
+  },
+  {
+    name: 'ProductionNode',
+    declaration: 'export interface ProductionNode {\n    id: string;\n    label: string;\n    kind: \'agent\' | \'program\' | \'gate\' | \'human\' | \'delivery\';\n    x: number;\n    y: number;\n    inputs: ProductionPort[];\n    outputs: ProductionPort[];\n    maxAttempts: number;\n    resource?: string;\n    protected?: boolean;\n    config: {\n        prompt?: string;\n        provider?: string;\n        model?: string;\n        toolName?: string;\n        arguments?: JsonValue;\n        evidencePath?: string;\n        evidenceToolName?: string;\n        expected?: JsonValue;\n        certification?: \'geometry\' | \'manufacturing\' | \'files\' | \'goal\';\n        question?: string;\n        filePaths?: string[];\n        fileHashes?: string[];\n        tools?: string[];\n        breakBefore?: boolean;\n        breakAfter?: boolean;\n        reconcileToolName?: string;\n    };\n}',
+  },
+  {
+    name: 'ProductionNodePhase',
+    declaration: 'export type ProductionNodePhase = \'waiting\' | \'ready\' | \'running\' | \'human\' | \'paused\' | \'blocked\' | \'unknown\' | \'complete\' | \'skipped\';',
+  },
+  {
+    name: 'ProductionOutlet',
+    declaration: 'export type ProductionOutlet = \'success\' | \'failure\' | \'unknown\';',
+  },
+  {
+    name: 'ProductionPort',
+    declaration: 'export interface ProductionPort {\n    id: string;\n    type: ProductionPortType;\n    outlet?: ProductionOutlet;\n}',
+  },
+  {
+    name: 'ProductionPortType',
+    declaration: 'export type ProductionPortType = \'input\' | \'candidate\' | \'geometry\' | \'manufacturing\' | \'files\' | \'delivery\' | \'issue\' | \'unknown\' | \'analysis\';',
+  },
+  {
+    name: 'ProductionRef',
+    declaration: 'export interface ProductionRef {\n    runId: ProductionRunId;\n    revision: number;\n    nodeId?: string;\n}',
+  },
+  {
+    name: 'ProductionRun',
+    declaration: 'export interface ProductionRun {\n    id: ProductionRunId;\n    revision: number;\n    objective: string;\n    graph: ProductionGraph;\n    phase: \'active\' | \'paused\' | \'blocked\' | \'unknown\' | \'complete\';\n    executions: number;\n    input: JsonValue;\n    tasks: ProductionTask[];\n    history: ProductionHistory[];\n    createdAt: number;\n    updatedAt: number;\n}',
+  },
+  {
+    name: 'ProductionRunId',
+    declaration: 'export type ProductionRunId = string & Branded<\'ProductionRunId\'>;',
+  },
+  {
+    name: 'ProductionSnapshot',
+    declaration: 'export interface ProductionSnapshot {\n    sessionId: SessionId;\n    revision: number;\n    graph: ProductionGraph;\n    runs: ProductionRun[];\n    capabilities: {\n        subagent: boolean;\n        tools: string[];\n        filesystem: boolean;\n    };\n    error?: string;\n}',
+  },
+  {
+    name: 'ProductionTask',
+    declaration: 'export interface ProductionTask {\n    nodeId: string;\n    phase: ProductionNodePhase;\n    attempts: number;\n    message: string;\n    output?: JsonValue;\n    evidence: ProductionEvidence[];\n    certificates: (\'geometry\' | \'manufacturing\' | \'files\' | \'goal\')[];\n    childSessionId?: SessionId;\n    startedAt?: number;\n    updatedAt: number;\n    incoming?: Record<string, {\n        data: JsonValue;\n        evidence: ProductionEvidence[];\n        certificates: (\'geometry\' | \'manufacturing\' | \'files\' | \'goal\')[];\n    }>;\n    queued?: Record<string, {\n        data: JsonValue;\n        evidence: ProductionEvidence[];\n        certificates: (\'geometry\' | \'manufacturing\' | \'files\' | \'goal\')[];\n    }>[];\n    breakpoint?: \'before\' | \'after\';\n    breakpointReleased?: boolean;\n    pendingOutlet?: ProductionOutlet;\n    operationId?: string;\n}',
+  },
+  {
     name: 'ProductTelemetryRecord',
     declaration: 'export type ProductTelemetryRecord = OTelEventRecord;',
   },
@@ -6300,6 +6427,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'SaveImageAttachment',
     declaration: 'export interface SaveImageAttachment {\n    data: Uint8Array;\n    mediaType: ImageMediaType;\n    name?: string;\n}',
+  },
+  {
+    name: 'SaveProductionGraphRequest',
+    declaration: 'export interface SaveProductionGraphRequest {\n    expectedVersion: number;\n    graph: ProductionGraph;\n}',
   },
   {
     name: 'SaveTextSpill',
@@ -7204,6 +7335,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'SshStreamEndpoint',
     declaration: 'export type SshStreamEndpoint = z.infer<typeof streamEndpointSchema>;',
+  },
+  {
+    name: 'StartProductionRunRequest',
+    declaration: 'export interface StartProductionRunRequest {\n    graphVersion: number;\n    objective: string;\n    input: JsonValue;\n    goalContractAcknowledged: boolean;\n}',
   },
   {
     name: 'StorageBackend',

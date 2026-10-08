@@ -3,47 +3,68 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/workflow/production-studio/README.md
 /:
-  en: 8914de7e10a5e8b4
-  zh: 94cbc45341a18318
+  en: 83595678f7c39041
+  zh: 2ef4411073ec7475
 /deepseek-ai-dsh-production-studio:
   en: 5707796371c79d0d
   zh: 5f04a801cca4e9d3
 /deepseek-ai-dsh-production-studio/summary:
-  en: 30514f8878f6dd18
-  zh: 98bfa77508b82b31
+  en: f7bec641c51be65c
+  zh: b5385e1451cc5507
 /deepseek-ai-dsh-production-studio/table-of-contents:
-  en: 2e89ddb1e73218cb
-  zh: c17dcc1cd5267d82
+  en: d152484eb41ac6b4
+  zh: 184c58005fb159f7
 /deepseek-ai-dsh-production-studio/use-this-package:
-  en: 77f58ae5f12ac8e4
-  zh: 1c9dd713e5a84b72
-/deepseek-ai-dsh-production-studio/use-this-package/state-and-controls:
-  en: 7f94b75ca4e1fdc6
-  zh: d1415febe9e46af7
-/deepseek-ai-dsh-production-studio/use-this-package/evidence-and-native-boundaries:
-  en: f0254f5d4f079fa2
-  zh: 8ee7baee24a93898
+  en: 0e6aad7cc480fff9
+  zh: 9b300f3bf4d8fb62
+/deepseek-ai-dsh-production-studio/use-this-package/bound-aea-conversations:
+  en: fb33a93a17ac7cd6
+  zh: 657b349c512516b1
+/deepseek-ai-dsh-production-studio/use-this-package/unbound-scheduled-runs:
+  en: 0e7b21b8d6f71e56
+  zh: 56481eab8392bf03
+/deepseek-ai-dsh-production-studio/use-this-package/evidence-and-recovery:
+  en: 2bb37583a57af7f1
+  zh: 26936ed82d2ea976
+/deepseek-ai-dsh-production-studio/understand-the-implementation:
+  en: 2942c99dfeed4c21
+  zh: c3352e982adb9e4f
+/deepseek-ai-dsh-production-studio/further-exploration:
+  en: 6db4974f7a962f74
+  zh: d14b2f09a7024507
 /deepseek-ai-dsh-production-studio/model-experience:
   en: 215e7ba838619b7b
   zh: 215e7ba838619b7b
-/deepseek-ai-dsh-production-studio/model-experience/agent-node-child-input:
-  en: 79726027e4e0df66
-  zh: 2b61d32a658c6e7d
-/deepseek-ai-dsh-production-studio/model-experience/agent-node-child-input/what-the-model-sees:
-  en: efaebd9db5d6a972
-  zh: 6c176379d6fa40a4
-/deepseek-ai-dsh-production-studio/model-experience/agent-node-child-input/what-the-model-sees/execution-instruction:
+/deepseek-ai-dsh-production-studio/model-experience/bound-conversation-steps:
+  en: 0cacabb032aec9b2
+  zh: e91e2acee8f619cd
+/deepseek-ai-dsh-production-studio/model-experience/bound-conversation-steps/what-the-model-sees:
+  en: 35ec92c5fcc414ef
+  zh: 072b4a5678a4cbe4
+/deepseek-ai-dsh-production-studio/model-experience/bound-conversation-steps/token-effect:
+  en: a38f54be1d38c558
+  zh: 62f36e7fe3a0ac74
+/deepseek-ai-dsh-production-studio/model-experience/bound-conversation-steps/kv-cache-effect:
+  en: 03ef6ab71565dfd5
+  zh: e6b5d32da64298e3
+/deepseek-ai-dsh-production-studio/model-experience/scheduled-agent-node-child-input:
+  en: c60b94e8744ce0bf
+  zh: 72495d085ccf836c
+/deepseek-ai-dsh-production-studio/model-experience/scheduled-agent-node-child-input/what-the-model-sees:
+  en: 8f6c798c36abb0b8
+  zh: cc3fbe65f4d76816
+/deepseek-ai-dsh-production-studio/model-experience/scheduled-agent-node-child-input/what-the-model-sees/execution-instruction:
   en: 33d03bfbc4d5e24b
   zh: 55572138aa1bdbe6
-/deepseek-ai-dsh-production-studio/model-experience/agent-node-child-input/token-effect:
+/deepseek-ai-dsh-production-studio/model-experience/scheduled-agent-node-child-input/token-effect:
   en: eb12d6a423ab2e89
-  zh: d888290ceb8f562b
-/deepseek-ai-dsh-production-studio/model-experience/agent-node-child-input/kv-cache-effect:
+  zh: 35a86d7ad2ef9d05
+/deepseek-ai-dsh-production-studio/model-experience/scheduled-agent-node-child-input/kv-cache-effect:
   en: 31dd052f19947988
-  zh: 80a01b6daa5d990c
+  zh: 445e210f8f2f01ec
 /deepseek-ai-dsh-production-studio/known-limitations-and-deferred-work:
-  en: 55355b627ff6816a
-  zh: 7dd9ef02313aa19e
-/deepseek-ai-dsh-production-studio/dev-note:
-  en: b75c8458928b72b9
-  zh: 003ba4e17b4b5269
+  en: 51a1e5dc30fdf0dd
+  zh: 8ddca9fa34995fca
+/deepseek-ai-dsh-production-studio/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: 3bb0c20c93f16f98

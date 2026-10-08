@@ -2,6 +2,7 @@
 import type { Branded } from '@deepseek-ai/dsh-brand'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
+import type { Agent } from '@deepseek-ai/dsh-agent/types'
 
 /** Opaque identity of one immutable graph execution. */
 export type ProductionRunId = string & Branded<'ProductionRunId'>
@@ -67,6 +68,8 @@ export interface ProductionGraph {
 export interface ProductionEvidence { kind: 'tool' | 'file' | 'human' | 'agent'; nodeId: string; attempt: number; toolName?: string; data: JsonValue; observedAt: number }
 /** One branch's current status and compact execution history. */
 export interface ProductionTask {
+  /** Stable execution or approval admission; phase changes never unlock its configuration. */
+  admitted?: boolean
   nodeId: string
   phase: ProductionNodePhase
   attempts: number
@@ -83,6 +86,8 @@ export interface ProductionTask {
   breakpointReleased?: boolean
   pendingOutlet?: ProductionOutlet
   operationId?: string
+  /** Exact last returned invocation; publication retries never redispatch it. */
+  settledOperationId?: string
 }
 /** Historical transition folded into the run view. */
 export interface ProductionHistory { nodeId: string; attempt: number; phase: ProductionNodePhase; message: string; time: number }
@@ -99,6 +104,10 @@ export interface ProductionRun {
   history: ProductionHistory[]
   createdAt: number
   updatedAt: number
+  /** Absent on historical independently scheduled runs. */
+  mode?: 'conversation' | 'scheduled'
+  /** Trusted adapter and source identity; never selected by model prose. */
+  binding?: { provider: string; key: string }
 }
 /** Single authoritative session projection shared by all Studio views. */
 export interface ProductionSnapshot {
@@ -106,7 +115,7 @@ export interface ProductionSnapshot {
   revision: number
   graph: ProductionGraph
   runs: ProductionRun[]
-  capabilities: { subagent: boolean; tools: string[]; filesystem: boolean }
+  capabilities: { subagent: boolean; tools: string[]; filesystem: boolean; conversation?: { provider: string } }
   error?: string
 }
 /** Compare-and-set reference prevents stale UI mutations. */
@@ -118,4 +127,42 @@ export interface StartProductionRunRequest { graphVersion: number; objective: st
 /** Explicit additional human decision. */
 export interface AnswerProductionRequest extends ProductionRef { nodeId: string; answer: string; accepted: boolean }
 /** Persisted domain state; capabilities are process-local and recomputed. */
-export interface ProductionState { format: 1; revision: number; graph: ProductionGraph; runs: ProductionRun[] }
+export interface ProductionState {
+  format: 1
+  revision: number
+  graph: ProductionGraph
+  runs: ProductionRun[]
+  conversationProvider?: string
+  pendingCheckpoints?: ProductionRun[]
+}
+
+declare module '@deepseek-ai/dsh-session-projection/types' {
+  interface SessionProjectionStateMap {
+    /** Last accepted checkpoint revision per run; retries append no duplicate history. */
+    productionCheckpoints: Record<string, number>
+  }
+}
+
+/** A trusted domain adapter binds direct conversation calls to the graph executor. */
+export interface ConversationWorkflowProvider {
+  id: string
+  toolNames: readonly string[]
+  appliesTo(agent: Agent): boolean
+  start(call: { agent: Agent; name: string; arguments: JsonValue }): { key: string; objective: string; input: JsonValue } | undefined
+  observe(call: { nodeId: string; name: string; arguments: JsonValue; receipt: JsonValue; run: ProductionRun }): {
+    key?: string
+    input?: JsonValue
+    outlet?: ProductionOutlet
+    message?: string
+  } | undefined
+}
+
+declare module '@deepseek-ai/dsh-session/types' {
+  interface SessionEventMap {
+    /**
+     * Committed whole-run checkpoint for deterministic Chat and Trajectory replay.
+     * @param data - independently renderable immutable execution snapshot.
+     */
+    'production/checkpoint': { run: ProductionRun }
+  }
+}

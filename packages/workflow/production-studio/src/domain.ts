@@ -29,8 +29,13 @@ const graphSchema = z.object({
 const evidence = z.object({ kind: z.enum(['tool', 'file', 'human', 'agent']), nodeId: z.string(), attempt: z.number().int().nonnegative(), toolName: z.string().optional(), data: z.json(), observedAt: z.number() }).strict()
 const phase = z.enum(['waiting', 'ready', 'running', 'human', 'paused', 'blocked', 'unknown', 'complete', 'skipped'])
 const token = z.record(z.string(), z.object({ data: z.json(), evidence: z.array(evidence), certificates: z.array(certificate) }))
-const task = z.object({ nodeId: z.string(), phase, attempts: z.number().int().nonnegative(), message: z.string(), output: z.json().optional(), evidence: z.array(evidence), certificates: z.array(certificate), childSessionId: z.string().optional(), startedAt: z.number().optional(), updatedAt: z.number(), incoming: token.optional(), queued: z.array(token).optional(), breakpoint: z.enum(['before', 'after']).optional(), breakpointReleased: z.boolean().optional(), pendingOutlet: z.enum(['success', 'failure', 'unknown']).optional(), operationId: z.string().optional() }).strict()
-const stateSchema = z.object({ format: z.literal(1), revision: z.number().int().nonnegative(), graph: graphSchema, runs: z.array(z.object({ id: z.string().min(1), revision: z.number().int().positive(), objective: z.string().min(1), graph: graphSchema, phase: z.enum(['active', 'paused', 'blocked', 'unknown', 'complete']), executions: z.number().int().nonnegative(), input: z.json(), tasks: z.array(task), history: z.array(z.object({ nodeId: z.string(), attempt: z.number().int().nonnegative(), phase, message: z.string(), time: z.number() })), createdAt: z.number(), updatedAt: z.number() }).strict()).max(50) }).strict()
+const task = z.object({ admitted: z.boolean().optional(), nodeId: z.string(), phase, attempts: z.number().int().nonnegative(), message: z.string(), output: z.json().optional(), evidence: z.array(evidence), certificates: z.array(certificate), childSessionId: z.string().optional(), startedAt: z.number().optional(), updatedAt: z.number(), incoming: token.optional(), queued: z.array(token).optional(), breakpoint: z.enum(['before', 'after']).optional(), breakpointReleased: z.boolean().optional(), pendingOutlet: z.enum(['success', 'failure', 'unknown']).optional(), operationId: z.string().optional(), settledOperationId: z.string().optional() }).strict()
+const run = z.object({ id: z.string().min(1), revision: z.number().int().positive(), objective: z.string().min(1), graph: graphSchema, phase: z.enum(['active', 'paused', 'blocked', 'unknown', 'complete']), executions: z.number().int().nonnegative(), input: z.json(), tasks: z.array(task), history: z.array(z.object({ nodeId: z.string(), attempt: z.number().int().nonnegative(), phase, message: z.string(), time: z.number() })), createdAt: z.number(), updatedAt: z.number(), mode: z.enum(['conversation', 'scheduled']).optional(), binding: z.object({ provider: z.string().min(1), key: z.string().min(1) }).strict().optional() }).strict()
+const stateSchema = z.object({
+  format: z.literal(1), revision: z.number().int().nonnegative(), graph: graphSchema,
+  conversationProvider: z.string().min(1).optional(), runs: z.array(run).max(50),
+  pendingCheckpoints: z.array(run).max(1000).optional(),
+}).strict()
 
 /**
  * Decode an untrusted persisted snapshot before using it.
@@ -118,4 +123,24 @@ export function createProductionGraph(maxExecutions: number, maxConcurrent: numb
   for (const item of nodes.filter(item => item.kind !== 'delivery' && item.id !== 'repair')) edges.push({ id: `repair-${item.id}`, fromNode: item.id, fromPort: 'failure', toNode: 'repair', toPort: 'input' })
   edges.push({ id: 'repair-return', fromNode: 'repair', fromPort: 'success', toNode: 'geometry', toPort: 'input' })
   return validateProductionGraph({ version: 1, name: 'AEA 生产流程', nodes, edges, maxExecutions, maxConcurrent })
+}
+
+/**
+ * Direct conversation owns agent nodes; read-only gates use the same persisted graph.
+ * @param maxExecutions - Existing bounded execution budget, never expanded by the adapter.
+ * @param toolNames - Actual profile tools visible to this parent conversation.
+ * @returns protected linear graph owned by the current conversation.
+ */
+export function createConversationGraph(maxExecutions: number, toolNames: readonly string[]): ProductionGraph {
+  const graph = createProductionGraph(maxExecutions, 1)
+  graph.name = 'AEA 对话执行流程'
+  for (const node of graph.nodes.filter(item => item.kind === 'agent')) {
+    node.config.tools = [...toolNames]
+    node.config.prompt = node.id === 'baseline'
+      ? '在原输入和冻结预算内提出、验证、比较并优化方案。按当前 Host nextActions 完成有界搜索与制造反馈；不要自行提前 user_requested 停止，不把理论分数当制造成本。'
+      : node.id === 'manufacture'
+        ? '按当前 Host nextActions 完成所有必需候选的真实制造、当前图纸与制造成本比较。保留最佳合法方案，明确失败再走修复，未知只对账不重放。'
+        : '读取精确失败证据，在原冻结预算内提出真正不同的修复。继续实际验证、搜索、制造与比较，不修改参数、预算、原模型或用文字声称通过。'
+  }
+  return validateProductionGraph(graph)
 }

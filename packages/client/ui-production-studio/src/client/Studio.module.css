@@ -64,7 +64,7 @@
 .answer { max-width: 680px; margin-top: 8px; }
 .field { display: flex; flex-direction: column; gap: 6px; min-width: 0; color: var(--dsw-alias-label-secondary); }
 .field > textarea { box-sizing: border-box; width: 100%; min-width: 0; resize: vertical; padding: 8px 10px; border: 0.5px solid var(--dsw-alias-border-l3); border-radius: var(--dsw-radius-sm); background: var(--dsw-alias-bg-base); color: var(--dsw-alias-label-primary); font-size: 13px; line-height: 20px; font-family: inherit; }
-.field > textarea:focus-visible { outline: 1px solid var(--dsw-alias-state-business-primary); outline-offset: 2px; }
+.field > textarea:focus-visible { outline: 1px solid var(--dsw-focus-ring-color); outline-offset: 2px; }
 .field > textarea[aria-invalid="true"] { border-color: var(--dsw-alias-state-error-primary); }
 .fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 14px 0; }
 .dock { box-sizing: border-box; width: calc(100% - 2 * var(--dsh-composer-side-clearance) - 4 * var(--dsh-composer-dock-inset)); max-width: calc(var(--dsh-composer-card-max-width) - 4 * var(--dsh-composer-dock-inset)); margin: 0 auto; border: 0; border-radius: var(--dsw-radius-md); box-shadow: var(--dsw-elevation-panel); --dsw-elevation-stroke-color: var(--dsw-alias-border-l1); background: var(--dsw-alias-bg-layer-1); overflow: hidden; }
@@ -104,6 +104,10 @@
 .outputPort[data-outlet="unknown"] .portDot { border-color: var(--dsw-alias-state-error-primary); }
 .nodeBudget { margin: 8px 12px 10px; color: var(--dsw-alias-label-tertiary); font-size: 11px; line-height: 16px; }
 .inspector { padding: 14px 0; border-top: 0.5px solid var(--dsw-alias-border-l2); margin-top: 16px; }
+.inspectorFields { border: 0; padding: 0; margin: 0; min-width: 0; }
+.checkpoint { margin: 12px 0; padding: 10px 12px; border: 0.5px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-sm); color: var(--dsw-alias-label-primary); font-size: 13px; line-height: 20px; }
+.checkpoint .toolbar { margin-bottom: 4px; }
+.inputPort:disabled, .outputPort:disabled { cursor: not-allowed; opacity: 0.5; }
 .start { display: grid; gap: 10px; border-top: 0.5px solid var(--dsw-alias-border-l2); padding-top: 18px; margin-top: 18px; }
 @media (max-width: 700px) {
   .monitor, .editor { padding: 12px 14px 20px; }

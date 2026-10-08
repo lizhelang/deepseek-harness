@@ -1,5 +1,5 @@
 ---
-description: "Durable production graph execution, conversation-owned monitoring, and evidence-gated AEA drawing delivery for users and plugin maintainers."
+description: "Direct AEA conversation workflows, future-node editing, durable execution monitoring, and evidence-checked drawing delivery."
 kind: "package-reference"
 ---
 
@@ -9,53 +9,106 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Production Studio runs a versioned graph in an existing Harness conversation. Independent branches execute concurrently; each native AEA invocation uses one durable exclusive lease. A task completes delivery only after the Host verifies geometry, manufacturing selection, actual file bytes and hashes, and the user's confirmed structured delivery conditions. The client renders this state in the conversation's monitor and workflow editor.
+Production Studio keeps a bound AEA conversation, task monitor, trajectory and workflow editor on one versioned run. Your chat executes agent steps; supported future-node edits affect later steps without starting another executor. Unbound conversations retain explicitly scheduled runs and child agents. Delivery still requires verified geometry, manufacturing selection, file bytes and hashes, and the recorded delivery conditions.
 
 ## Table of Contents
 
 - [Use this package](#use-this-package)
+- [Understand the implementation](#understand-the-implementation)
+- [Further Exploration](#further-exploration)
 - [Model Experience](#model-experience)
 - [Known Limitations and Deferred Work](#known-limitations-and-deferred-work)
 - [Dev Note](#dev-note)
 
+-----
+
 <a id="use-this-package"></a>
 ## Use this package
 
-Load this service alongside agent, tool, subagent, filesystem and storage-domain services. An in-process `fork` subagent provider is required for agent nodes; program nodes use the existing ToolRuntime, including its approval and sandbox pipeline. This package introduces no model-facing tool schema.
+Load this service alongside agent, tool, subagent, filesystem and storage-domain services. A trusted conversation provider binds direct AEA calls to the current graph. Unbound scheduled agent nodes require an in-process `fork` subagent provider; scheduled program nodes use ToolRuntime with its existing approval and sandbox pipeline. This package introduces no model-facing tool schema.
 
 ```yaml
 - name: '@deepseek-ai/dsh-production-studio'
 ```
 
-The default deployment limits are 80 total node executions, three concurrent tasks, 256 KiB retained evidence, 4 MiB per file readback, 400 history entries and 20 retained runs per conversation. Configure `maxFileBytes` for larger drawing files. Per-node attempts and per-run execution/concurrency budgets belong to the saved graph; a started run freezes that graph and its input. Changing the draft affects later runs.
+The deployment defaults are 80 executions, three concurrent scheduled tasks, 256 KiB retained evidence, 4 MiB per file readback, 400 history entries and 20 retained runs per conversation. Bound conversation graphs always use one executor. Configure `maxFileBytes` for larger drawings; the [configuration catalog](../../../docs/config-catalog.md) owns accepted deployment fields.
 
-### State and controls
+### Bound AEA conversations
 
-`ctx.productionStudio` exposes the same `productionStudio` Remote namespace. `get` and `follow` provide committed snapshots; `saveGraph` uses an expected graph version; `start` requires that version, an objective and input, plus `goalContractAcknowledged: true`. `input.deliveryGoal` must have `kind: 'verified-drawings'` and an `objectiveText` exactly matching the objective. Optional maximum piece, weld, bend and manufacturing-score limits become frozen acceptance conditions. The service rejects missing confirmation or mismatched objectives.
+Send the model-processing request through the existing chat. The AEA provider binds the first eligible `create_case` call to the actual user objective and source input. That same parent conversation executes the agent nodes; the graph admits and records each actual tool call once. Do not call `start` as a second action: bound profiles reject it, including before their first run.
 
-`pause`, `resume`, `answer` and `reconcile` use the run ID and revision, optionally a node ID. Pause affects only that branch's admission and dependencies. A running interruption becomes unknown. Answering a before/after breakpoint releases only that branch; answering a human node preserves upstream objective evidence and cannot certify an unknown native operation. Independent branches continue. A blocked operation needs a corrected draft and a new run; resume accepts paused work, never unknown work.
+Use `saveGraph` with the expected graph version to change supported future prompts, tool lists or routes in the same run. A stale save fails and requires reload. An admitted node's executable settings and outgoing routes cannot change; labels and positions may change. Human nodes retain a stable admission record after approval, so later phase changes do not unlock these settings or routes. Edits cannot increase execution or retry budgets, introduce parallel execution, or weaken required delivery checks. Saved changes affect later admitted steps, not a model request or native call already in progress.
 
-Snapshots persist in storage domain `production_studio`, independently of Session journal formats. The session table is keyed by the owning Session ID. Native leases use a separate global table. Restart converts in-flight operations to unknown and pauses ready runs. Reading state never restarts old work, and a fork inherits no active run authority.
+`pause`, `resume`, `answer` and `reconcile` require the run ID and current revision. Conversation pause stops admission of the next operation; an already dispatched operation may settle with its known result. A node stopped between known receipts is paused and resumable. A genuinely unresolved invocation is unknown: neither resume nor a human answer grants replay authority. A known failed check is blocked, not an unknown execution result.
 
-### Evidence and native boundaries
+Explicit resume and human answers release workflow restrictions and may advance read-only checks. When the run is active with an available agent node and no human wait, unknown result or in-flight call, the service continues the same parent chat. Eligible continuation always uses `steer`, including while an earlier cancellation is settling; it does not choose `inject` from a transient driver status. The continuation preserves the source binding, consumed routes and remaining run budget; it does not start another production run or replay a settled invocation. Saving a graph, reading state and reconnecting never wake an idle driver.
 
-The protected default path is baseline → geometry → manufacturing → manufacturing check → file check → goal check → delivery. The confirmed goal contract chooses a limited trial: baseline first, delivery when its declared conditions pass, necessary optimization only after failure or an unmet condition. The manufacturing child may record this scope using the existing Host's legal `finish_search(reason="user_requested")` action, then obtain actual manufacturing and comparison receipts. A failed manufacturing or goal check requires legal repair or resumed search within the original budget. This scope establishes software delivery conditions; it does not prove exhaustive search or global optimality. The four required gates use the Host-only `production_aea_evidence` producer. Graph edits cannot replace its producer, selectors, frozen bindings or reconciliation behavior. Additional gates may be configured without replacing required checks.
+The conversation adapter retains AEA Host's bounded search, required manufacturing evaluations, comparison and repair actions under the original frozen settings and budget. It does not impose the scheduled default's baseline-only `user_requested` shortcut, treat a search score as manufacturing cost, or prove global optimality.
 
-The baseline child has a narrow tool list: case creation/restoration, workpiece/geometry/candidate consultation, `submit_baseline` and `finish_search`. Its prompt explicitly records the confirmed limited scope after a verified baseline; optimization and manufacturing tools are unavailable at this stage. Only child-owned events after the Session's authoritative live boundary supply new objective evidence; fork-inherited parent receipts cannot bind a new case or certify this attempt.
+### Unbound scheduled runs
 
-The producer reads the existing AEA case ledger and reports, validates their identity and report hashes, checks the required geometry and manufacturing records, and reads both selected models as binary bytes to verify their selected SHA-256 values. Manufacturing selection comes from an actual successful AEA tool receipt, bound back to the ledger. Assistant prose, user-supplied receipts and mere file-path presence cannot certify delivery. Actual reports can reject a candidate without making the native outcome unknown.
+Without a conversation provider, `start` requires a graph version, objective, JSON input and `goalContractAcknowledged: true`. `input.deliveryGoal` must contain `kind: 'verified-drawings'` and the exact objective as `objectiveText`; optional piece, weld, bend and manufacturing-score limits become frozen acceptance conditions. Scheduled runs capture their graph and input at start; draft edits affect later scheduled runs. Independent scheduled branches and real child agents remain supported.
 
-Program and tool-backed gate arguments are checked against the current scoped tool schema before ToolRuntime dispatch. A schema rejection records a known failure and follows its failure outlet; valid calls still use the existing guarded execution pipeline. An exception after entering a tool body remains unknown unless a trusted native boundary proves that no native dispatch occurred.
+The default scheduled graph uses the confirmed limited trial: baseline first, with legal `finish_search(reason="user_requested")` when permitted, and necessary optimization after failure or an unmet condition. Its narrow baseline tool list and child-owned evidence remain separate from bound conversation execution. Pause and human decisions affect the chosen scheduled branch; other independent branches continue.
 
-The Host serializes recognized AEA and `rhino_*` tool executions across program nodes, agent children and ordinary conversation calls. Node resource settings can add locks; clearing a setting cannot remove the native lease. A trusted provider registers exact mutating tool names with `registerNativeBoundaryProvider`, owns the returned disposer, and awaits `noteNativeDispatch(exec.callId)` immediately before entering native execution. This commits a dispatch marker before native work begins. A rejection before that marker is a known failure that may enter repair; a dispatched error or an explicit unresolved AEA receipt quarantines native execution, including after restart. Providers without the marker contract are handled conservatively.
+### Evidence and recovery
+
+The required path checks geometry, manufacturing, saved files and the recorded goal before delivery. Host-only `production_aea_evidence` reads the actual AEA ledger and reports, verifies identities and report hashes, and hashes both selected models from binary bytes. Manufacturing selection must bind an actual successful tool receipt to the ledger. Assistant prose, human answers and paths alone cannot certify delivery; graph edits cannot replace or bypass required checks.
+
+Recognized AEA and `rhino_*` calls share a durable exclusive native lease across all execution modes. A trusted native provider records dispatch before native work begins. Pre-dispatch rejection is a known failure; a dispatched error or unresolved native receipt quarantines further native work. Node resource edits cannot remove that lease, and `reconcile` cannot currently release it without exact trusted completion evidence.
+
+A failed settlement write does not make an already returned result unknown. The service retains the known receipt and invocation identity in process, blocks new admission until settlement commits, and retries publication rather than redispatching the tool. A continuing domain-write failure is not durability. Once state and its pending history checkpoints commit together, append or durability-flush failure leaves a recoverable metadata outbox and a visible publication error. New operation admission waits for that outbox to publish durably; retry or restart never dispatches native work to recover history.
+
+-----
+
+<a id="understand-the-implementation"></a>
+## Understand the implementation
+
+<details>
+<summary>Implementation internals — click to expand</summary>
+
+The service serializes graph mutations, admission and settlement while the parent conversation owns each bound tool invocation. Read-only graph checks advance from actual receipts; the ordinary scheduler skips conversation runs. The [conversation-edit validator](src/conversation.ts) protects admitted work and rejects unsupported executors. The [service](src/index.ts) owns lifecycle settlement and publication; the [domain](src/domain.ts) owns saved-state validation and default graphs.
+
+The `production_studio` storage domain owns current execution state keyed by Session ID and a separate global native-lease table. Each changed conversation run and its optional `pendingCheckpoints` outbox commit in the same domain-state write. Publication then appends whole-run `production/checkpoint` events with `ignorable: true` to that same Session. Chat and Trajectory render each historical event at its original sequence; Tasks and Workflow follow current state. Current-state changes never rewrite historical checkpoint cards, and a fork inherits no active run authority.
+
+The Host-only Session projection `productionCheckpoints` records the greatest accepted checkpoint revision per run. Its cursor proves that Session accepted the append, not that the event reached durable storage. Publication and restart recovery consult that projection before appending an outbox entry; an already accepted run/revision is not appended again. Before acknowledging and clearing any delivered outbox entries, publication awaits `ctx.sessions.flush(session)` and requires `true`, even when the cursor allowed it to skip append. A `false` result or thrown error retains the pending metadata for retry. An outbox acknowledgement-write failure also retains entries without adding duplicate history. Recovery republishes metadata only, not the corresponding tool or native operation. The domain/outbox commit and Session persistence remain separate writes, not one atomic transaction, and publication errors remain visible.
+
+On stop, the service waits for admitted parent calls to settle before closing its state. Known conversation receipts remain resumable between operations; only an unresolved invocation becomes unknown. Recovery never automatically dispatches either state. The [architecture decision](../../../.agents/notes/implemented/architecture/2026-10-08-conversation-owned-production-workflow.md) records why one executor serves the four views.
+
+</details>
+
+-----
+
+<a id="further-exploration"></a>
+## Further Exploration
+
+- [Production Studio client](../../client/ui-production-studio/README.md) — current-state controls and historical rendering.
+- [Session log](../../core/session/README.md) — optional log-only events and durability checkpoints.
+- [Workflow subsystem](../../../docs/subsystems/workflow.md) — the separate script-workflow engine and generated service declarations.
+
+-----
 
 ## Model Experience
 
-### Agent-node child input
+### Bound conversation steps
 
 #### What the model sees
 
-Each agent node starts a real subagent with its configured prompt or label followed by the frozen objective, JSON input, upstream branch data and human decisions. These are a recorded child user message. The stable trailing instruction is owned by this package:
+Prompt assembly adds the active run identity, graph version, phase and current agent-node prompt to the parent conversation. It filters registered tools by that node's saved allowlist; ToolRuntime admission enforces the same restriction for direct calls. Workflow checkpoints are log-only and add no model message. An eligible explicit resume or human answer adds recorded continuation context with the existing source kind `user-approval`, attributing the explicit UI approval rather than an ordinary human message with source kind `user`. The context identifies the same run and requires preservation of its source binding, consumed routes and remaining execution budget. Its trailing instruction is `Never repeat a settled invocation or start a second run.`
+
+#### Token effect
+
+The parent incurs its existing chat request costs plus the current workflow instruction and any admitted continuation context. Explicit controls can wake an idle parent for another model request without resetting the run's consumed execution budget. Future prompt edits change later admitted requests; monitoring and checkpoint rendering add no model tokens. Graph budgets bound admitted graph work, not model token usage.
+
+#### KV Cache effect
+
+The normal parent request and system-prompt policy govern reuse. Continuation context enters the logged user-message history without rewriting earlier chat messages; a changed workflow prompt or tool list can affect cache reuse on the next request.
+
+### Scheduled agent-node child input
+
+#### What the model sees
+
+Each scheduled agent node starts a real subagent with its configured prompt or label followed by the frozen objective, JSON input, upstream branch data and human decisions. These are a recorded child user message. The stable trailing instruction is owned by this package:
 
 ##### Execution instruction
 
@@ -73,12 +126,22 @@ Each child creates an independent request through its provider. This package doe
 
 ## Known Limitations and Deferred Work
 
+<a id="known-limitations-and-deferred-work"></a>
+
+The supported execution modes have distinct limits:
+
 - **Unknown-operation reconciliation** — no generic provider currently binds an interrupted ToolRuntime call ID to the exact completed native receipt. `reconcile` reports this limitation and leaves the operation unknown. A human answer or another mutating tool call cannot release it; inspecting an existing ledger is not automatic authority to replay.
-- **Existing AEA completion policy** — this scheduler uses the existing Host's limited-trial scope and legal next actions. It does not replace AEA's search engine with a new native early-stop algorithm or claim best possible cost. A confirmed structured goal stops this graph once all required evidence is available.
-- **Unavailable capabilities** — missing program bindings or subagent providers cannot produce simulated success. A deployment must supply real capabilities. Binary file readback is bounded by the configured file-size limit.
+- **Conversation adapter scope** — agent IDs are limited to `baseline`, `manufacture` and `repair`. Conversation graphs reject parallel branches, custom agent identities, per-node model/provider overrides, program nodes and automatic tools other than read-only AEA evidence checks. Extra supported human decisions do not supply another executor.
+- **Continuation eligibility** — explicit resume and answers wake only an active conversation run with a free agent node and no human wait, unknown result or in-flight call. They do not resolve blocked or unknown work by themselves. Graph saves do not wake an idle driver.
+- **Unavailable capabilities and storage** — missing real bindings cannot produce simulated success. Binary readback has a file-size limit. Same-version compatibility here applies only to the optional Session log-only event's `ignorable` marker. Older DSH versions are not guaranteed to parse new production-domain fields with their strict readers, even when the new fields are optional. Rollback requires a matching pre-update application and data backup; it is not a promise that an older application can open the new domain state. Domain/outbox commits are not atomic with Session persistence.
 - **Acceptance scope** — verified software reports and file hashes establish this workflow's delivery conditions. They do not establish physical manufacture, workshop acceptance, or expert approval of a new part.
 
 <a id="dev-note"></a>
-## Dev Note
+### Dev Note
+
+<details>
+<summary>Working context for maintainers — click to expand</summary>
 
 None.
+
+</details>

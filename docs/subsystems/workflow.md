@@ -8,6 +8,12 @@ Service Definition: [dsh-workflow](../../packages/workflow/workflow) (`ctx.workf
 
 Sources: browser-safe vocabulary in [`packages/workflow/workflow/src/types.ts`](../../packages/workflow/workflow/src/types.ts), Host request and live-run handles in [`runtime-types.ts`](../../packages/workflow/workflow/src/runtime-types.ts).
 
+## Conversation-owned production workflows
+
+[Production Studio](../../packages/workflow/production-studio/README.md) separately owns `ctx.productionStudio`, versioned production graphs and drawing-delivery checks. A trusted provider can bind a direct AEA conversation to one run: the parent chat executes agent steps, while the service enforces graph admission and performs read-only evidence checks. This does not use `ctx.workflowEngine` to spawn another script execution. Unbound production runs retain the explicit scheduler and child agents.
+
+The monitor and editor follow current committed production state; Chat and Trajectory render optional, log-only checkpoints of that same run in Session order. Supported future-node edits preserve admitted operations, consumed routes, required checks and original budgets. The [package reference](../../packages/workflow/production-studio/README.md) owns controls and limitations; the [architecture decision](../../.agents/notes/implemented/architecture/2026-10-08-conversation-owned-production-workflow.md) owns the single-executor rationale.
+
 ## The start request
 
 What a caller asks for when starting a run. The ordinary workflow tool builds this from the model's `{ script, meta, args }` call plus the calling agent; specialized consumers may also select one engine-wide `subagentProvider` and lower `maxTotalAgents` for the run, but the script cannot observe or replace either policy. `meta` and `args` are plain JSON DATA (the engine validates `meta` against its schema and rejects loud BEFORE anything runs — no script text is ever evaluated to obtain it). `parent` is REQUIRED — every child the script starts is attributed to it, and cwd, lineage, and depth pass through the [subagent seam](subagent.md).
@@ -157,6 +163,13 @@ registerNativeBoundaryProvider(toolNames: readonly string[]): () => void
  * @returns after the native dispatch marker is durable.
  */
 async noteNativeDispatch(operationId: ToolCallIdentity): Promise<void>
+
+/**
+ * Register a trusted profile adapter; disposal removes only its own scope.
+ * @param provider - Scoped binding to actual parent-conversation tool receipts.
+ * @returns disposer that removes only this adapter.
+ */
+registerConversationWorkflow(provider: ConversationWorkflowProvider): () => void
 
 /**
  * Read state; interrupted persisted executions become unknown and are never replayed.

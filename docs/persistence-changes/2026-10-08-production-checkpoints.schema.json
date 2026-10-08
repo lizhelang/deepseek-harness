@@ -1,0 +1,869 @@
+{
+  "formatVersion": 2,
+  "roots": [
+    {
+      "key": "event:production/checkpoint",
+      "kind": "event",
+      "event": "production/checkpoint",
+      "surface": false,
+      "digest": "1585eed5425771c8549b274afdfe1f2d224cc06dce695f1471a90a0faf4bb535",
+      "schema": {
+        "root": 0,
+        "nodes": [
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "data",
+                "type": 1,
+                "optional": false
+              },
+              {
+                "name": "ignorable",
+                "type": 69,
+                "optional": true
+              },
+              {
+                "name": "seq",
+                "type": 5,
+                "optional": false
+              },
+              {
+                "name": "time",
+                "type": 5,
+                "optional": false
+              },
+              {
+                "name": "type",
+                "type": 70,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "run",
+                "type": 2,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "binding",
+                "type": 3,
+                "optional": true
+              },
+              {
+                "name": "createdAt",
+                "type": 5,
+                "optional": false
+              },
+              {
+                "name": "executions",
+                "type": 5,
+                "optional": false
+              },
+              {
+                "name": "graph",
+                "type": 6,
+                "optional": false
+              },
+              {
+                "name": "history",
+                "type": 40,
+                "optional": false
+              },
+              {
+                "name": "id",
+                "type": 4,
+                "optional": false
+              },
+              {
+                "name": "input",
+                "type": 12,
+                "optional": false
+              },
+              {
+                "name": "mode",
+                "type": 50,
+                "optional": true
+              },
+              {
+                "name": "objective",
+                "type": 4,
+                "optional": false
+              },
+              {
+                "name": "phase",
+                "type": 53,
+                "optional": false
+              },
+              {
+                "name": "revision",
+                "type": 5,
+                "optional": false
+              },
+              {
+                "name": "tasks",
+                "type": 55,
+                "optional": false
+              },
+              {
+                "name": "updatedAt",
+                "type": 5,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "key",
+                "type": 4,
+                "optional": false
+              },
+              {
+                "name": "provider",
+                "type": 4,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "primitive",
+            "type": "string"
+          },
+          {
+            "kind": "primitive",
+            "type": "number"
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "edges",
+                "type": 7,
+                "optional": false
+              },
+              {
+                "name": "maxConcurrent",
+                "type": 5,
+                "optional": false
+              },
+              {
+                "name": "maxExecutions",
+                "type": 5,
+                "optional": false
+              },
+              {
+                "name": "name",
+                "type": 4,
+                "optional": false
+              },
+              {
+                "name": "nodes",
+                "type": 9,
+                "optional": false
+              },
+              {
+                "name": "version",
+                "type": 5,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "array",
+            "element": 8
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "fromNode",
+                "type": 4,
+                "optional": false
+              },
+              {
+                "name": "fromPort",
+                "type": 4,
+                "optional": false
+              },
+              {
+                "name": "id",
+                "type": 4,
+                "optional": false
+              },
+              {
+                "name": "toNode",
+                "type": 4,
+                "optional": false
+              },
+              {
+                "name": "toPort",
+                "type": 4,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "array",
+            "element": 10
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "config",
+                "type": 11,
+                "optional": false
+              },
+              {
+                "name": "id",
+                "type": 4,
+                "optional": false
+              },
+              {
+                "name": "inputs",
+                "type": 23,
+                "optional": false
+              },
+              {
+                "name": "kind",
+                "type": 35,
+                "optional": false
+              },
+              {
+                "name": "label",
+                "type": 4,
+                "optional": false
+              },
+              {
+                "name": "maxAttempts",
+                "type": 5,
+                "optional": false
+              },
+              {
+                "name": "outputs",
+                "type": 23,
+                "optional": false
+              },
+              {
+                "name": "protected",
+                "type": 14,
+                "optional": true
+              },
+              {
+                "name": "resource",
+                "type": 4,
+                "optional": true
+              },
+              {
+                "name": "x",
+                "type": 5,
+                "optional": false
+              },
+              {
+                "name": "y",
+                "type": 5,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "arguments",
+                "type": 12,
+                "optional": true
+              },
+              {
+                "name": "breakAfter",
+                "type": 14,
+                "optional": true
+              },
+              {
+                "name": "breakBefore",
+                "type": 14,
+                "optional": true
+              },
+              {
+                "name": "certification",
+                "type": 17,
+                "optional": true
+              },
+              {
+                "name": "evidencePath",
+                "type": 4,
+                "optional": true
+              },
+              {
+                "name": "evidenceToolName",
+                "type": 4,
+                "optional": true
+              },
+              {
+                "name": "expected",
+                "type": 12,
+                "optional": true
+              },
+              {
+                "name": "fileHashes",
+                "type": 22,
+                "optional": true
+              },
+              {
+                "name": "filePaths",
+                "type": 22,
+                "optional": true
+              },
+              {
+                "name": "model",
+                "type": 4,
+                "optional": true
+              },
+              {
+                "name": "prompt",
+                "type": 4,
+                "optional": true
+              },
+              {
+                "name": "provider",
+                "type": 4,
+                "optional": true
+              },
+              {
+                "name": "question",
+                "type": 4,
+                "optional": true
+              },
+              {
+                "name": "reconcileToolName",
+                "type": 4,
+                "optional": true
+              },
+              {
+                "name": "toolName",
+                "type": 4,
+                "optional": true
+              },
+              {
+                "name": "tools",
+                "type": 22,
+                "optional": true
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "union",
+            "types": [
+              4,
+              5,
+              13,
+              14,
+              15,
+              16
+            ]
+          },
+          {
+            "kind": "object",
+            "properties": [],
+            "indices": [
+              {
+                "key": 4,
+                "value": 12
+              }
+            ]
+          },
+          {
+            "kind": "primitive",
+            "type": "boolean"
+          },
+          {
+            "kind": "primitive",
+            "type": "null"
+          },
+          {
+            "kind": "array",
+            "element": 12
+          },
+          {
+            "kind": "union",
+            "types": [
+              18,
+              19,
+              20,
+              21
+            ]
+          },
+          {
+            "kind": "literal",
+            "value": "manufacturing"
+          },
+          {
+            "kind": "literal",
+            "value": "files"
+          },
+          {
+            "kind": "literal",
+            "value": "geometry"
+          },
+          {
+            "kind": "literal",
+            "value": "goal"
+          },
+          {
+            "kind": "array",
+            "element": 4
+          },
+          {
+            "kind": "array",
+            "element": 24
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "id",
+                "type": 4,
+                "optional": false
+              },
+              {
+                "name": "outlet",
+                "type": 25,
+                "optional": true
+              },
+              {
+                "name": "type",
+                "type": 29,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "union",
+            "types": [
+              26,
+              27,
+              28
+            ]
+          },
+          {
+            "kind": "literal",
+            "value": "success"
+          },
+          {
+            "kind": "literal",
+            "value": "unknown"
+          },
+          {
+            "kind": "literal",
+            "value": "failure"
+          },
+          {
+            "kind": "union",
+            "types": [
+              18,
+              19,
+              20,
+              27,
+              30,
+              31,
+              32,
+              33,
+              34
+            ]
+          },
+          {
+            "kind": "literal",
+            "value": "input"
+          },
+          {
+            "kind": "literal",
+            "value": "issue"
+          },
+          {
+            "kind": "literal",
+            "value": "delivery"
+          },
+          {
+            "kind": "literal",
+            "value": "analysis"
+          },
+          {
+            "kind": "literal",
+            "value": "candidate"
+          },
+          {
+            "kind": "union",
+            "types": [
+              32,
+              36,
+              37,
+              38,
+              39
+            ]
+          },
+          {
+            "kind": "literal",
+            "value": "program"
+          },
+          {
+            "kind": "literal",
+            "value": "agent"
+          },
+          {
+            "kind": "literal",
+            "value": "gate"
+          },
+          {
+            "kind": "literal",
+            "value": "human"
+          },
+          {
+            "kind": "array",
+            "element": 41
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "attempt",
+                "type": 5,
+                "optional": false
+              },
+              {
+                "name": "message",
+                "type": 4,
+                "optional": false
+              },
+              {
+                "name": "nodeId",
+                "type": 4,
+                "optional": false
+              },
+              {
+                "name": "phase",
+                "type": 42,
+                "optional": false
+              },
+              {
+                "name": "time",
+                "type": 5,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "union",
+            "types": [
+              27,
+              39,
+              43,
+              44,
+              45,
+              46,
+              47,
+              48,
+              49
+            ]
+          },
+          {
+            "kind": "literal",
+            "value": "paused"
+          },
+          {
+            "kind": "literal",
+            "value": "ready"
+          },
+          {
+            "kind": "literal",
+            "value": "running"
+          },
+          {
+            "kind": "literal",
+            "value": "skipped"
+          },
+          {
+            "kind": "literal",
+            "value": "waiting"
+          },
+          {
+            "kind": "literal",
+            "value": "blocked"
+          },
+          {
+            "kind": "literal",
+            "value": "complete"
+          },
+          {
+            "kind": "union",
+            "types": [
+              51,
+              52
+            ]
+          },
+          {
+            "kind": "literal",
+            "value": "scheduled"
+          },
+          {
+            "kind": "literal",
+            "value": "conversation"
+          },
+          {
+            "kind": "union",
+            "types": [
+              27,
+              43,
+              48,
+              49,
+              54
+            ]
+          },
+          {
+            "kind": "literal",
+            "value": "active"
+          },
+          {
+            "kind": "array",
+            "element": 56
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "admitted",
+                "type": 14,
+                "optional": true
+              },
+              {
+                "name": "attempts",
+                "type": 5,
+                "optional": false
+              },
+              {
+                "name": "breakpoint",
+                "type": 57,
+                "optional": true
+              },
+              {
+                "name": "breakpointReleased",
+                "type": 14,
+                "optional": true
+              },
+              {
+                "name": "certificates",
+                "type": 60,
+                "optional": false
+              },
+              {
+                "name": "childSessionId",
+                "type": 4,
+                "optional": true
+              },
+              {
+                "name": "evidence",
+                "type": 61,
+                "optional": false
+              },
+              {
+                "name": "incoming",
+                "type": 66,
+                "optional": true
+              },
+              {
+                "name": "message",
+                "type": 4,
+                "optional": false
+              },
+              {
+                "name": "nodeId",
+                "type": 4,
+                "optional": false
+              },
+              {
+                "name": "operationId",
+                "type": 4,
+                "optional": true
+              },
+              {
+                "name": "output",
+                "type": 12,
+                "optional": true
+              },
+              {
+                "name": "pendingOutlet",
+                "type": 25,
+                "optional": true
+              },
+              {
+                "name": "phase",
+                "type": 42,
+                "optional": false
+              },
+              {
+                "name": "queued",
+                "type": 68,
+                "optional": true
+              },
+              {
+                "name": "settledOperationId",
+                "type": 4,
+                "optional": true
+              },
+              {
+                "name": "startedAt",
+                "type": 5,
+                "optional": true
+              },
+              {
+                "name": "updatedAt",
+                "type": 5,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "union",
+            "types": [
+              58,
+              59
+            ]
+          },
+          {
+            "kind": "literal",
+            "value": "after"
+          },
+          {
+            "kind": "literal",
+            "value": "before"
+          },
+          {
+            "kind": "array",
+            "element": 17
+          },
+          {
+            "kind": "array",
+            "element": 62
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "attempt",
+                "type": 5,
+                "optional": false
+              },
+              {
+                "name": "data",
+                "type": 12,
+                "optional": false
+              },
+              {
+                "name": "kind",
+                "type": 63,
+                "optional": false
+              },
+              {
+                "name": "nodeId",
+                "type": 4,
+                "optional": false
+              },
+              {
+                "name": "observedAt",
+                "type": 5,
+                "optional": false
+              },
+              {
+                "name": "toolName",
+                "type": 4,
+                "optional": true
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "union",
+            "types": [
+              37,
+              39,
+              64,
+              65
+            ]
+          },
+          {
+            "kind": "literal",
+            "value": "tool"
+          },
+          {
+            "kind": "literal",
+            "value": "file"
+          },
+          {
+            "kind": "object",
+            "properties": [],
+            "indices": [
+              {
+                "key": 4,
+                "value": 67
+              }
+            ]
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "certificates",
+                "type": 60,
+                "optional": false
+              },
+              {
+                "name": "data",
+                "type": 12,
+                "optional": false
+              },
+              {
+                "name": "evidence",
+                "type": 61,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "array",
+            "element": 66
+          },
+          {
+            "kind": "literal",
+            "value": true
+          },
+          {
+            "kind": "literal",
+            "value": "production/checkpoint"
+          }
+        ]
+      }
+    }
+  ],
+  "types": []
+}

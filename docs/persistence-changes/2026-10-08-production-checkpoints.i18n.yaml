@@ -1,0 +1,28 @@
+# Bilingual-pair consistency record for 2026-10-08-production-checkpoints.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/persistence-changes/2026-10-08-production-checkpoints.md
+/:
+  en: 3d5a424ae7d7e46b
+  zh: c22a8e4a62d8cc1a
+/2026-10-08-production-checkpoints:
+  en: d1b72b6cac358fed
+  zh: 7bc239dba10532bc
+/2026-10-08-production-checkpoints/summary:
+  en: 698bf5b6d16ba09a
+  zh: f10cf574d13d2a65
+/2026-10-08-production-checkpoints/table-of-contents:
+  en: 6cf314a069ceb451
+  zh: 9adff678e9ecab3b
+/2026-10-08-production-checkpoints/declaration:
+  en: 6907136f28e48c90
+  zh: 02f8298485f3d8e7
+/2026-10-08-production-checkpoints/compatibility:
+  en: 02b68aa3708ad851
+  zh: da9a475765ab2851
+/2026-10-08-production-checkpoints/verification:
+  en: 3baacb1dc41f44af
+  zh: d0f7015be1606257
+/2026-10-08-production-checkpoints/dev-note:
+  en: b75c8458928b72b9
+  zh: 003ba4e17b4b5269

@@ -697,9 +697,10 @@ export class Session {
    *   events this one derives from. REQUIRED for
    *   {@link SurfaceEventType} events (every message-producing event must
    *   declare how it joins the surface, the sole source of derived model
-   *   history) and
-   *   rejected by the compiler for non-surface types like `turn/start` or
-   *   `assistant/attempt`. Assistant messages embed their exact provider
+   *   history). Non-surface types accept only `ignorable: true`, which lets
+   *   older readers preserve an optional observation they do not recognize;
+   *   it never permits surface metadata or changes message derivation.
+   *   Assistant messages embed their exact provider
    *   stream and cannot cite top-level source events.
    * @returns the logged event — its assigned `seq`/`time` plus the SNAPSHOT of
    *   `data` that entered the log, so reading `event.data` back sees the logged
@@ -722,12 +723,13 @@ export class Session {
   append<T extends SessionEventType>(
     type: T,
     data: SessionEventMap[T],
-    ...opts: T extends SurfaceEventType ? [opts: SurfaceIntent<T>] : []
+    ...opts: T extends SurfaceEventType ? [opts: SurfaceIntent<T>] : [opts?: { ignorable?: true }]
   ): SessionEvent<T> {
-    const surfaceOpts: SurfaceIntent | undefined = opts[0]
+    const surfaceOpts = opts[0] as (SurfaceIntent & { ignorable?: true }) | undefined
     const surfaceMetadata = {
       ...surfaceOpts?.sourceEventSeqs === undefined ? {} : { sourceEventSeqs: surfaceOpts.sourceEventSeqs },
       ...surfaceOpts?.surfaceOp === undefined ? {} : { surfaceOp: surfaceOpts.surfaceOp },
+      ...surfaceOpts?.ignorable === undefined ? {} : { ignorable: surfaceOpts.ignorable },
     }
     const dataSnapshot = snapshotJsonValue(data)
     if (dataSnapshot === undefined) {

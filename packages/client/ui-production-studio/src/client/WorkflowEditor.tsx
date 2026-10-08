@@ -1,4 +1,4 @@
-/** Typed node editor and explicit start form backed by the Session draft. */
+/** Typed future-node editor and the unbound Session's explicit start form. */
 import { useEffect, useRef, useState, type CSSProperties, type PointerEvent } from 'react'
 import clsx from 'clsx'
 import { Button, Checkbox, Input, Menu } from '@deepseek-ai/dsh-client-ui-primitives'
@@ -40,13 +40,17 @@ function JsonField({ label, value, raw, update, writeRaw, t }: PropsLocale<'prod
   </label>
 }
 
-function NodeInspector({ node, update, remove, tools, jsonFields, writeJson, t }: PropsLocale<'productionStudio'> & {
+function NodeInspector({ node, update, remove, tools, jsonFields, writeJson, locked, removeLocked, conversation, maxAttempts, t }: PropsLocale<'productionStudio'> & {
   node: ProductionNode
   update: (node: ProductionNode) => void
   remove: () => void
   tools: readonly string[]
   jsonFields: Readonly<Record<string, string>>
   writeJson: (field: string, value: string) => void
+  locked: boolean
+  removeLocked: boolean
+  conversation: boolean
+  maxAttempts: number
 }) {
   const setConfig = (config: ProductionNode['config']): void => { update({ ...node, config: { ...node.config, ...config } }) }
   const requiredGate = node.protected === true && node.kind === 'gate' && node.config.certification !== undefined
@@ -54,57 +58,64 @@ function NodeInspector({ node, update, remove, tools, jsonFields, writeJson, t }
   const text = (key: 'prompt' | 'provider' | 'model' | 'toolName' | 'evidencePath' | 'evidenceToolName' | 'question' | 'reconcileToolName', label: string, multiline = false) =>
     <label className={css.field}>{label}{multiline
       ? <textarea aria-label={label} rows={3} value={node.config[key] ?? ''} onChange={(event) => { setConfig({ [key]: event.target.value }) }} />
-      : <Input aria-label={label} value={node.config[key] ?? ''} readOnly={requiredGate && ['toolName', 'evidencePath', 'evidenceToolName', 'reconcileToolName'].includes(key)}
-        onChange={(event) => { setConfig({ [key]: event.target.value }) }} />}</label>
+      : <Input aria-label={label} value={node.config[key] ?? ''} readOnly={(conversation && (key === 'provider' || key === 'model')) || (requiredGate && ['toolName', 'evidencePath', 'evidenceToolName', 'reconcileToolName'].includes(key))}
+        onChange={(event) => { if (!conversation || (key !== 'provider' && key !== 'model')) setConfig({ [key]: event.target.value }) }} />}</label>
   return <section className={css.inspector} data-production-inspector={node.id}>
     <div className={css.toolbar}><h3>{node.label}</h3><span className={css.muted}>{t(`node.${node.kind}`)}</span>
-      <Button size="sm" variant="ghost" disabled={node.protected} title={node.protected ? t('editor.protected') : undefined} onClick={remove}>{t('editor.delete')}</Button></div>
+      <Button size="sm" variant="ghost" disabled={node.protected || removeLocked} title={removeLocked ? t('editor.locked') : node.protected ? t('editor.protected') : undefined} onClick={remove}>{t('editor.delete')}</Button></div>
     {node.protected && <p className={css.muted}>{t('editor.protected')}</p>}
-    <div className={css.fields}>
-      <label className={css.field}>{t('field.label')}<Input aria-label={t('field.label')} value={node.label} onChange={(event) => { update({ ...node, label: event.target.value }) }} /></label>
-      <label className={css.field}>{t('field.attempts')}<Input type="number" min={1} max={100} aria-label={t('field.attempts')} value={node.maxAttempts}
-        onChange={(event) => { update({ ...node, maxAttempts: Math.max(1, Math.min(100, Number(event.target.value) || 1)) }) }} /></label>
-      <label className={css.field}>{t('field.resource')}<Input aria-label={t('field.resource')} value={node.resource ?? ''} onChange={(event) => { update({ ...node, resource: event.target.value }) }} /></label>
-      {!node.protected && node.inputs[0] !== undefined && <div className={css.field}>{t('field.inputType')}
-        <PortTypePicker value={node.inputs[0].type} t={t} onChange={(type) => { update({ ...node,
-          inputs: node.inputs.map(port => ({ ...port, type })),
-          outputs: node.kind === 'gate' || node.kind === 'human' ? node.outputs.map(port => port.outlet === 'success' ? { ...port, type } : port) : node.outputs,
-        }) }} /></div>}
-      {!node.protected && (node.kind === 'agent' || node.kind === 'program') && successOutput !== undefined && <div className={css.field}>{t('field.outputType')}
-        <PortTypePicker value={successOutput.type} t={t} onChange={(type) => { update({ ...node,
-          outputs: node.outputs.map(port => port.outlet === 'success' ? { ...port, type } : port),
-        }) }} /></div>}
-      {node.kind === 'agent' && <>
-        {text('provider', t('field.provider'))}{text('model', t('field.model'))}
-        <label className={css.field}>{t('field.tools')}<textarea aria-label={t('field.tools')} rows={2} value={(node.config.tools ?? []).join('\n')}
-          onChange={(event) => { setConfig({ tools: event.target.value.split('\n').map(line => line.trim()).filter(Boolean) }) }} /></label>
-      </>}
-      {(node.kind === 'agent' || node.kind === 'program') && text('prompt', t('field.role'), true)}
-      {(node.kind === 'gate' || node.kind === 'program') && <>
-        {text('toolName', t('field.tool'))}
-        {requiredGate ? <div className={css.field}>{t('field.arguments')}<pre>{JSON.stringify(node.config.arguments ?? {}, null, 2)}</pre></div>
-          : <JsonField key={`${node.id}:arguments`} label={t('field.arguments')} value={node.config.arguments} raw={jsonFields[`${node.id}:arguments`]} t={t} writeRaw={(value) => { writeJson(`${node.id}:arguments`, value) }} update={(value) => { setConfig({ arguments: value }) }} />}
-        {text('reconcileToolName', t('branch.reconcile'))}
-      </>}
-      {node.kind === 'gate' && <>
-        {text('evidencePath', t('field.evidence'))}
-        {text('evidenceToolName', t('field.evidenceSource'))}
-        {requiredGate ? <div className={css.field}>{t('field.expected')}<pre>{JSON.stringify(node.config.expected ?? true, null, 2)}</pre></div>
-          : <JsonField key={`${node.id}:expected`} label={t('field.expected')} value={node.config.expected} raw={jsonFields[`${node.id}:expected`]} t={t} writeRaw={(value) => { writeJson(`${node.id}:expected`, value) }} update={(value) => { setConfig({ expected: value }) }} />}
-        {node.config.certification !== undefined && <div className={css.field}>{t('field.certification')}<strong>{t(`certificate.${node.config.certification}`)}</strong></div>}
-      </>}
-      {(node.kind === 'gate' || node.kind === 'delivery') && <label className={css.field}>{t('field.files')}
-        <textarea aria-label={t('field.files')} rows={2} value={(node.config.filePaths ?? []).join('\n')} readOnly={requiredGate}
-          onChange={(event) => { setConfig({ filePaths: event.target.value.split('\n').map(line => line.trim()).filter(Boolean) }) }} /></label>}
-      {(node.kind === 'gate' || node.kind === 'delivery') && <label className={css.field}>{t('field.hashes')}
-        <textarea aria-label={t('field.hashes')} rows={2} value={(node.config.fileHashes ?? []).join('\n')} readOnly={requiredGate}
-          onChange={(event) => { setConfig({ fileHashes: event.target.value.split('\n').map(line => line.trim()).filter(Boolean) }) }} /></label>}
-      {node.kind === 'human' && text('question', t('field.question'), true)}
-    </div>
-    {node.kind !== 'human' && node.kind !== 'delivery' && <div className={css.rowActions}>
-      <Checkbox label={t('field.before')} checked={node.config.breakBefore ?? false} onChange={(value) => { setConfig({ breakBefore: value }) }} />
-      <Checkbox label={t('field.after')} checked={node.config.breakAfter ?? false} onChange={(value) => { setConfig({ breakAfter: value }) }} />
-    </div>}
+    {locked && <p className={css.muted}>{t('editor.locked')}</p>}
+    {conversation && node.kind === 'agent' && <p className={css.muted}>{t('editor.modelUnsupported')}</p>}
+    <fieldset className={css.inspectorFields} disabled={locked}>
+      <div className={css.fields}>
+        <label className={css.field}>{t('field.label')}<Input aria-label={t('field.label')} value={node.label} onChange={(event) => { update({ ...node, label: event.target.value }) }} /></label>
+        <label className={css.field}>{t('field.attempts')}<Input type="number" min={1} max={maxAttempts}
+          aria-label={t('field.attempts')} value={node.maxAttempts}
+          onChange={(event) => {
+            update({ ...node, maxAttempts: Math.max(1, Math.min(maxAttempts, Number(event.target.value) || 1)) })
+          }} /></label>
+        <label className={css.field}>{t('field.resource')}<Input aria-label={t('field.resource')} value={node.resource ?? ''} onChange={(event) => { update({ ...node, resource: event.target.value }) }} /></label>
+        {!node.protected && node.inputs[0] !== undefined && <div className={css.field}>{t('field.inputType')}
+          <PortTypePicker value={node.inputs[0].type} t={t} onChange={(type) => { update({ ...node,
+            inputs: node.inputs.map(port => ({ ...port, type })),
+            outputs: node.kind === 'gate' || node.kind === 'human' ? node.outputs.map(port => port.outlet === 'success' ? { ...port, type } : port) : node.outputs,
+          }) }} /></div>}
+        {!node.protected && (node.kind === 'agent' || node.kind === 'program') && successOutput !== undefined && <div className={css.field}>{t('field.outputType')}
+          <PortTypePicker value={successOutput.type} t={t} onChange={(type) => { update({ ...node,
+            outputs: node.outputs.map(port => port.outlet === 'success' ? { ...port, type } : port),
+          }) }} /></div>}
+        {node.kind === 'agent' && <>
+          {text('provider', t('field.provider'))}{text('model', t('field.model'))}
+          <label className={css.field}>{t('field.tools')}<textarea aria-label={t('field.tools')} rows={2} value={(node.config.tools ?? []).join('\n')}
+            onChange={(event) => { setConfig({ tools: event.target.value.split('\n').map(line => line.trim()).filter(Boolean) }) }} /></label>
+        </>}
+        {(node.kind === 'agent' || node.kind === 'program') && text('prompt', t('field.role'), true)}
+        {(node.kind === 'gate' || node.kind === 'program') && <>
+          {text('toolName', t('field.tool'))}
+          {requiredGate ? <div className={css.field}>{t('field.arguments')}<pre>{JSON.stringify(node.config.arguments ?? {}, null, 2)}</pre></div>
+            : <JsonField key={`${node.id}:arguments`} label={t('field.arguments')} value={node.config.arguments} raw={jsonFields[`${node.id}:arguments`]} t={t} writeRaw={(value) => { writeJson(`${node.id}:arguments`, value) }} update={(value) => { setConfig({ arguments: value }) }} />}
+          {text('reconcileToolName', t('branch.reconcile'))}
+        </>}
+        {node.kind === 'gate' && <>
+          {text('evidencePath', t('field.evidence'))}
+          {text('evidenceToolName', t('field.evidenceSource'))}
+          {requiredGate ? <div className={css.field}>{t('field.expected')}<pre>{JSON.stringify(node.config.expected ?? true, null, 2)}</pre></div>
+            : <JsonField key={`${node.id}:expected`} label={t('field.expected')} value={node.config.expected} raw={jsonFields[`${node.id}:expected`]} t={t} writeRaw={(value) => { writeJson(`${node.id}:expected`, value) }} update={(value) => { setConfig({ expected: value }) }} />}
+          {node.config.certification !== undefined && <div className={css.field}>{t('field.certification')}<strong>{t(`certificate.${node.config.certification}`)}</strong></div>}
+        </>}
+        {(node.kind === 'gate' || node.kind === 'delivery') && <label className={css.field}>{t('field.files')}
+          <textarea aria-label={t('field.files')} rows={2} value={(node.config.filePaths ?? []).join('\n')} readOnly={requiredGate}
+            onChange={(event) => { setConfig({ filePaths: event.target.value.split('\n').map(line => line.trim()).filter(Boolean) }) }} /></label>}
+        {(node.kind === 'gate' || node.kind === 'delivery') && <label className={css.field}>{t('field.hashes')}
+          <textarea aria-label={t('field.hashes')} rows={2} value={(node.config.fileHashes ?? []).join('\n')} readOnly={requiredGate}
+            onChange={(event) => { setConfig({ fileHashes: event.target.value.split('\n').map(line => line.trim()).filter(Boolean) }) }} /></label>}
+        {node.kind === 'human' && text('question', t('field.question'), true)}
+      </div>
+      {node.kind !== 'human' && node.kind !== 'delivery' && <div className={css.rowActions}>
+        <Checkbox label={t('field.before')} checked={node.config.breakBefore ?? false} onChange={(value) => { setConfig({ breakBefore: value }) }} />
+        <Checkbox label={t('field.after')} checked={node.config.breakAfter ?? false} onChange={(value) => { setConfig({ breakAfter: value }) }} />
+      </div>}
+    </fieldset>
     {tools.length > 0 && <details className={css.history}><summary>{t('field.tools')}</summary><pre>{tools.join('\n')}</pre></details>}
   </section>
 }
@@ -112,15 +123,27 @@ function NodeInspector({ node, update, remove, tools, jsonFields, writeJson, t }
 /**
  * Render the actual editable graph, preserving unsent fields across Host updates.
  * @param props - Typed Remote mutation callbacks, Session draft and locale props.
- * @returns a port-wiring canvas, selected-node properties and explicit start form.
+ * @returns the canonical graph, live node phases and supported future edits.
  */
 export function ProductionWorkflowView(props: StudioViewProps) {
   const { useProduction, useStore, actions, t, saveGraph, start, refresh } = props
   const read = useProduction(value => value)
   const drafts = useStore(value => value)
   const snapshot = read.snapshot
-  const graph = drafts.graph ?? snapshot?.graph
-  const baseVersion = drafts.baseVersion ?? snapshot?.graph.version ?? 0
+  const conversation = snapshot?.capabilities.conversation !== undefined
+  const currentRun = conversation ? snapshot.runs.findLast(run => run.mode === 'conversation' && run.phase !== 'complete')
+    ?? snapshot.runs.findLast(run => run.mode === 'conversation' && run.graph.version === snapshot.graph.version) : undefined
+  const tasks = new Map(currentRun?.tasks.map(task => [task.nodeId, task]))
+  const graph = drafts.dirty ? drafts.graph ?? snapshot?.graph : snapshot?.graph
+  const baseVersion = drafts.dirty ? drafts.baseVersion ?? snapshot?.graph.version ?? 0 : snapshot?.graph.version ?? 0
+  const lockedNode = (id: string): boolean => {
+    const task = tasks.get(id)
+    return task !== undefined && (task.admitted === true || task.attempts > 0
+      || ['running', 'human', 'paused', 'complete', 'unknown'].includes(task.phase))
+  }
+  // Removing a future target would also remove a consumed predecessor's route.
+  const lockedRemoval = (id: string): boolean => lockedNode(id)
+    || graph?.edges.some(edge => edge.toNode === id && lockedNode(edge.fromNode)) === true
   const [selected, setSelected] = useState<string | null>(null)
   const [selectedEdge, setSelectedEdge] = useState<string | null>(null)
   const [wire, setWire] = useState<Wire | null>(null)
@@ -145,7 +168,10 @@ export function ProductionWorkflowView(props: StudioViewProps) {
   }, [snapshot, drafts.dirty, drafts.baseVersion, actions])
   const change = (next: ProductionGraph): void => { actions.graph(next, baseVersion); setMessage(null) }
   const updateNode = (node: ProductionNode): void => {
-    if (graph !== undefined) change({ ...graph, nodes: graph.nodes.map(item => item.id === node.id ? node : item) })
+    if (graph !== undefined && !lockedNode(node.id)) change({ ...graph, nodes: graph.nodes.map(item => item.id === node.id ? node : item) })
+  }
+  const moveNode = (id: string, x: number, y: number): void => {
+    if (graph !== undefined) change({ ...graph, nodes: graph.nodes.map(node => node.id === id ? { ...node, x, y } : node) })
   }
   const point = (clientX: number, clientY: number): { x: number; y: number } => {
     const bounds = canvas.current?.getBoundingClientRect()
@@ -154,6 +180,7 @@ export function ProductionWorkflowView(props: StudioViewProps) {
   }
   const connect = (nodeId: string, portId: string): void => {
     if (graph === undefined || wire === null) return
+    if (lockedNode(wire.node)) { setWire(null); return }
     const output = graph.nodes.find(node => node.id === wire.node)?.outputs.find(port => port.id === wire.port)
     const input = graph.nodes.find(node => node.id === nodeId)?.inputs.find(port => port.id === portId)
     if (wire.node === nodeId) { setMessage(t('editor.selfEdge')); setWire(null); return }
@@ -176,11 +203,9 @@ export function ProductionWorkflowView(props: StudioViewProps) {
     if (current.kind === 'pan') setView({ ...viewRef.current, x: current.x + event.clientX - current.clientX, y: current.y + event.clientY - current.clientY })
     if (current.kind === 'node') {
       const node = graph?.nodes.find(item => item.id === current.id)
-      if (node !== undefined) updateNode({
-        ...node,
-        x: Math.max(0, current.x + (event.clientX - current.clientX) / viewRef.current.zoom),
-        y: Math.max(0, current.y + (event.clientY - current.clientY) / viewRef.current.zoom),
-      })
+      if (node !== undefined) moveNode(node.id,
+        Math.max(0, current.x + (event.clientX - current.clientX) / viewRef.current.zoom),
+        Math.max(0, current.y + (event.clientY - current.clientY) / viewRef.current.zoom))
     }
   }
   const onUp = (event: PointerEvent<HTMLDivElement>): void => {
@@ -247,7 +272,7 @@ export function ProductionWorkflowView(props: StudioViewProps) {
     }, t('editor.saved'))
   }
   const handleStart = (): void => {
-    if (graph === undefined) return
+    if (graph === undefined || conversation) return
     if (invalidFields.length > 0) { setMessage(t('editor.invalidFields')); return }
     if (drafts.dirty) { setMessage(t('editor.unsavedStart')); return }
     if (drafts.objective.trim() === '') { setMessage(t('start.objectiveRequired')); return }
@@ -275,14 +300,15 @@ export function ProductionWorkflowView(props: StudioViewProps) {
   const wireNode = wire === null ? undefined : graph.nodes.find(node => node.id === wire.node)
   const conflict = drafts.dirty && snapshot.graph.version !== baseVersion
   return <section className={css.editor} data-production-editor>
-    <div className={css.toolbar}><h2>{t('view.editor')}</h2><span className={css.muted}>{t('editor.draft', { version: baseVersion })}</span>
+    <div className={css.toolbar}><h2>{t('view.editor')}</h2><span className={css.muted}>{t(conversation && !drafts.dirty ? 'task.versionLive' : 'editor.draft', { version: baseVersion })}</span>
       <span className={css.muted}>{drafts.dirty ? t('editor.changed') : ''}</span>
       <Button size="sm" variant="primary" disabled={pending || !drafts.dirty} onClick={handleSave}>{t('editor.save')}</Button></div>
-    <p className={css.muted}>{t('editor.frozen')}</p>
+    <p className={css.muted}>{t(conversation ? 'editor.future' : 'editor.frozen')}</p>
+    {conversation && <p className={css.muted}>{t('conversation.autoStart')}</p>}
     {conflict && <div className={css.error} role="alert">{t('editor.conflict')}<Button size="sm" variant="outline" onClick={() => { actions.loaded(snapshot.graph); setMessage(null) }}>{t('editor.reload')}</Button></div>}
     {read.error !== null && <p className={css.error} role="alert">{read.error}</p>}
     <div className={css.toolbar}>
-      {(['agent', 'gate', 'human'] as const).map(kind => <Button key={kind} size="sm" variant="outline" onClick={() => {
+      {(['agent', 'gate', 'human'] as const).map(kind => <Button key={kind} size="sm" variant="outline" disabled={conversation && kind === 'agent'} title={conversation && kind === 'agent' ? t('editor.agentUnsupported') : undefined} onClick={() => {
         const node = newNode(graph, kind, t(kind === 'agent' ? 'node.newAgent' : kind === 'gate' ? 'node.newGate' : 'node.newHuman'))
         change({ ...graph, nodes: [...graph.nodes, node] }); setSelected(node.id); setSelectedEdge(null)
       }}>{t(kind === 'agent' ? 'editor.addAgent' : kind === 'gate' ? 'editor.addGate' : 'editor.addHuman')}</Button>)}
@@ -317,41 +343,53 @@ export function ProductionWorkflowView(props: StudioViewProps) {
           {wire !== null && wireNode !== undefined && <path className={clsx(css.wire, css.selectedWire)}
             d={edgePath(portPoint(wireNode, wire.port, true), ghost)} />}
         </svg>
-        {graph.nodes.map(node => <article key={node.id} className={clsx(css.node, selected === node.id && css.selectedNode)}
-          data-production-node={node.id} style={{ '--studio-x': `${node.x}px`, '--studio-y': `${node.y}px` } as LocalStyle} onClick={() => { setSelected(node.id); setSelectedEdge(null) }}>
-          <button type="button" className={css.nodeTitle} onPointerDown={(event) => {
-            setSelected(node.id); setSelectedEdge(null)
-            capture(event, { kind: 'node', id: node.id, clientX: event.clientX, clientY: event.clientY, x: node.x, y: node.y })
-          }}>{node.label}</button>
-          <div className={css.nodeKind}>{t(`node.${node.kind}`)}{node.protected ? ' · ' + t('editor.protected') : ''}</div>
-          <div className={css.ports}>
-            <div>{node.inputs.map(port => <button key={port.id} type="button" className={css.inputPort} data-studio-input data-node={node.id} data-port={port.id}
-              aria-label={t('editor.connectTo', { node: node.label, port: port.id })} onClick={(event) => { event.stopPropagation(); connect(node.id, port.id) }}>
-              <span className={css.portDot} />{t(`port.${port.type}`)}</button>)}</div>
-            <div>{node.outputs.map(port => <button key={port.id} type="button" className={css.outputPort} data-studio-output data-node={node.id} data-port={port.id}
-              data-outlet={port.outlet} aria-label={t('editor.connectFrom', { node: node.label, port: port.id })}
-              onPointerDown={(event) => {
-                setWire({ node: node.id, port: port.id }); setGhost(portPoint(node, port.id, true))
-                capture(event, { kind: 'wire', clientX: event.clientX, clientY: event.clientY })
-              }}
-              onClick={(event) => {
-                event.stopPropagation(); setWire({ node: node.id, port: port.id }); setGhost(portPoint(node, port.id, true))
-              }}>
-              {port.outlet === undefined ? t(`port.${port.type}`) : t(`outlet.${port.outlet}`)}<span className={css.portDot} /></button>)}</div>
-          </div>
-          <div className={css.nodeBudget}>{t('field.attempts')}{': '}{node.maxAttempts}{node.resource ? ' · ' + node.resource : ''}</div>
-        </article>)}
+        {graph.nodes.map((node) => {
+          const task = tasks.get(node.id)
+          return <article key={node.id} className={clsx(css.node, selected === node.id && css.selectedNode)}
+            data-production-node={node.id} data-phase={task?.phase} style={{ '--studio-x': `${node.x}px`, '--studio-y': `${node.y}px` } as LocalStyle} onClick={() => { setSelected(node.id); setSelectedEdge(null) }}>
+            <button type="button" className={css.nodeTitle} onPointerDown={(event) => {
+              setSelected(node.id); setSelectedEdge(null)
+              capture(event, { kind: 'node', id: node.id, clientX: event.clientX, clientY: event.clientY, x: node.x, y: node.y })
+            }}>{node.label}</button>
+            <div className={css.nodeKind}>{t(`node.${node.kind}`)}
+              {task !== undefined && <span className={css.phase} data-phase={task.phase}>{' · '}{t(`phase.${task.phase}`)}</span>}
+              {node.protected ? ' · ' + t('editor.protected') : ''}</div>
+            <div className={css.ports}>
+              <div>{node.inputs.map(port => <button key={port.id} type="button" className={css.inputPort} data-studio-input data-node={node.id} data-port={port.id}
+                aria-label={t('editor.connectTo', { node: node.label, port: port.id })} onClick={(event) => { event.stopPropagation(); connect(node.id, port.id) }}>
+                <span className={css.portDot} />{t(`port.${port.type}`)}</button>)}</div>
+              <div>{node.outputs.map(port => <button key={port.id} type="button" disabled={lockedNode(node.id)} className={css.outputPort} data-studio-output data-node={node.id} data-port={port.id}
+                data-outlet={port.outlet} aria-label={t('editor.connectFrom', { node: node.label, port: port.id })}
+                onPointerDown={(event) => {
+                  if (lockedNode(node.id)) return
+                  setWire({ node: node.id, port: port.id }); setGhost(portPoint(node, port.id, true))
+                  capture(event, { kind: 'wire', clientX: event.clientX, clientY: event.clientY })
+                }}
+                onClick={(event) => {
+                  event.stopPropagation()
+                  if (lockedNode(node.id)) return
+                  setWire({ node: node.id, port: port.id }); setGhost(portPoint(node, port.id, true))
+                }}>
+                {port.outlet === undefined ? t(`port.${port.type}`) : t(`outlet.${port.outlet}`)}<span className={css.portDot} /></button>)}</div>
+            </div>
+            <div className={css.nodeBudget}>{t('field.attempts')}{': '}{node.maxAttempts}{node.resource ? ' · ' + node.resource : ''}</div>
+          </article>})}
       </div>
     </div>
     <Checkbox label={t('editor.recovery')} checked={recoveryVisible} onChange={setRecoveryVisible} />
     {activeEdge !== undefined && <div className={css.toolbar}>
       <span>{t('editor.connection', { from: activeEdge.fromNode, to: activeEdge.toNode })}</span>
-      <Button size="sm" variant="outline" onClick={() => { change({ ...graph, edges: graph.edges.filter(edge => edge.id !== activeEdge.id) }); setSelectedEdge(null) }}>{t('editor.deleteEdge')}</Button>
+      <Button size="sm" variant="outline" disabled={lockedNode(activeEdge.fromNode)} onClick={() => {
+        if (lockedNode(activeEdge.fromNode)) return
+        change({ ...graph, edges: graph.edges.filter(edge => edge.id !== activeEdge.id) }); setSelectedEdge(null)
+      }}>{t('editor.deleteEdge')}</Button>
     </div>}
     {message !== null && <p className={css.feedback} role="status">{message}</p>}
     {activeNode === undefined ? <p className={css.muted}>{t('editor.select')}</p> : <NodeInspector key={activeNode.id} node={activeNode} t={t} tools={snapshot.capabilities.tools}
+      locked={lockedNode(activeNode.id)} removeLocked={lockedRemoval(activeNode.id)} conversation={conversation}
+      maxAttempts={conversation ? snapshot.graph.nodes.find(node => node.id === activeNode.id)?.maxAttempts ?? activeNode.maxAttempts : 100}
       update={updateNode} jsonFields={drafts.jsonFields} writeJson={actions.json} remove={() => {
-        if (activeNode.protected) return
+        if (activeNode.protected || lockedRemoval(activeNode.id)) return
         change({
           ...graph,
           nodes: graph.nodes.filter(node => node.id !== activeNode.id),
@@ -359,14 +397,20 @@ export function ProductionWorkflowView(props: StudioViewProps) {
         }); setSelected(null)
       }} />}
     <div className={css.fields}>
-      <label className={css.field}>{t('field.executions')}<Input type="number" min={1} max={1000} aria-label={t('field.executions')} value={graph.maxExecutions}
+      <label className={css.field}>{t('field.executions')}<Input type="number" min={1} max={conversation ? snapshot.graph.maxExecutions : 1000} aria-label={t('field.executions')} value={graph.maxExecutions}
         onChange={(event) => {
-          change({ ...graph, maxExecutions: Math.max(1, Math.min(1000, Number(event.target.value) || 1)) })
+          change({ ...graph,
+            maxExecutions: Math.max(1, Math.min(conversation ? snapshot.graph.maxExecutions : 1000, Number(event.target.value) || 1)),
+          })
         }} /></label>
-      <label className={css.field}>{t('field.concurrent')}<Input type="number" min={1} max={16} aria-label={t('field.concurrent')} value={graph.maxConcurrent}
-        onChange={(event) => { change({ ...graph, maxConcurrent: Math.max(1, Math.min(16, Number(event.target.value) || 1)) }) }} /></label>
+      <label className={css.field}>{t('field.concurrent')}<Input type="number" min={1} max={conversation ? snapshot.graph.maxConcurrent : 16} aria-label={t('field.concurrent')} value={graph.maxConcurrent}
+        onChange={(event) => {
+          change({ ...graph,
+            maxConcurrent: Math.max(1, Math.min(conversation ? snapshot.graph.maxConcurrent : 16, Number(event.target.value) || 1)),
+          })
+        }} /></label>
     </div>
-    <section className={css.start}>
+    {!conversation && <section className={css.start}>
       <h3>{t('start.title')}</h3>
       <label className={css.field}>{t('start.objective')}<Input aria-label={t('start.objective')} placeholder={t('start.objectivePlaceholder')} value={drafts.objective}
         onChange={(event) => { actions.objective(event.target.value) }} /></label>
@@ -383,6 +427,6 @@ export function ProductionWorkflowView(props: StudioViewProps) {
       <p className={css.muted}>{t('start.inputHint')}</p>
       <p className={css.muted}>{t('capabilities', { agents: t(snapshot.capabilities.subagent ? 'capability.agent' : 'capability.noAgent'), tools: snapshot.capabilities.tools.length, files: t(snapshot.capabilities.filesystem ? 'capability.files' : 'capability.noFiles') })}</p>
       <div className={css.toolbar}><Button size="sm" variant="primary" disabled={pending} onClick={handleStart}>{pending ? t('action.pending') : t('start.action')}</Button><span className={css.muted}>{t('start.cost')}</span></div>
-    </section>
+    </section>}
   </section>
 }

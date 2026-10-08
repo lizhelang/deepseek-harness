@@ -1765,6 +1765,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'after the native dispatch marker is durable.',
       },
       {
+        signature: 'registerConversationWorkflow(provider: ConversationWorkflowProvider): () => void',
+        description: 'Register a trusted profile adapter; disposal removes only its own scope.',
+        parameters: [{ name: 'provider', description: 'Scoped binding to actual parent-conversation tool receipts.' }],
+        returns: 'disposer that removes only this adapter.',
+      },
+      {
         signature: '@Remote async get(sessionId: SessionId): Promise<ProductionSnapshot>',
         description: 'Read state; interrupted persisted executions become unknown and are never replayed.',
         parameters: [{ name: 'sessionId', description: 'owning live conversation.' }],
@@ -4953,6 +4959,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface ContinuableSubagentDescriptorData extends SubagentDescriptorBase {\n    readonly mode: \'continuable\';\n    readonly label: string;\n    readonly agentProvider?: string;\n    readonly agentModel?: string;\n    readonly agentReasoningEffort?: ReasoningEffortId;\n    readonly persona?: string;\n    readonly toolFilter?: ToolRestriction;\n}',
   },
   {
+    name: 'ConversationWorkflowProvider',
+    declaration: 'export interface ConversationWorkflowProvider {\n    id: string;\n    toolNames: readonly string[];\n    appliesTo(agent: Agent): boolean;\n    start(call: {\n        agent: Agent;\n        name: string;\n        arguments: JsonValue;\n    }): {\n        key: string;\n        objective: string;\n        input: JsonValue;\n    } | undefined;\n    observe(call: {\n        nodeId: string;\n        name: string;\n        arguments: JsonValue;\n        receipt: JsonValue;\n        run: ProductionRun;\n    }): {\n        key?: string;\n        input?: JsonValue;\n        outlet?: ProductionOutlet;\n        message?: string;\n    } | undefined;\n}',
+  },
+  {
     name: 'CordisDynamicPackageId',
     declaration: 'export type CordisDynamicPackageId = Branded<\'CordisDynamicPackageId\'>;',
   },
@@ -6146,7 +6156,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ProductionRun',
-    declaration: 'export interface ProductionRun {\n    id: ProductionRunId;\n    revision: number;\n    objective: string;\n    graph: ProductionGraph;\n    phase: \'active\' | \'paused\' | \'blocked\' | \'unknown\' | \'complete\';\n    executions: number;\n    input: JsonValue;\n    tasks: ProductionTask[];\n    history: ProductionHistory[];\n    createdAt: number;\n    updatedAt: number;\n}',
+    declaration: 'export interface ProductionRun {\n    id: ProductionRunId;\n    revision: number;\n    objective: string;\n    graph: ProductionGraph;\n    phase: \'active\' | \'paused\' | \'blocked\' | \'unknown\' | \'complete\';\n    executions: number;\n    input: JsonValue;\n    tasks: ProductionTask[];\n    history: ProductionHistory[];\n    createdAt: number;\n    updatedAt: number;\n    mode?: \'conversation\' | \'scheduled\';\n    binding?: {\n        provider: string;\n        key: string;\n    };\n}',
   },
   {
     name: 'ProductionRunId',
@@ -6154,11 +6164,11 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ProductionSnapshot',
-    declaration: 'export interface ProductionSnapshot {\n    sessionId: SessionId;\n    revision: number;\n    graph: ProductionGraph;\n    runs: ProductionRun[];\n    capabilities: {\n        subagent: boolean;\n        tools: string[];\n        filesystem: boolean;\n    };\n    error?: string;\n}',
+    declaration: 'export interface ProductionSnapshot {\n    sessionId: SessionId;\n    revision: number;\n    graph: ProductionGraph;\n    runs: ProductionRun[];\n    capabilities: {\n        subagent: boolean;\n        tools: string[];\n        filesystem: boolean;\n        conversation?: {\n            provider: string;\n        };\n    };\n    error?: string;\n}',
   },
   {
     name: 'ProductionTask',
-    declaration: 'export interface ProductionTask {\n    nodeId: string;\n    phase: ProductionNodePhase;\n    attempts: number;\n    message: string;\n    output?: JsonValue;\n    evidence: ProductionEvidence[];\n    certificates: (\'geometry\' | \'manufacturing\' | \'files\' | \'goal\')[];\n    childSessionId?: SessionId;\n    startedAt?: number;\n    updatedAt: number;\n    incoming?: Record<string, {\n        data: JsonValue;\n        evidence: ProductionEvidence[];\n        certificates: (\'geometry\' | \'manufacturing\' | \'files\' | \'goal\')[];\n    }>;\n    queued?: Record<string, {\n        data: JsonValue;\n        evidence: ProductionEvidence[];\n        certificates: (\'geometry\' | \'manufacturing\' | \'files\' | \'goal\')[];\n    }>[];\n    breakpoint?: \'before\' | \'after\';\n    breakpointReleased?: boolean;\n    pendingOutlet?: ProductionOutlet;\n    operationId?: string;\n}',
+    declaration: 'export interface ProductionTask {\n    admitted?: boolean;\n    nodeId: string;\n    phase: ProductionNodePhase;\n    attempts: number;\n    message: string;\n    output?: JsonValue;\n    evidence: ProductionEvidence[];\n    certificates: (\'geometry\' | \'manufacturing\' | \'files\' | \'goal\')[];\n    childSessionId?: SessionId;\n    startedAt?: number;\n    updatedAt: number;\n    incoming?: Record<string, {\n        data: JsonValue;\n        evidence: ProductionEvidence[];\n        certificates: (\'geometry\' | \'manufacturing\' | \'files\' | \'goal\')[];\n    }>;\n    queued?: Record<string, {\n        data: JsonValue;\n        evidence: ProductionEvidence[];\n        certificates: (\'geometry\' | \'manufacturing\' | \'files\' | \'goal\')[];\n    }>[];\n    breakpoint?: \'before\' | \'after\';\n    breakpointReleased?: boolean;\n    pendingOutlet?: ProductionOutlet;\n    operationId?: string;\n    settledOperationId?: string;\n}',
   },
   {
     name: 'ProductTelemetryRecord',
@@ -6554,7 +6564,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'Session',
-    declaration: 'export class Session {\n    get surface(): SessionSurface;\n    readonly header: SessionHeader;\n    readonly inheritedEventCount: SessionLogOffset;\n    get id(): SessionId;\n    readonly firstLiveSeq: SessionLogOffset;\n    readonly firstLifecycleSeq: SessionLogOffset;\n    static create(id: SessionId, seed?: readonly SessionEvent[], header?: SessionHeader, inheritedEventCount?: SessionLogOffset, projections?: readonly SessionMessageProjection[]): Session;\n    static fromRestore(id: SessionId, seed: readonly SessionEvent[], header: SessionHeader, inheritedEventCount: SessionLogOffset, eventState: SessionSeedEventState, projections?: readonly SessionMessageProjection[]): Session;\n    eventAt(seq: SessionSeq): SessionEvent | undefined;\n    snapshotEvents(fromSeq: SessionLogOffset = SessionLogOffset(0), toSeqExclusive: SessionLogOffset = this.seq): readonly SessionEvent[];\n    ownEvents(): readonly SessionEvent[];\n    isOwnSeq(seq: SessionSeq): boolean;\n    get seq(): SessionLogOffset;\n    append<T extends SessionEventType>(type: T, data: SessionEventMap[T], ...opts: T extends SurfaceEventType ? [\n        opts: SurfaceIntent<T>\n    ] : [\n    ]): SessionEvent<T>;\n    requestHeader(): EpochHeader | undefined;\n    requestContext(): RequestContext | undefined;\n    toolHistory(): ToolHistory;\n    deriveMessages(): Message[];\n    deriveEventMessage(event: SessionEvent): Message | null;\n}',
+    declaration: 'export class Session {\n    get surface(): SessionSurface;\n    readonly header: SessionHeader;\n    readonly inheritedEventCount: SessionLogOffset;\n    get id(): SessionId;\n    readonly firstLiveSeq: SessionLogOffset;\n    readonly firstLifecycleSeq: SessionLogOffset;\n    static create(id: SessionId, seed?: readonly SessionEvent[], header?: SessionHeader, inheritedEventCount?: SessionLogOffset, projections?: readonly SessionMessageProjection[]): Session;\n    static fromRestore(id: SessionId, seed: readonly SessionEvent[], header: SessionHeader, inheritedEventCount: SessionLogOffset, eventState: SessionSeedEventState, projections?: readonly SessionMessageProjection[]): Session;\n    eventAt(seq: SessionSeq): SessionEvent | undefined;\n    snapshotEvents(fromSeq: SessionLogOffset = SessionLogOffset(0), toSeqExclusive: SessionLogOffset = this.seq): readonly SessionEvent[];\n    ownEvents(): readonly SessionEvent[];\n    isOwnSeq(seq: SessionSeq): boolean;\n    get seq(): SessionLogOffset;\n    append<T extends SessionEventType>(type: T, data: SessionEventMap[T], ...opts: T extends SurfaceEventType ? [\n        opts: SurfaceIntent<T>\n    ] : [\n        opts?: {\n            ignorable?: true;\n        }\n    ]): SessionEvent<T>;\n    requestHeader(): EpochHeader | undefined;\n    requestContext(): RequestContext | undefined;\n    toolHistory(): ToolHistory;\n    deriveMessages(): Message[];\n    deriveEventMessage(event: SessionEvent): Message | null;\n}',
   },
   {
     name: 'SessionAccess',

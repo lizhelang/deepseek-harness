@@ -1,0 +1,34 @@
+# Bilingual-pair consistency record for 2026-10-08-conversation-owned-production-workflow.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-10-08-conversation-owned-production-workflow.md
+/agent-note-conversation-owned-production-workflow:
+  en: 06f9a727a475ab13
+  zh: 666de617c00ed502
+/agent-note-conversation-owned-production-workflow/problem:
+  en: 2b2162de7ad2eb11
+  zh: 1ea2a3b1b477db2b
+/agent-note-conversation-owned-production-workflow/decision:
+  en: 6c43d27a3d30699c
+  zh: 295ff0dbbb3dc89e
+/agent-note-conversation-owned-production-workflow/decision/future-edits-and-continuation:
+  en: 8c277441760478fd
+  zh: fb7c53a8a1965479
+/agent-note-conversation-owned-production-workflow/decision/current-state-and-immutable-history:
+  en: e37bc9bd94fab9f9
+  zh: 10c8c56cbf43dd5d
+/agent-note-conversation-owned-production-workflow/decision/pause-and-unresolved-results:
+  en: ba7090d85be96e67
+  zh: 5c75dd8e7cc4d277
+/agent-note-conversation-owned-production-workflow/alternatives-considered:
+  en: ce5a2c9b4760071a
+  zh: 6babae2e927f805c
+/agent-note-conversation-owned-production-workflow/consequences:
+  en: 30cf72140269699f
+  zh: 44e89e555df34cde
+/agent-note-conversation-owned-production-workflow/testing:
+  en: f007c34d9e2d4926
+  zh: 21ab3a9c5c97ea0c
+/agent-note-conversation-owned-production-workflow/related:
+  en: 169b6d8629ef34e8
+  zh: cb2e358cd37314a9

@@ -10828,6 +10828,869 @@
       }
     },
     {
+      "key": "event:production/checkpoint",
+      "kind": "event",
+      "event": "production/checkpoint",
+      "surface": false,
+      "digest": "1585eed5425771c8549b274afdfe1f2d224cc06dce695f1471a90a0faf4bb535",
+      "schema": {
+        "root": 0,
+        "nodes": [
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "data",
+                "type": 1,
+                "optional": false
+              },
+              {
+                "name": "ignorable",
+                "type": 69,
+                "optional": true
+              },
+              {
+                "name": "seq",
+                "type": 5,
+                "optional": false
+              },
+              {
+                "name": "time",
+                "type": 5,
+                "optional": false
+              },
+              {
+                "name": "type",
+                "type": 70,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "run",
+                "type": 2,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "binding",
+                "type": 3,
+                "optional": true
+              },
+              {
+                "name": "createdAt",
+                "type": 5,
+                "optional": false
+              },
+              {
+                "name": "executions",
+                "type": 5,
+                "optional": false
+              },
+              {
+                "name": "graph",
+                "type": 6,
+                "optional": false
+              },
+              {
+                "name": "history",
+                "type": 40,
+                "optional": false
+              },
+              {
+                "name": "id",
+                "type": 4,
+                "optional": false
+              },
+              {
+                "name": "input",
+                "type": 12,
+                "optional": false
+              },
+              {
+                "name": "mode",
+                "type": 50,
+                "optional": true
+              },
+              {
+                "name": "objective",
+                "type": 4,
+                "optional": false
+              },
+              {
+                "name": "phase",
+                "type": 53,
+                "optional": false
+              },
+              {
+                "name": "revision",
+                "type": 5,
+                "optional": false
+              },
+              {
+                "name": "tasks",
+                "type": 55,
+                "optional": false
+              },
+              {
+                "name": "updatedAt",
+                "type": 5,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "key",
+                "type": 4,
+                "optional": false
+              },
+              {
+                "name": "provider",
+                "type": 4,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "primitive",
+            "type": "string"
+          },
+          {
+            "kind": "primitive",
+            "type": "number"
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "edges",
+                "type": 7,
+                "optional": false
+              },
+              {
+                "name": "maxConcurrent",
+                "type": 5,
+                "optional": false
+              },
+              {
+                "name": "maxExecutions",
+                "type": 5,
+                "optional": false
+              },
+              {
+                "name": "name",
+                "type": 4,
+                "optional": false
+              },
+              {
+                "name": "nodes",
+                "type": 9,
+                "optional": false
+              },
+              {
+                "name": "version",
+                "type": 5,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "array",
+            "element": 8
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "fromNode",
+                "type": 4,
+                "optional": false
+              },
+              {
+                "name": "fromPort",
+                "type": 4,
+                "optional": false
+              },
+              {
+                "name": "id",
+                "type": 4,
+                "optional": false
+              },
+              {
+                "name": "toNode",
+                "type": 4,
+                "optional": false
+              },
+              {
+                "name": "toPort",
+                "type": 4,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "array",
+            "element": 10
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "config",
+                "type": 11,
+                "optional": false
+              },
+              {
+                "name": "id",
+                "type": 4,
+                "optional": false
+              },
+              {
+                "name": "inputs",
+                "type": 23,
+                "optional": false
+              },
+              {
+                "name": "kind",
+                "type": 35,
+                "optional": false
+              },
+              {
+                "name": "label",
+                "type": 4,
+                "optional": false
+              },
+              {
+                "name": "maxAttempts",
+                "type": 5,
+                "optional": false
+              },
+              {
+                "name": "outputs",
+                "type": 23,
+                "optional": false
+              },
+              {
+                "name": "protected",
+                "type": 14,
+                "optional": true
+              },
+              {
+                "name": "resource",
+                "type": 4,
+                "optional": true
+              },
+              {
+                "name": "x",
+                "type": 5,
+                "optional": false
+              },
+              {
+                "name": "y",
+                "type": 5,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "arguments",
+                "type": 12,
+                "optional": true
+              },
+              {
+                "name": "breakAfter",
+                "type": 14,
+                "optional": true
+              },
+              {
+                "name": "breakBefore",
+                "type": 14,
+                "optional": true
+              },
+              {
+                "name": "certification",
+                "type": 17,
+                "optional": true
+              },
+              {
+                "name": "evidencePath",
+                "type": 4,
+                "optional": true
+              },
+              {
+                "name": "evidenceToolName",
+                "type": 4,
+                "optional": true
+              },
+              {
+                "name": "expected",
+                "type": 12,
+                "optional": true
+              },
+              {
+                "name": "fileHashes",
+                "type": 22,
+                "optional": true
+              },
+              {
+                "name": "filePaths",
+                "type": 22,
+                "optional": true
+              },
+              {
+                "name": "model",
+                "type": 4,
+                "optional": true
+              },
+              {
+                "name": "prompt",
+                "type": 4,
+                "optional": true
+              },
+              {
+                "name": "provider",
+                "type": 4,
+                "optional": true
+              },
+              {
+                "name": "question",
+                "type": 4,
+                "optional": true
+              },
+              {
+                "name": "reconcileToolName",
+                "type": 4,
+                "optional": true
+              },
+              {
+                "name": "toolName",
+                "type": 4,
+                "optional": true
+              },
+              {
+                "name": "tools",
+                "type": 22,
+                "optional": true
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "union",
+            "types": [
+              4,
+              5,
+              13,
+              14,
+              15,
+              16
+            ]
+          },
+          {
+            "kind": "object",
+            "properties": [],
+            "indices": [
+              {
+                "key": 4,
+                "value": 12
+              }
+            ]
+          },
+          {
+            "kind": "primitive",
+            "type": "boolean"
+          },
+          {
+            "kind": "primitive",
+            "type": "null"
+          },
+          {
+            "kind": "array",
+            "element": 12
+          },
+          {
+            "kind": "union",
+            "types": [
+              18,
+              19,
+              20,
+              21
+            ]
+          },
+          {
+            "kind": "literal",
+            "value": "manufacturing"
+          },
+          {
+            "kind": "literal",
+            "value": "files"
+          },
+          {
+            "kind": "literal",
+            "value": "geometry"
+          },
+          {
+            "kind": "literal",
+            "value": "goal"
+          },
+          {
+            "kind": "array",
+            "element": 4
+          },
+          {
+            "kind": "array",
+            "element": 24
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "id",
+                "type": 4,
+                "optional": false
+              },
+              {
+                "name": "outlet",
+                "type": 25,
+                "optional": true
+              },
+              {
+                "name": "type",
+                "type": 29,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "union",
+            "types": [
+              26,
+              27,
+              28
+            ]
+          },
+          {
+            "kind": "literal",
+            "value": "success"
+          },
+          {
+            "kind": "literal",
+            "value": "unknown"
+          },
+          {
+            "kind": "literal",
+            "value": "failure"
+          },
+          {
+            "kind": "union",
+            "types": [
+              18,
+              19,
+              20,
+              27,
+              30,
+              31,
+              32,
+              33,
+              34
+            ]
+          },
+          {
+            "kind": "literal",
+            "value": "input"
+          },
+          {
+            "kind": "literal",
+            "value": "issue"
+          },
+          {
+            "kind": "literal",
+            "value": "delivery"
+          },
+          {
+            "kind": "literal",
+            "value": "analysis"
+          },
+          {
+            "kind": "literal",
+            "value": "candidate"
+          },
+          {
+            "kind": "union",
+            "types": [
+              32,
+              36,
+              37,
+              38,
+              39
+            ]
+          },
+          {
+            "kind": "literal",
+            "value": "program"
+          },
+          {
+            "kind": "literal",
+            "value": "agent"
+          },
+          {
+            "kind": "literal",
+            "value": "gate"
+          },
+          {
+            "kind": "literal",
+            "value": "human"
+          },
+          {
+            "kind": "array",
+            "element": 41
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "attempt",
+                "type": 5,
+                "optional": false
+              },
+              {
+                "name": "message",
+                "type": 4,
+                "optional": false
+              },
+              {
+                "name": "nodeId",
+                "type": 4,
+                "optional": false
+              },
+              {
+                "name": "phase",
+                "type": 42,
+                "optional": false
+              },
+              {
+                "name": "time",
+                "type": 5,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "union",
+            "types": [
+              27,
+              39,
+              43,
+              44,
+              45,
+              46,
+              47,
+              48,
+              49
+            ]
+          },
+          {
+            "kind": "literal",
+            "value": "paused"
+          },
+          {
+            "kind": "literal",
+            "value": "ready"
+          },
+          {
+            "kind": "literal",
+            "value": "running"
+          },
+          {
+            "kind": "literal",
+            "value": "skipped"
+          },
+          {
+            "kind": "literal",
+            "value": "waiting"
+          },
+          {
+            "kind": "literal",
+            "value": "blocked"
+          },
+          {
+            "kind": "literal",
+            "value": "complete"
+          },
+          {
+            "kind": "union",
+            "types": [
+              51,
+              52
+            ]
+          },
+          {
+            "kind": "literal",
+            "value": "scheduled"
+          },
+          {
+            "kind": "literal",
+            "value": "conversation"
+          },
+          {
+            "kind": "union",
+            "types": [
+              27,
+              43,
+              48,
+              49,
+              54
+            ]
+          },
+          {
+            "kind": "literal",
+            "value": "active"
+          },
+          {
+            "kind": "array",
+            "element": 56
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "admitted",
+                "type": 14,
+                "optional": true
+              },
+              {
+                "name": "attempts",
+                "type": 5,
+                "optional": false
+              },
+              {
+                "name": "breakpoint",
+                "type": 57,
+                "optional": true
+              },
+              {
+                "name": "breakpointReleased",
+                "type": 14,
+                "optional": true
+              },
+              {
+                "name": "certificates",
+                "type": 60,
+                "optional": false
+              },
+              {
+                "name": "childSessionId",
+                "type": 4,
+                "optional": true
+              },
+              {
+                "name": "evidence",
+                "type": 61,
+                "optional": false
+              },
+              {
+                "name": "incoming",
+                "type": 66,
+                "optional": true
+              },
+              {
+                "name": "message",
+                "type": 4,
+                "optional": false
+              },
+              {
+                "name": "nodeId",
+                "type": 4,
+                "optional": false
+              },
+              {
+                "name": "operationId",
+                "type": 4,
+                "optional": true
+              },
+              {
+                "name": "output",
+                "type": 12,
+                "optional": true
+              },
+              {
+                "name": "pendingOutlet",
+                "type": 25,
+                "optional": true
+              },
+              {
+                "name": "phase",
+                "type": 42,
+                "optional": false
+              },
+              {
+                "name": "queued",
+                "type": 68,
+                "optional": true
+              },
+              {
+                "name": "settledOperationId",
+                "type": 4,
+                "optional": true
+              },
+              {
+                "name": "startedAt",
+                "type": 5,
+                "optional": true
+              },
+              {
+                "name": "updatedAt",
+                "type": 5,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "union",
+            "types": [
+              58,
+              59
+            ]
+          },
+          {
+            "kind": "literal",
+            "value": "after"
+          },
+          {
+            "kind": "literal",
+            "value": "before"
+          },
+          {
+            "kind": "array",
+            "element": 17
+          },
+          {
+            "kind": "array",
+            "element": 62
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "attempt",
+                "type": 5,
+                "optional": false
+              },
+              {
+                "name": "data",
+                "type": 12,
+                "optional": false
+              },
+              {
+                "name": "kind",
+                "type": 63,
+                "optional": false
+              },
+              {
+                "name": "nodeId",
+                "type": 4,
+                "optional": false
+              },
+              {
+                "name": "observedAt",
+                "type": 5,
+                "optional": false
+              },
+              {
+                "name": "toolName",
+                "type": 4,
+                "optional": true
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "union",
+            "types": [
+              37,
+              39,
+              64,
+              65
+            ]
+          },
+          {
+            "kind": "literal",
+            "value": "tool"
+          },
+          {
+            "kind": "literal",
+            "value": "file"
+          },
+          {
+            "kind": "object",
+            "properties": [],
+            "indices": [
+              {
+                "key": 4,
+                "value": 67
+              }
+            ]
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "certificates",
+                "type": 60,
+                "optional": false
+              },
+              {
+                "name": "data",
+                "type": 12,
+                "optional": false
+              },
+              {
+                "name": "evidence",
+                "type": 61,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "array",
+            "element": 66
+          },
+          {
+            "kind": "literal",
+            "value": true
+          },
+          {
+            "kind": "literal",
+            "value": "production/checkpoint"
+          }
+        ]
+      }
+    },
+    {
       "key": "event:request/context",
       "kind": "event",
       "event": "request/context",
@@ -21795,6 +22658,11 @@
   ],
   "types": [
     {
+      "digest": "002ee1f53b674da0befac1d67244bb9fa4f9c8499760966032292560a3da37ab",
+      "names": [],
+      "sources": []
+    },
+    {
       "digest": "0116b1f89c05221d56b0ba35c83d302bf4857bc7277d247e9bbaf74b27d2c66e",
       "names": [],
       "sources": []
@@ -21825,6 +22693,11 @@
     },
     {
       "digest": "0341d4c3dfcd53253cdc1e789d9130d3cd848b6f8b0706bf92f313a68b39ff23",
+      "names": [],
+      "sources": []
+    },
+    {
+      "digest": "0508943b55d92caab6481407d00c453300c967089380af5afe2c4c103f2a809f",
       "names": [],
       "sources": []
     },
@@ -21864,6 +22737,34 @@
     },
     {
       "digest": "07eccc9ea2f9b5439d76cc77d5e062936677d43f07a23da749819b0a22ee36b7",
+      "names": [],
+      "sources": []
+    },
+    {
+      "digest": "07ee6bb550c7a4b6ba5e0250cd3aed389ef6dd8ca25f96a406434a8067e0254b",
+      "names": [],
+      "sources": []
+    },
+    {
+      "digest": "083ff2ccec2b943d2dcf20907fac4b8a5bf56b66a9d527bd44cad48e7a73bdc5",
+      "names": [
+        "packages/workflow/production-studio/src/types.ts#ProductionNodePhase"
+      ],
+      "sources": [
+        "packages/workflow/production-studio/src/types.ts:14"
+      ]
+    },
+    {
+      "digest": "0865c014a279cb614e786f91a1e1fe03748e7fc4b0c63426c3378f4f7d258658",
+      "names": [
+        "packages/workflow/production-studio/src/types.ts#ProductionPort"
+      ],
+      "sources": [
+        "packages/workflow/production-studio/src/types.ts:16"
+      ]
+    },
+    {
+      "digest": "09409764113066d59bbb4d0df1a49f49708d07a462ee81a406134d9550a32326",
       "names": [],
       "sources": []
     },
@@ -22020,6 +22921,11 @@
       "sources": []
     },
     {
+      "digest": "1083d24bcd66c2dd7aa835485bc73753abe661fc0530631aa59a1fac1643f97a",
+      "names": [],
+      "sources": []
+    },
+    {
       "digest": "10e386801903f9d424602c31d3ff837a94aef623c8b391376d8d9e253525fabe",
       "names": [],
       "sources": []
@@ -22044,6 +22950,11 @@
       ]
     },
     {
+      "digest": "12136401bae0866e06990ddfd9ea529eac10ebf7b7905085fe6ebf6fa856e238",
+      "names": [],
+      "sources": []
+    },
+    {
       "digest": "12a0cfa619ac4a5fc6c3e8e359c8dae15769edc61497a575935c78d5842f8e42",
       "names": [],
       "sources": []
@@ -22056,6 +22967,11 @@
       "sources": [
         "packages/llm/llm/src/types.ts:79"
       ]
+    },
+    {
+      "digest": "1314bbb94b9e99b0cba02033b0fe5b0529f35f27fc60e0acced71e9b90124fc7",
+      "names": [],
+      "sources": []
     },
     {
       "digest": "1379f0b72275994d20f1ddca2d60a96ab16ec80397ca9f1af21bdc67ba5c269c",
@@ -22107,12 +23023,22 @@
       "sources": []
     },
     {
+      "digest": "1585eed5425771c8549b274afdfe1f2d224cc06dce695f1471a90a0faf4bb535",
+      "names": [],
+      "sources": []
+    },
+    {
       "digest": "15d5dfdd822aa35e115afd74a8982825a493880457774e6850bc1520b50875e4",
       "names": [],
       "sources": []
     },
     {
       "digest": "16d0507cb94b4cfc84a87446b1ba7652d6ec1d65ee1684789e747e30d542800e",
+      "names": [],
+      "sources": []
+    },
+    {
+      "digest": "172ffe5bf525ddc0f8d9b64d45a2f1f1bb07f72c3d4cacf3e0cff3d94d86d9da",
       "names": [],
       "sources": []
     },
@@ -22127,6 +23053,11 @@
       "sources": [
         "packages/core/session/src/types.ts:427"
       ]
+    },
+    {
+      "digest": "18025c366364f2549e0e2a64c4dcec62c70b94a72b6bb75b5a1afded609bce42",
+      "names": [],
+      "sources": []
     },
     {
       "digest": "186159f5f6f67a0b8cd095b8fe55bef42d4f25ca1a1c248f859867af2ece0467",
@@ -22218,11 +23149,21 @@
       "sources": []
     },
     {
+      "digest": "1c638c180e8900518a7bfeda787962bb890273d2b655c1ae0646d8b36ac7f5f4",
+      "names": [],
+      "sources": []
+    },
+    {
       "digest": "1ccb56061942f5ccb0d30c9e4f2883b9d115ff906560029de637b61d3cde896d",
       "names": [],
       "sources": [
         "packages/core/session/src/types.ts:341"
       ]
+    },
+    {
+      "digest": "1cd980b41efad86959905c9e347ba3b7d23683feebe606e6d430ff55beec5985",
+      "names": [],
+      "sources": []
     },
     {
       "digest": "1cde1bedde79c5e8a56aee9c05c8e0a579cf5bc611deb85b93fa331a16ca978f",
@@ -22232,6 +23173,11 @@
       "sources": [
         "packages/compaction/compaction-image-offload/src/projection.ts:9"
       ]
+    },
+    {
+      "digest": "1d511ee64b40734a33f1f1cd732a19489eb3e0f548e3dce0e0422f9305c6da16",
+      "names": [],
+      "sources": []
     },
     {
       "digest": "1d5f04a03ea75fc8eeece544129eba0f49f0c82046e9c404461920390135c7b2",
@@ -22383,6 +23329,15 @@
       ]
     },
     {
+      "digest": "2533004b4099a33253c42ba451809a147caa9289815b600119cb670ca1794b6c",
+      "names": [
+        "packages/workflow/production-studio/src/types.ts#ProductionGraph"
+      ],
+      "sources": [
+        "packages/workflow/production-studio/src/types.ts:59"
+      ]
+    },
+    {
       "digest": "254dce209e735f9cb6f6b7aec0354712b1611759ec02af4d35a96f2081e666f6",
       "names": [],
       "sources": []
@@ -22422,6 +23377,15 @@
       "sources": []
     },
     {
+      "digest": "283bc052f8b5404143b3ec39f3210283c68b3909386f3ca026d55252c1d2e302",
+      "names": [
+        "packages/workflow/production-studio/src/types.ts#ProductionEdge"
+      ],
+      "sources": [
+        "packages/workflow/production-studio/src/types.ts:57"
+      ]
+    },
+    {
       "digest": "287211846beea1eccb5f9acee00d20388a38fcb2e95858fa2332d6f58529379a",
       "names": [],
       "sources": [
@@ -22440,6 +23404,11 @@
     },
     {
       "digest": "297fbd8067d7815adae02b89790ec6ff5fb7c2cb0d0eb026e1746c24ec857761",
+      "names": [],
+      "sources": []
+    },
+    {
+      "digest": "29aa673eaba60cbc388f505248bf698c80c13d080f4ee2ff3312ba1950e34e77",
       "names": [],
       "sources": []
     },
@@ -22488,6 +23457,11 @@
       "sources": []
     },
     {
+      "digest": "2e2f82cf30a82b0342349ca29f6a5854cf712f290e225b1a77528fe7f00b27bd",
+      "names": [],
+      "sources": []
+    },
+    {
       "digest": "2e3523541e942ef6cc9fbc5b91f242e0ca4c6ada479b79b96025b797f6e41f3f",
       "names": [
         "packages/schedule/schedule/src/types.ts#ScheduleChange"
@@ -22498,6 +23472,11 @@
     },
     {
       "digest": "2e4debca12f2c449f96dc6574f3fbf2fb346193443114a241d01a236362ec48c",
+      "names": [],
+      "sources": []
+    },
+    {
+      "digest": "2e575a8f9b6b39b4977692fbe58abdf3a3432d2e71b416a5583095e7eb49b2d3",
       "names": [],
       "sources": []
     },
@@ -22587,6 +23566,20 @@
       "sources": [
         "packages/core/session/src/types.ts:462"
       ]
+    },
+    {
+      "digest": "33b0ae8ff4c523dff29613ee9dc2cd5774bdacf9e1d25aaf6bcc3fcca626fe52",
+      "names": [
+        "packages/workflow/production-studio/src/types.ts#ProductionTask"
+      ],
+      "sources": [
+        "packages/workflow/production-studio/src/types.ts:70"
+      ]
+    },
+    {
+      "digest": "33d73b60d1d1bfc788176037ad7685b4de38b09495592088f1356d2273c7a3a3",
+      "names": [],
+      "sources": []
     },
     {
       "digest": "34d1ab5c5df378186d6054b1a1beea9a41e41965d6f336f0bc0025c441a82e66",
@@ -22851,6 +23844,11 @@
       "sources": []
     },
     {
+      "digest": "494c7bbd9c5b1de363b72b33de14249dcdf0c5fd036dd9f556958f113ac7f772",
+      "names": [],
+      "sources": []
+    },
+    {
       "digest": "4991dfc415c9efebc36fa6969e1798c7d2e42396cc1e6e0ac7d7c89c5c5c4aea",
       "names": [],
       "sources": []
@@ -22934,6 +23932,7 @@
         "packages/webhook/webhook/src/brand.ts#WebhookDeliveryId",
         "packages/webhook/webhook/src/brand.ts#WebhookRuleId",
         "packages/webhook/webhook/src/brand.ts#WebhookSourceId",
+        "packages/workflow/production-studio/src/types.ts#ProductionRunId",
         "packages/workflow/workflow/src/types.ts#WorkflowRunId"
       ],
       "sources": [
@@ -22959,6 +23958,7 @@
         "packages/webhook/webhook/src/brand.ts:12",
         "packages/webhook/webhook/src/brand.ts:6",
         "packages/webhook/webhook/src/brand.ts:9",
+        "packages/workflow/production-studio/src/types.ts:8",
         "packages/workflow/workflow/src/types.ts:13"
       ]
     },
@@ -22998,6 +23998,11 @@
     },
     {
       "digest": "4f507598cf476214aa7646ce7841a7064a9dcb05d0a1eaaefaf79c2b738f160f",
+      "names": [],
+      "sources": []
+    },
+    {
+      "digest": "4f54c4f69aa7156be3a049ee9aff75bf1615326b51646b2f949cd20d7baa84e9",
       "names": [],
       "sources": []
     },
@@ -23051,6 +24056,11 @@
     },
     {
       "digest": "52c6113cb0e53f345324bf84f01928bea5d5df57ee80bc0dd65407b8bc5a3734",
+      "names": [],
+      "sources": []
+    },
+    {
+      "digest": "52f99bdc389cb6339a437712dbc8bd693e0c7cd6800f5af16990a90b7fd84d8e",
       "names": [],
       "sources": []
     },
@@ -23145,6 +24155,11 @@
     },
     {
       "digest": "58f94390b982f8a5ac1f4f235ba612557f4a1dc4a995d8b1cec63ce7639decb0",
+      "names": [],
+      "sources": []
+    },
+    {
+      "digest": "5a2af0b4ba81014e34424c4a63e69afc41169d272a655758ed5f89992038efc5",
       "names": [],
       "sources": []
     },
@@ -23520,6 +24535,13 @@
       ]
     },
     {
+      "digest": "72e434c3340c1a5933a384c8ca44a82e754c5ca472b876ac832c07f989ba7602",
+      "names": [],
+      "sources": [
+        "packages/workflow/production-studio/src/types.ts:166"
+      ]
+    },
+    {
       "digest": "72ec79127a9c0d0241b1106a74cc2b24c81ce467170f1c3c93f7b71a9496d227",
       "names": [],
       "sources": []
@@ -23556,6 +24578,11 @@
     },
     {
       "digest": "78a9be340090b735a39980e7222ce730c972fbcf1de7c9e0aef2125884b7caee",
+      "names": [],
+      "sources": []
+    },
+    {
+      "digest": "791a3bdf0c9d58811c0d0c7109ab871aa27d102600cd5c44044f1dbfad169bf4",
       "names": [],
       "sources": []
     },
@@ -23640,6 +24667,14 @@
       "sources": []
     },
     {
+      "digest": "7f3363843dc7225b5d4e8ba9c0a0c40a6ce9d1c32ef359049da56806972776dc",
+      "names": [],
+      "sources": [
+        "packages/workflow/production-studio/src/types.ts:83",
+        "packages/workflow/production-studio/src/types.ts:84"
+      ]
+    },
+    {
       "digest": "7f7fd5a6b0064f597534b29ff62ef26e786dffccf5e14f654a7d4fcea2c35f04",
       "names": [],
       "sources": []
@@ -23696,6 +24731,11 @@
       ]
     },
     {
+      "digest": "8209c1757abb13344b2c6f519608230a532d748396a51dae2e0dacaef09c7d1d",
+      "names": [],
+      "sources": []
+    },
+    {
       "digest": "82470020b5bfcb1a843e2aa05602af7d37df99e82d01f015c7c589ba054fd89d",
       "names": [],
       "sources": []
@@ -23709,6 +24749,13 @@
       "digest": "829a2fb3be6efd4ba36aef8ed2d381a4c6fb2a0aaf50c823a6f3f8290786b809",
       "names": [],
       "sources": []
+    },
+    {
+      "digest": "82d6396ff0b41e235ac2c867b3e31d20336eae44f4c028b6ff09453249460a3f",
+      "names": [],
+      "sources": [
+        "packages/workflow/production-studio/src/types.ts:29"
+      ]
     },
     {
       "digest": "83079c8a3f733ac3fa603eefa0fbb4737ca4d8b69e7e2e7298b60f9ac4098693",
@@ -23854,6 +24901,11 @@
       "sources": []
     },
     {
+      "digest": "8b3ba8e5d4ad5966fb862ce395eb122d064fd0293b375a3e150bc09b6fb3075a",
+      "names": [],
+      "sources": []
+    },
+    {
       "digest": "8bb8c3751a6ce64b61aba1ec7ae798c00a5803c4d868a0430873216c6569ed52",
       "names": [],
       "sources": [
@@ -23971,7 +25023,21 @@
       "sources": []
     },
     {
+      "digest": "9425b3d2e78b519b02c3d9d9f67b879de48b4cbeb9feee565e6b43f43497b73d",
+      "names": [
+        "packages/workflow/production-studio/src/types.ts#ProductionNode"
+      ],
+      "sources": [
+        "packages/workflow/production-studio/src/types.ts:18"
+      ]
+    },
+    {
       "digest": "94c56aeb1564ad735eb773d88636b40761d063efa1610f1308004d32923f5378",
+      "names": [],
+      "sources": []
+    },
+    {
+      "digest": "94d498a640e06441d3cd2036ea8cf0d205b77268f55fcd6ec3ea65e65e573fea",
       "names": [],
       "sources": []
     },
@@ -24024,6 +25090,15 @@
       "sources": []
     },
     {
+      "digest": "99631590fcb02f31b54a8ac079b617e18b3a1f85eac020a784515460ea1b822a",
+      "names": [
+        "packages/workflow/production-studio/src/types.ts#ProductionHistory"
+      ],
+      "sources": [
+        "packages/workflow/production-studio/src/types.ts:93"
+      ]
+    },
+    {
       "digest": "998f22585a5d73ec005365e203f07fc3b3a029e82323fdda3fd7f13b0a9639d0",
       "names": [],
       "sources": []
@@ -24072,6 +25147,15 @@
       "digest": "9acbe713f3f641921dd3333b240aa72e176d795327c24e8d9db9b68b16771b49",
       "names": [],
       "sources": []
+    },
+    {
+      "digest": "9b36ba102558e20ca267d6a1046d57de68e40f6dfbb57f2915e4d38e48956c56",
+      "names": [
+        "packages/workflow/production-studio/src/types.ts#ProductionRun"
+      ],
+      "sources": [
+        "packages/workflow/production-studio/src/types.ts:95"
+      ]
     },
     {
       "digest": "9b4fd974c124c83743efe030ba4e1250e087505f3f74588716a521fb8d453267",
@@ -24177,6 +25261,11 @@
     },
     {
       "digest": "a3c6f1ea38e9a61d7a9706057ba65aabe02dfe6d9dd90d4736aa62325d874531",
+      "names": [],
+      "sources": []
+    },
+    {
+      "digest": "a3d737dc9a71ce8ea670cd5ba604cdd56f4ac25b949ca0892d30302a3ac0b4ae",
       "names": [],
       "sources": []
     },
@@ -24373,6 +25462,11 @@
       "sources": []
     },
     {
+      "digest": "ae687395ac92deec72430de1eea03cba28278043c66f9185cbb7c48c7efcae65",
+      "names": [],
+      "sources": []
+    },
+    {
       "digest": "ae84c5e493f94acc63cfb70389073ba616ed7ae7aa4fadde048bdcc64d49bb46",
       "names": [],
       "sources": []
@@ -24426,6 +25520,15 @@
       ]
     },
     {
+      "digest": "b15e31865c704446d8e9222833ba116c6d219ef6aa711ef1d5489f8cdde48e96",
+      "names": [
+        "packages/workflow/production-studio/src/types.ts#ProductionEvidence"
+      ],
+      "sources": [
+        "packages/workflow/production-studio/src/types.ts:68"
+      ]
+    },
+    {
       "digest": "b1664fa89f8eab49a14e7e3168d8bc4da4aa9fd76332f6c4a053d839e5276ae7",
       "names": [],
       "sources": []
@@ -24453,6 +25556,11 @@
       "sources": []
     },
     {
+      "digest": "b23e6c0fb10b6368e00566884fe8547fccc8e74fd826be1da3e9706b448c28a1",
+      "names": [],
+      "sources": []
+    },
+    {
       "digest": "b2a5c8c008a31e3dc6c3013502f2356aca13894b31c8e70601fa92f2d40d1dba",
       "names": [],
       "sources": []
@@ -24465,6 +25573,11 @@
       "sources": [
         "packages/experimental/agent-team/src/types.ts:71"
       ]
+    },
+    {
+      "digest": "b3644ba3032ff006363a11558e61e5e2a02d852a14cbd84906ae4e991ed1dd82",
+      "names": [],
+      "sources": []
     },
     {
       "digest": "b3681c026a0b98e98b103f057dfd217fbe904129c090efd668253ec9aea7fece",
@@ -24659,6 +25772,11 @@
       "sources": []
     },
     {
+      "digest": "be4d68fe1c1dac0be8683eb48f6ab1003b661c0de54830b17a129bc23a58dc91",
+      "names": [],
+      "sources": []
+    },
+    {
       "digest": "bf16d2e98a7f13894ded2cffe5ce857bf473954a0e3c0ed9bc7739e2e1c7b78a",
       "names": [],
       "sources": []
@@ -24746,7 +25864,22 @@
       ]
     },
     {
+      "digest": "c5a097449186577cff0084497e5dc5a175a616d4b4d70873ccee0cb7c570a3ff",
+      "names": [],
+      "sources": []
+    },
+    {
+      "digest": "c6e4fa548c431804f6adebfaed3e343205c813699d2a191f990a7b1133e8c5ba",
+      "names": [],
+      "sources": []
+    },
+    {
       "digest": "c748fb42c80a120038a8c587af80ec39924803c401364db11c8974d5bf6d0262",
+      "names": [],
+      "sources": []
+    },
+    {
+      "digest": "c84fbfb8c4119efcc5e3682d05b691e102d136d9be00879beda840dbda86400b",
       "names": [],
       "sources": []
     },
@@ -24845,6 +25978,15 @@
       "digest": "d28765f87d6b6ab408e0b2f3e7e297791b004b806d8e302c49903ebae815feb2",
       "names": [],
       "sources": []
+    },
+    {
+      "digest": "d3e9970a5e3b34f4ec1ecfbc8620c1de96ddcb1614ce3b1074288065ba361145",
+      "names": [
+        "packages/workflow/production-studio/src/types.ts#ProductionPortType"
+      ],
+      "sources": [
+        "packages/workflow/production-studio/src/types.ts:10"
+      ]
     },
     {
       "digest": "d4b739491689cc6bb13d07ffac1a32239875abda364c0d5edd8f74faf5e9c00d",
@@ -25145,6 +26287,11 @@
       "sources": []
     },
     {
+      "digest": "ee5b273d1468be647b9e3ecf591ced2cf42fec407cf8e4463a06a52f26c1068a",
+      "names": [],
+      "sources": []
+    },
+    {
       "digest": "eea687d437880bd5f55fb447a561112800ca34334c0724d9cecb98493059d9e4",
       "names": [
         "packages/schedule/schedule/src/types.ts#ScheduleCreateChange"
@@ -25217,6 +26364,11 @@
     },
     {
       "digest": "f230c0b583e23b25ee0a61dbe4c05e95c1e2ae44b27939501eb9e03696f0c278",
+      "names": [],
+      "sources": []
+    },
+    {
+      "digest": "f2511d79be05bc19fa8c960ef480056a2bbc8b7cf4911dca388173d51ea0d63f",
       "names": [],
       "sources": []
     },
@@ -25298,6 +26450,11 @@
       "sources": []
     },
     {
+      "digest": "f867b96a542d00afff53b6b841ce0ee2cd234b1df0ce564f057345ab61fd7f78",
+      "names": [],
+      "sources": []
+    },
+    {
       "digest": "f88f1b7b6bb733f685f5fb6a8744a5db9199fa53c90463ea1a33bad51153671d",
       "names": [],
       "sources": []
@@ -25317,6 +26474,11 @@
     },
     {
       "digest": "f9cfc89e8fe085b4fcc9cd32b74b6f103608c54d7d8cd97b47c01de34f252ba3",
+      "names": [],
+      "sources": []
+    },
+    {
+      "digest": "fa1872183e24c9e66d8704c1ea57995a22ee6ccebf98f249ae728bf131be1e5a",
       "names": [],
       "sources": []
     },
@@ -25354,6 +26516,13 @@
       "sources": []
     },
     {
+      "digest": "fbb731fa69d038d9b6879dca428eb4b5b1d65b701bbb97bcfcabbfd44db05e63",
+      "names": [],
+      "sources": [
+        "packages/workflow/production-studio/src/types.ts:110"
+      ]
+    },
+    {
       "digest": "fbd2c74b346a1595b376139c587fadd23e4a21acc9c0abce342975b6cfc60986",
       "names": [],
       "sources": []
@@ -25379,6 +26548,11 @@
     },
     {
       "digest": "fd0d91a1f9dd2efb8959bdf5e07f8f0a98b1cdfa38ce8d4732ebde0b44c3abd4",
+      "names": [],
+      "sources": []
+    },
+    {
+      "digest": "fd84d0b25b62a3cf4a12a01b895e042dc16a3dfbaadc1a39a3abe5c60d5dcf5a",
       "names": [],
       "sources": []
     },

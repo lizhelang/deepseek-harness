@@ -49,6 +49,8 @@ session.deriveMessages()         // the derived model history
 
 Surface events (`system/message`, `developer/message`, `user/message`, `assistant/message`, `tool/result`) require `surfaceOp` in both typed events and append input. A replacement uses exactly `{ op: 'replace', startSeq, endSeq }`, with inclusive `SessionSeq` endpoints in current surface order. An Assistant message embeds its exact compact provider stream and forbids `sourceEventSeqs`. Known log-only events forbid both metadata fields and never produce a message.
 
+Producers may append a known log-only event with `{ ignorable: true }` as the third argument. Session retains this marker in the event envelope so a same-format reader that does not know the optional event type can skip it. This permission concerns Session event reading only, not compatibility with new fields in a plugin's separate storage domain. The marker does not add a model message, bypass validation for a known event, make required unknown events readable, or establish compatibility with another structural Session format. Required-on-read remains the default when the marker is absent.
+
 `developer/message` stores tool-addition names and a `headerSeq` reference to an earlier `request/header`. The reference is required exactly when additions are present, and each name must identify exactly one complete schema in that header. Removals name the tool without a header reference. Historical headers remain available across restart, fork, and surface replacement; the current registry and latest header do not select an earlier addition's definition. `sourceEventSeqs` continues to describe derivation and replaced nodes.
 
 Plugins declare content-changing events with `@messageProjection` and register a pure definition through `ctx.sessions.registerMessageProjection()`. Session calls the definition before accepting an event and caches its immutable message updates. Missing definitions reject append and restore; unloading a used definition also blocks cached reads. Detached constructors and `foldSurface(events, projections)` require explicit definitions. Reconstructors pass the fold's `projectedMessages` to `deriveEventMessage()`; live instance methods apply the same projections automatically. [Plugin-owned message projections](../../../.agents/notes/implemented/architecture/2026-09-11-plugin-owned-message-projections.md) defines ownership and offline assembly.
@@ -71,7 +73,7 @@ The logical `SessionHeader.isSeeded` field reports whether fork history exists w
 
 ### Flush durable state
 
-`ctx.sessions.flush(session)` dispatches the awaited durability checkpoint: every persistence listener flushes and the call settles after all of them. A producer that needs an immediate durability barrier awaits it instead of assuming the write-behind drained.
+`ctx.sessions.flush(session)` dispatches the awaited durability checkpoint: every persistence listener flushes and the call settles after all of them. It returns `true` only when at least one durability listener participated and all succeeded; `false` means no listener participated, and any listener failure rejects the call after all listeners settle. A producer that needs an immediate durability barrier awaits it and requires `true` before acknowledging a persisted outbox. An accepted append or projection cursor does not prove that the write-behind drained; a `false` result or rejection leaves the producer's pending metadata available for retry.
 
 -----
 

@@ -19,11 +19,13 @@ describe('optional external AEA bridge source through the real Loader', () => {
       const instructions = join(root, 'test-role.md')
       await writeFile(instructions, 'External bridge registry and native boundary contract fixture. No native execution is authorized.')
       const mockPlugin = pathToFileURL(fileURLToPath(new URL('../../../test-support/loader-smoke/tests/fixtures/cli-mock-llm.ts', import.meta.url))).href
-      await writeFile(configPath, `- id: headless-startup\n  disabled: true\n- id: headless-runner\n  disabled: true\n- id: agent-loop\n  config:\n    agents:\n      - id: main\n        provider: cli-mock\n        model: cli-mock\n        cwd: !!js process.cwd()\n- id: storage-json\n  config:\n    root: './.state'\n- id: session-persistence-jsonl\n  config:\n    root: './.sessions'\n    compression: none\n- insert:\n    - id: cli-mock-llm\n      name: ${JSON.stringify(mockPlugin)}\n    - id: production-studio\n      name: '@deepseek-ai/dsh-production-studio'\n    - id: actual-aea-bridge\n      name: ${JSON.stringify(pathToFileURL(bridgePath).href)}\n      inject: [productionStudio]\n      config:\n        hostDll: './intentionally-unused.dll'\n        workspace: !!js process.cwd()\n        instructionsPath: ${JSON.stringify(instructions)}\n        maxCalls: 4\n        timeoutMs: 1000\n        stagedWorkflow: ${staged}\n    - id: observe-external-bridge\n      name: ${JSON.stringify(seedPlugin)}\n`)
+      await writeFile(configPath, `- id: headless-startup\n  disabled: true\n- id: headless-runner\n  disabled: true\n- id: agent-loop\n  config:\n    agents:\n      []\n- id: storage-json\n  config:\n    root: './.state'\n- id: session-persistence-jsonl\n  config:\n    root: './.sessions'\n    compression: none\n- insert:\n    - id: cli-mock-llm\n      name: ${JSON.stringify(mockPlugin)}\n    - id: production-studio\n      name: '@deepseek-ai/dsh-production-studio'\n    - id: actual-aea-bridge\n      name: ${JSON.stringify(pathToFileURL(bridgePath).href)}\n      inject: [productionStudio]\n      config:\n        hostDll: './intentionally-unused.dll'\n        workspace: !!js process.cwd()\n        instructionsPath: ${JSON.stringify(instructions)}\n        maxCalls: 4\n        timeoutMs: 1000\n        stagedWorkflow: ${staged}\n    - id: observe-external-bridge\n      name: ${JSON.stringify(seedPlugin)}\n`)
       const result = await runLoaderSmoke({ label: `actual-aea-bridge-${staged}`, cwd: root, binScript, libBinScript: binScript, configPath, binArgs: [configPath, 'validate the selected bridge contract'], tsconfigPath: repoTsconfig, env: { DSH_LOADER_SMOKE_REQUIRED_ENTRY_ID: 'actual-aea-bridge' } })
       expect(result.stderr).toBe('')
-      expect(result.stdout).toContain('"type":"external_bridge_result"')
-      expect(result.stdout).toContain('"nativeDispatched":false')
+      const observed = result.stdout.split('\n').find(line => line.includes('"type":"external_bridge_result"'))
+      expect(observed).toBeDefined()
+      expect(observed).toContain('"nativeDispatched":false')
+      expect(observed).toContain(`"conversationProvider":${staged ? '"aea"' : 'null'}`)
     } finally { await rm(root, { recursive: true, force: true }) }
   }, LOADER_SMOKE_TEST_TIMEOUT_MS)
 })

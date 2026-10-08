@@ -46,7 +46,7 @@ function Branch({ run, task, pending, perform, ...props }: StudioSurfaceProps & 
     {task.message !== '' && <p className={css.message}>{task.message}</p>}
     {task.phase === 'waiting' && waiting.length > 0 && <p className={css.muted}>{t('branch.waiting', { nodes: waiting.join(', ') })}</p>}
     {task.phase === 'unknown' && <p className={css.muted}>{t('branch.unknown')}</p>}
-    {task.phase === 'blocked' && <p className={css.muted}>{t('branch.blocked')}</p>}
+    {task.phase === 'blocked' && <p className={css.muted}>{t(run.mode === 'conversation' ? 'branch.blockedConversation' : 'branch.blocked')}</p>}
     {task.childSessionId !== undefined && <p className={css.muted}>{t('branch.agent', { session: task.childSessionId })}</p>}
     {task.certificates.length > 0 && <p className={css.muted}>{t('branch.certificates', {
       certificates: task.certificates.map(certificate => t(`certificate.${certificate}`)).join(', '),
@@ -136,7 +136,7 @@ export function TaskMonitor({ read, compact = false, ...props }: TaskMonitorProp
     </div>}
     {read.error !== null && <div className={css.error} role="alert">{read.error}<Button size="sm" variant="ghost" onClick={refresh}>{t('refresh')}</Button></div>}
     {error !== null && <p className={css.error} role="alert">{t('action.failed')}{': '}{error}</p>}
-    {snapshot.runs.length === 0 && <div className={css.empty}><p>{t('empty')}</p>{!compact && <p>{t('empty.detail')}</p>}</div>}
+    {snapshot.runs.length === 0 && <div className={css.empty}><p>{t('empty')}</p>{!compact && <p>{t(snapshot.capabilities.conversation === undefined ? 'empty.detail' : 'conversation.autoStart')}</p>}</div>}
     {snapshot.runs.length > 0 && runs.length === 0 && <p className={css.empty}>{t('search.empty')}</p>}
     {TASK_GROUPS.map((group) => {
       const members = runs.filter(run => runGroup(run) === group).sort((left, right) => right.updatedAt - left.updatedAt)
@@ -155,7 +155,7 @@ export function TaskMonitor({ read, compact = false, ...props }: TaskMonitorProp
           </summary>
           <div className={css.runDetails}>
             <div className={css.toolbar}>
-              <span className={css.muted}>{t('task.version', { version: run.graph.version })}</span>
+              <span className={css.muted}>{t(run.mode === 'conversation' ? 'task.versionLive' : 'task.version', { version: run.graph.version })}</span>
               {run.phase === 'active' && <Button size="sm" variant="ghost" disabled={pending}
                 onClick={() => { void perform(() => pause({ runId: run.id, revision: run.revision })) }}>{t('task.pause')}</Button>}
               {run.phase === 'paused' && <Button size="sm" variant="outline" disabled={pending}

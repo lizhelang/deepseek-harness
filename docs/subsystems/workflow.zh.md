@@ -8,6 +8,12 @@ Service Definition：[dsh-workflow](../../packages/workflow/workflow)（`ctx.wor
 
 源码：浏览器安全词汇位于 [`packages/workflow/workflow/src/types.ts`](../../packages/workflow/workflow/src/types.ts)，Host 请求与活跃运行句柄位于 [`runtime-types.ts`](../../packages/workflow/workflow/src/runtime-types.ts)。
 
+## 对话持有的生产工作流
+
+[Production Studio](../../packages/workflow/production-studio/README.zh.md)独立负责 `ctx.productionStudio`、带版本的生产流程和图纸交付检查。可信提供方可以把直接的 AEA 对话绑定到一次运行：父对话执行 agent 步骤，服务执行流程准入限制和只读证据检查。这不会通过 `ctx.workflowEngine` 再启动一次脚本执行。未绑定的生产运行保留显式调度器与子 agent。
+
+监控和编辑器追踪当前已提交的生产状态，对话和轨迹按 Session 顺序渲染同一次运行的可选仅日志检查点。受支持的未来节点编辑保留已准入操作、已消费接线、必需检查和原预算。[包参考](../../packages/workflow/production-studio/README.zh.md)负责控制方式与限制，[架构决策](../../.agents/notes/implemented/architecture/2026-10-08-conversation-owned-production-workflow.zh.md)负责单执行器的理由。
+
 ## 启动请求
 
 本节定义调用方启动一次运行时提交的请求。普通工作流工具会根据模型的 `{ script, meta, args }` 调用和发起调用的 agent 构建该请求；专用消费方还可以为本次运行选择引擎级 `subagentProvider`，并将 `maxTotalAgents` 调低，但脚本无法观察或替换这两项策略。`meta` 与 `args` 是普通 JSON 数据；引擎会用 schema 校验 `meta`，并在任何工作开始前明确报错并拒绝无效数据。引擎绝不会通过对脚本文本求值来获取它们。`parent` 是必填字段——脚本启动的每个子 agent 都归属于它，cwd、谱系与深度通过 [subagent seam](subagent.zh.md) 传递。
@@ -157,6 +163,13 @@ registerNativeBoundaryProvider(toolNames: readonly string[]): () => void
  * @returns after the native dispatch marker is durable.
  */
 async noteNativeDispatch(operationId: ToolCallIdentity): Promise<void>
+
+/**
+ * Register a trusted profile adapter; disposal removes only its own scope.
+ * @param provider - Scoped binding to actual parent-conversation tool receipts.
+ * @returns disposer that removes only this adapter.
+ */
+registerConversationWorkflow(provider: ConversationWorkflowProvider): () => void
 
 /**
  * Read state; interrupted persisted executions become unknown and are never replayed.

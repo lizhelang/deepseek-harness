@@ -4,7 +4,7 @@ import { Context, Service } from '@deepseek-ai/cordis'
 import schema from '@deepseek-ai/schemastery'
 import { z } from 'zod'
 import { Remote, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
-import { ToolCallId } from '@deepseek-ai/dsh-llm'
+import { ToolCallId, createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { ToolCallId as ToolCallIdentity } from '@deepseek-ai/dsh-llm'
 import type { SessionEvent, SessionId } from '@deepseek-ai/dsh-session'
@@ -12,10 +12,12 @@ import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { assertSupportedJsonSchema, validateJsonSchemaValue } from '@deepseek-ai/dsh-tools'
 import type {} from '@deepseek-ai/dsh-subagent'
 import type {} from '@deepseek-ai/dsh-fs'
+import type {} from '@deepseek-ai/dsh-session-projection'
 import { defineDomain, domainTable, type Domain } from '@deepseek-ai/dsh-storage-domain'
-import { createProductionGraph, decodeProductionState, validateProductionGraph } from './domain.ts'
+import { createConversationGraph, createProductionGraph, decodeProductionState, validateProductionGraph } from './domain.ts'
+import { validateConversationEdit } from './conversation.ts'
 import { readAeaEvidence } from './aea-evidence.ts'
-import type { AnswerProductionRequest, ProductionEvidence, ProductionNode, ProductionOutlet, ProductionRef, ProductionRun, ProductionRunId, ProductionSnapshot, ProductionState, ProductionTask, SaveProductionGraphRequest, StartProductionRunRequest } from './types.ts'
+import type { AnswerProductionRequest, ConversationWorkflowProvider, ProductionEvidence, ProductionNode, ProductionOutlet, ProductionRef, ProductionRun, ProductionRunId, ProductionSnapshot, ProductionState, ProductionTask, SaveProductionGraphRequest, StartProductionRunRequest } from './types.ts'
 
 export type * from './types.ts'
 export { createProductionGraph, decodeProductionState, validateProductionGraph } from './domain.ts'
@@ -52,6 +54,9 @@ interface SessionRuntime {
   pausedRun: Set<string>
   scheduling: boolean
   scheduleAgain: boolean
+  mutationTail: Promise<void>
+  pendingPublication?: ProductionState
+  publicationError?: string
 }
 interface NodeResult { outlet: ProductionOutlet; data: JsonValue; evidence: ProductionEvidence[]; certificates: ProductionTask['certificates']; message: string }
 
@@ -110,7 +115,7 @@ function bind(value: JsonValue, input: JsonValue, upstream: JsonValue): JsonValu
 
 /** Production Studio Host service and its authenticated Remote controller. */
 export class ProductionStudio extends TypertRemoteService {
-  static inject = ['agents', 'tools', 'subagents', 'fs', 'storageDomain']
+  static inject = ['agents', 'tools', 'subagents', 'fs', 'storageDomain', 'sessions', 'sessionProjections']
   static Config = schema.object({
     defaultMaxExecutions: schema.natural().min(1).default(80), defaultMaxConcurrent: schema.natural().min(1).default(3),
     subagentProvider: schema.string().default('fork'), maxEvidenceBytes: schema.natural().min(1).default(262144),
@@ -128,6 +133,8 @@ export class ProductionStudio extends TypertRemoteService {
   private nativeController: AbortController | undefined
   private readonly nativeProviders = new Map<string, number>()
   private readonly notDispatched = new Set<string>()
+  private readonly conversationProviders = new Set<ConversationWorkflowProvider>()
+  private readonly conversationCalls = new Set<Promise<void>>()
 
   /**
  * @param ctx - composed Host capabilities.
@@ -143,6 +150,139 @@ export class ProductionStudio extends TypertRemoteService {
       maxRetainedRuns: config.maxRetainedRuns ?? 20,
     }
     createProductionGraph(this.limits.defaultMaxExecutions, this.limits.defaultMaxConcurrent)
+    ctx.sessionProjections.register({ key: 'productionCheckpoints', stateVersion: 1,
+      stateSchema: z.record(z.string(), z.number().int().nonnegative()), init: () => ({}),
+      apply: (state, event) => event.type === 'production/checkpoint'
+        ? { ...state, [event.data.run.id]: Math.max(state[event.data.run.id] ?? 0, event.data.run.revision) } : state })
+    ctx.on('system-prompt/assemble', async (_assembly, { agent }, next) => {
+      const assembled = await next()
+      if (!agent || !this.provider(agent)) return assembled
+      const runtime = await this.runtime(agent.id)
+      const run = this.conversationRun(runtime)
+      if (!run) return assembled
+      await this.mutate(runtime, () => this.advanceConversation(runtime, run))
+      const task = run.tasks.find(item => this.node(run, item.nodeId).kind === 'agent' && ['ready', 'running'].includes(item.phase))
+      const allowed = run.phase === 'active' && !runtime.pausedRun.has(run.id) && task && !task.operationId ? this.node(run, task.nodeId).config.tools ?? [] : []
+      const instruction = task ? this.node(run, task.nodeId).config.prompt ?? '' : 'No executable graph node is available. Preserve the run and explain its current blocker.'
+      return { ...assembled, tools: assembled.tools.filter(tool => allowed.includes(tool.name)), sections: [...assembled.sections, { name: 'production:execution', text: `Production workflow ${run.id}, graph=${run.graph.version}, phase=${run.phase}:\n${instruction}`, interpolate: false }] }
+    })
+    // The conversation is the sole executor of agent nodes. This middleware
+    // admits and settles that same call; it never invokes its native tool twice.
+    ctx.on('tools/execute', async (exec, next) => {
+      const provider = exec.agent ? this.provider(exec.agent, exec.name) : undefined
+      if (!provider || !exec.agent) return next()
+      const agent = exec.agent
+      if (this.closing) throw new Error('Production Studio is stopping; conversation work cannot start')
+      let release: (() => void) | undefined
+      const completion = new Promise<void>((resolve) => { release = resolve })
+      this.conversationCalls.add(completion)
+      try {
+        const runtime = await this.runtime(exec.agent.id)
+        const admission = await this.mutate(runtime, async () => {
+          let run = this.conversationRun(runtime)
+          if (!run) {
+            const entry = provider.start({ agent, name: exec.name, arguments: json(exec.arguments) })
+            if (!entry) return undefined
+            if (runtime.state.runs.some(item => item.phase !== 'complete')) throw new Error('This conversation already owns an unfinished execution; no second executor may start')
+            if (runtime.state.runs.length >= this.limits.maxRetainedRuns) throw new Error('Retained run limit reached')
+            const now = Date.now()
+            const graph = createConversationGraph(this.limits.defaultMaxExecutions, provider.toolNames)
+            // Preserve an explicitly edited conversation draft, not the old
+            // independent baseline-only scheduler's initial default.
+            if (runtime.state.conversationProvider === provider.id) Object.assign(graph, validateProductionGraph(runtime.state.graph))
+            run = { id: `production-${randomUUID()}` as ProductionRunId, revision: 1, objective: entry.objective, graph, phase: 'active', executions: 0, input: entry.input, mode: 'conversation', binding: { provider: provider.id, key: entry.key }, tasks: graph.nodes.map(node => ({ nodeId: node.id, phase: graph.edges.some(edge => edge.toNode === node.id) ? 'waiting' : 'ready', attempts: 0, message: '', evidence: [], certificates: [], updatedAt: now })), history: [], createdAt: now, updatedAt: now }
+            runtime.state.graph = structuredClone(graph)
+            runtime.state.conversationProvider = provider.id
+            runtime.state.runs.push(run)
+            await this.publish(runtime)
+          }
+          if (run.binding?.provider !== provider.id) throw new Error('The active graph belongs to another conversation adapter')
+          await this.advanceConversation(runtime, run)
+          if (run.phase !== 'active' || runtime.pausedRun.has(run.id)) throw new Error(`Conversation workflow is ${run.phase}; no tool is admitted`)
+          const task = run.tasks.find(item => this.node(run, item.nodeId).kind === 'agent' && ['ready', 'running'].includes(item.phase))
+          if (!task || task.operationId) throw new Error('No free conversation agent node; wait for the existing operation')
+          const node = this.node(run, task.nodeId)
+          if (!node.config.tools?.includes(exec.name)) throw new Error(`Tool ${exec.name} is not allowed by graph node ${node.id}`)
+          if (run.executions >= run.graph.maxExecutions) throw new Error('Conversation graph execution budget exhausted; no delivery claim is allowed')
+          if (task.phase === 'ready') {
+            if (task.attempts >= node.maxAttempts) throw new Error('Conversation node attempt budget exhausted')
+            task.attempts++; task.startedAt = Date.now()
+            const incoming = Object.values(task.incoming ?? {})
+            task.certificates = [...new Set(incoming.flatMap(item => item.certificates))]
+            task.evidence = incoming.flatMap(item => item.evidence)
+          }
+          task.operationId = exec.callId; run.executions++
+          this.transition(run, task, 'running', `正在执行 ${exec.name}`)
+          await this.publish(runtime)
+          return { runId: run.id, nodeId: node.id }
+        })
+        if (!admission) return await next()
+        let returned = false
+        try {
+          const result = await next()
+          returned = true
+          try {
+            await this.mutate(runtime, async () => {
+              const run = runtime.state.runs.find(item => item.id === admission.runId)
+              if (!run) throw new Error('Admitted conversation run disappeared')
+              const task = this.task(run, admission.nodeId)
+              if (task.operationId !== exec.callId || task.phase === 'unknown') return
+              delete task.operationId
+              task.settledOperationId = exec.callId
+              if (result.isError) {
+                const unknown = this.nativeLease?.operationId === exec.callId && this.nativeLease.status === 'unknown'
+                this.transition(run, task, unknown ? 'unknown' : 'running', result.error.message)
+              } else {
+                const receipt = receiptValue(result.value)
+                task.output = receipt
+                // Full tool history already lives in this exact Session. Retain
+                // the latest objective receipt rather than duplicating every turn.
+                task.evidence = [...task.evidence.filter(item => item.toolName === 'production_aea_evidence'), { kind: 'tool', nodeId: task.nodeId, attempt: task.attempts, toolName: exec.name, data: receipt, observedAt: Date.now() }]
+                let observed: ReturnType<ConversationWorkflowProvider['observe']>
+                try {
+                  observed = provider.observe({ nodeId: task.nodeId, name: exec.name,
+                    arguments: json(exec.arguments), receipt, run: structuredClone(run) })
+                } catch (error: unknown) {
+                  runtime.pausedRun.add(run.id)
+                  this.transition(run, task, 'paused', `Known tool receipt retained; workflow observation failed: ${error instanceof Error ? error.message : String(error)}`)
+                  this.updateRun(run); run.phase = 'paused'
+                  await this.publish(runtime, true)
+                  return
+                }
+                if (observed?.key && run.binding) run.binding.key = observed.key
+                if (observed?.input !== undefined) run.input = observed.input
+                const outlet = unresolvedReceipt(receipt) ? 'unknown' : observed?.outlet
+                if (outlet) {
+                  delete task.incoming
+                  if (this.node(run, task.nodeId).config.breakAfter && outlet !== 'unknown') { task.breakpoint = 'after'; task.pendingOutlet = outlet; this.transition(run, task, 'human', observed?.message ?? 'Confirm before the next graph node') }
+                  else { this.transition(run, task, outlet === 'success' ? 'complete' : outlet === 'unknown' ? 'unknown' : 'blocked', observed?.message ?? `已返回 ${exec.name}`); this.route(run, task, outlet) }
+                  this.activateQueued(run, task)
+                } else this.transition(run, task, 'running', observed?.message ?? `已返回 ${exec.name}，等待对话执行下一步`)
+              }
+              this.updateRun(run)
+              if (runtime.pausedRun.has(run.id) && run.phase !== 'unknown' && run.phase !== 'complete') run.phase = 'paused'
+              await this.publish(runtime, true)
+              await this.advanceConversation(runtime, run)
+            }, true)
+          } catch (error: unknown) {
+          // The ToolRuntime result is already known. Retain its settlement and
+          // retry only publication; never turn this storage error into replay.
+            runtime.publicationError ??= `Known receipt ${exec.callId} could not be published; only settlement storage may retry`
+            this.ctx.logger.error('Production Studio known receipt publication failed', error)
+          }
+          return result
+        } catch (error: unknown) {
+          if (returned) throw error
+          await this.mutate(runtime, async () => {
+            const run = runtime.state.runs.find(item => item.id === admission.runId)
+            if (!run) return
+            const task = this.task(run, admission.nodeId)
+            if (task.operationId === exec.callId) { this.transition(run, task, 'unknown', 'The admitted tool did not return a known result; inspect its exact invocation before continuing'); this.updateRun(run); await this.publish(runtime, true) }
+          }, true)
+          throw error
+        }
+      } finally { release?.(); this.conversationCalls.delete(completion) }
+    })
     ctx.on('tools/execute', async (exec, next) => {
       if (!nativeTool(exec.name)) return next()
       const previous = this.nativeTail
@@ -183,13 +323,12 @@ export class ProductionStudio extends TypertRemoteService {
     ctx.on('agent/disposed', ({ agent }) => {
       const runtime = this.runtimes.get(agent.id)
       if (!runtime || runtime.agent !== agent || this.closing) return
-      for (const run of runtime.state.runs) {
-        runtime.pausedRun.add(run.id)
-        for (const task of run.tasks.filter(item => item.phase === 'running')) this.transition(run, task, 'unknown', 'Owning conversation stopped; reconcile the existing operation before resuming')
-        this.updateRun(run)
-      }
+      for (const run of runtime.state.runs) runtime.pausedRun.add(run.id)
       for (const worker of runtime.workers.values()) worker.controller.abort()
-      void this.publish(runtime).catch((error: unknown) => { this.ctx.logger.error('Production Studio interruption persistence failed', error) })
+      void (async () => {
+        await Promise.allSettled([...this.conversationCalls])
+        await this.mutate(runtime, () => this.stopRuntime(runtime, 'Owning conversation stopped'), true)
+      })().catch((error: unknown) => { this.ctx.logger.error('Production Studio interruption persistence failed', error) })
     })
     ctx.effect(() => async () => {
       this.closing = true
@@ -198,15 +337,16 @@ export class ProductionStudio extends TypertRemoteService {
       this.listeners.clear()
       const workers: Promise<void>[] = []
       for (const runtime of this.runtimes.values()) {
-        for (const run of runtime.state.runs) {
-          for (const task of run.tasks.filter(item => item.phase === 'running')) this.transition(run, task, 'unknown', 'Host stopped while execution was in progress; reconcile before continuing')
-          this.updateRun(run)
-        }
-        try { await this.publish(runtime) } catch (error: unknown) { this.ctx.logger.error('Production Studio could not persist interruption', error) }
+        for (const run of runtime.state.runs) runtime.pausedRun.add(run.id)
         for (const worker of runtime.workers.values()) { worker.controller.abort(); workers.push(worker.done) }
       }
       await Promise.allSettled(workers)
       await this.nativeTail
+      await Promise.allSettled([...this.conversationCalls])
+      for (const runtime of this.runtimes.values()) {
+        try { await this.mutate(runtime, () => this.stopRuntime(runtime, 'Host stopped'), true) }
+        catch (error: unknown) { this.ctx.logger.error('Production Studio could not persist interruption', error) }
+      }
       this.runtimes.clear()
       this.resources.clear()
       await (await this.domain).close()
@@ -258,6 +398,101 @@ export class ProductionStudio extends TypertRemoteService {
   }
 
   /**
+   * Register a trusted profile adapter; disposal removes only its own scope.
+   * @param provider - Scoped binding to actual parent-conversation tool receipts.
+   * @returns disposer that removes only this adapter.
+   */
+  registerConversationWorkflow(provider: ConversationWorkflowProvider): () => void {
+    if (!provider.id || !provider.toolNames.length) throw new Error('Conversation workflow requires an identity and actual tools')
+    this.conversationProviders.add(provider)
+    for (const listeners of this.listeners.values()) for (const listener of listeners) listener()
+    return () => { this.conversationProviders.delete(provider) }
+  }
+
+  private provider(agent: Agent, name?: string): ConversationWorkflowProvider | undefined {
+    const providers = [...this.conversationProviders].filter(item => item.appliesTo(agent)
+      && (name === undefined || item.toolNames.includes(name)))
+    if (providers.length > 1) throw new Error('More than one conversation executor matches this profile')
+    return providers[0]
+  }
+  private conversationRun(runtime: SessionRuntime): ProductionRun | undefined {
+    return runtime.state.runs.findLast(item => item.mode === 'conversation' && item.phase !== 'complete')
+  }
+  private async mutate<T>(runtime: SessionRuntime, action: () => Promise<T>, allowSettlement = false): Promise<T> {
+    const previous = runtime.mutationTail
+    let release: (() => void) | undefined
+    runtime.mutationTail = new Promise<void>((resolve) => { release = resolve })
+    await previous
+    try {
+      if (!allowSettlement && (runtime.pendingPublication || runtime.state.pendingCheckpoints?.length)) {
+        await this.publish(runtime, true)
+        if (runtime.state.pendingCheckpoints?.length) throw new Error(runtime.publicationError ?? 'Checkpoint publication is pending; no new operation may start')
+      }
+      return await action()
+    } finally { release?.() }
+  }
+  /** Quiescent conversation nodes pause; only an unsettled invocation becomes unknown. */
+  private async stopRuntime(runtime: SessionRuntime, reason: string): Promise<void> {
+    for (const run of runtime.state.runs) {
+      for (const task of run.tasks.filter(item => item.phase === 'running')) {
+        const inFlight = run.mode !== 'conversation' || task.operationId !== undefined
+        this.transition(run, task, inFlight ? 'unknown' : 'paused', `${reason}; ${inFlight ? 'reconcile the exact invocation before continuing' : 'resume between known receipts without replay'}`)
+      }
+      this.updateRun(run)
+      if (run.phase === 'active') run.phase = 'paused'
+    }
+    await this.publish(runtime, true)
+  }
+  /** An explicit UI resume/answer wakes the same parent without starting another run. */
+  private wakeConversation(runtime: SessionRuntime, run: ProductionRun): void {
+    if (this.closing || run.mode !== 'conversation' || run.phase !== 'active' || runtime.pausedRun.has(run.id) || run.tasks.some(task => task.operationId || task.phase === 'human' || task.phase === 'unknown')) return
+    if (!run.tasks.some(task => this.node(run, task.nodeId).kind === 'agent' && ['ready', 'running'].includes(task.phase))) return
+    const message = createUserMessage({ content: [{ type: 'text', text: `The user explicitly released the workflow control for run ${run.id}. Continue this same run at its current graph node. Preserve its source binding, consumed routes, and remaining execution budget. Never repeat a settled invocation or start a second run.` }], source: { kind: 'user-approval' } })
+    runtime.agent.steer(message)
+  }
+  /** Execute only graph-bound read-only checks; conversational agent nodes stay in the parent. */
+  private async advanceConversation(runtime: SessionRuntime, run: ProductionRun): Promise<void> {
+    if (this.closing || run.mode !== 'conversation' || runtime.pausedRun.has(run.id) || ['unknown', 'complete'].includes(run.phase)) return
+    for (;;) {
+      const ready = run.tasks.filter(item => item.phase === 'ready')
+      if (!ready.length) return
+      if (ready.length > 1) throw new Error('A conversation graph requires one executable next node; parallel agent branches have no second executor')
+      const task = ready[0]
+      if (!task) return
+      const node = this.node(run, task.nodeId)
+      if (node.kind === 'human' || node.config.breakBefore && !task.breakpointReleased) {
+        task.breakpoint = 'before'
+        if (node.kind === 'human') {
+          const incoming = Object.values(task.incoming ?? {})
+          task.output = incoming[0]?.data ?? null
+          task.evidence = incoming.flatMap(item => item.evidence)
+          task.certificates = [...new Set(incoming.flatMap(item => item.certificates))]
+        }
+        this.transition(run, task, 'human', node.config.question ?? 'Confirm before the next conversation step')
+        this.updateRun(run); await this.publish(runtime); return
+      }
+      if (node.kind === 'agent') return
+      if (run.executions >= run.graph.maxExecutions || task.attempts >= node.maxAttempts) { this.transition(run, task, 'blocked', 'Conversation graph execution budget exhausted'); this.updateRun(run); await this.publish(runtime); return }
+      task.attempts++; run.executions++; task.startedAt = Date.now()
+      this.transition(run, task, 'running', node.label)
+      await this.publish(runtime)
+      let result: NodeResult
+      try { result = await this.perform(runtime.agent, run, node, task, new AbortController().signal) }
+      catch (error: unknown) {
+        result = { outlet: 'failure', data: { error: error instanceof Error ? error.message : String(error) },
+          evidence: task.evidence, certificates: task.certificates, message: 'Read-only evidence check failed; no native operation was dispatched' }
+      }
+      task.output = result.data; task.evidence = result.evidence; task.certificates = result.certificates
+      delete task.incoming; delete task.breakpointReleased
+      if (node.config.breakAfter && result.outlet !== 'unknown') { task.breakpoint = 'after'; task.pendingOutlet = result.outlet; this.transition(run, task, 'human', 'Confirm before releasing the next graph step') }
+      else { this.transition(run, task, result.outlet === 'success' ? 'complete' : result.outlet === 'unknown' ? 'unknown' : 'blocked', result.message); this.route(run, task, result.outlet) }
+      this.activateQueued(run, task); this.updateRun(run)
+      await this.publish(runtime, true)
+      if (task.phase === 'human' || run.phase === 'unknown' || run.phase === 'complete') return
+    }
+  }
+
+  /**
  * Read state; interrupted persisted executions become unknown and are never replayed.
  * @param sessionId - owning live conversation.
  * @returns current graph and runs.
@@ -274,17 +509,34 @@ export class ProductionStudio extends TypertRemoteService {
   @Remote
   async saveGraph(sessionId: SessionId, request: SaveProductionGraphRequest): Promise<ProductionSnapshot> {
     const runtime = await this.runtime(sessionId)
-    const parsed = z.object({ expectedVersion: z.number().int().nonnegative(), graph: z.unknown() }).strict().parse(request)
-    if (runtime.state.graph.version !== parsed.expectedVersion) throw new Error('Production graph changed; reload before saving')
-    const graph = validateProductionGraph(parsed.graph)
-    for (const protectedNode of runtime.state.graph.nodes.filter(item => item.protected)) {
-      const replacement = graph.nodes.find(item => item.id === protectedNode.id)
-      if (!replacement || replacement.kind !== protectedNode.kind || replacement.config.certification !== protectedNode.config.certification || replacement.protected !== true || replacement.config.expected !== protectedNode.config.expected || replacement.config.evidencePath !== protectedNode.config.evidencePath || replacement.config.toolName !== protectedNode.config.toolName || replacement.config.evidenceToolName !== protectedNode.config.evidenceToolName || JSON.stringify(replacement.config.arguments) !== JSON.stringify(protectedNode.config.arguments) || JSON.stringify(replacement.config.filePaths) !== JSON.stringify(protectedNode.config.filePaths) || JSON.stringify(replacement.config.fileHashes) !== JSON.stringify(protectedNode.config.fileHashes) || replacement.config.reconcileToolName !== protectedNode.config.reconcileToolName) throw new Error(`Mandatory node ${protectedNode.id} cannot be removed or weakened`)
-    }
-    graph.version = parsed.expectedVersion + 1
-    runtime.state.graph = graph
-    await this.publish(runtime)
-    return this.snapshot(runtime)
+    return this.mutate(runtime, async () => {
+      const parsed = z.object({ expectedVersion: z.number().int().nonnegative(), graph: z.unknown() }).strict().parse(request)
+      if (runtime.state.graph.version !== parsed.expectedVersion) throw new Error('Production graph changed; reload before saving')
+      const graph = validateProductionGraph(parsed.graph)
+      for (const protectedNode of runtime.state.graph.nodes.filter(item => item.protected)) {
+        const replacement = graph.nodes.find(item => item.id === protectedNode.id)
+        if (!replacement || replacement.kind !== protectedNode.kind || replacement.config.certification !== protectedNode.config.certification || replacement.protected !== true || replacement.config.expected !== protectedNode.config.expected || replacement.config.evidencePath !== protectedNode.config.evidencePath || replacement.config.toolName !== protectedNode.config.toolName || replacement.config.evidenceToolName !== protectedNode.config.evidenceToolName || JSON.stringify(replacement.config.arguments) !== JSON.stringify(protectedNode.config.arguments) || JSON.stringify(replacement.config.filePaths) !== JSON.stringify(protectedNode.config.filePaths) || JSON.stringify(replacement.config.fileHashes) !== JSON.stringify(protectedNode.config.fileHashes) || replacement.config.reconcileToolName !== protectedNode.config.reconcileToolName) throw new Error(`Mandatory node ${protectedNode.id} cannot be removed or weakened`)
+      }
+      graph.version = parsed.expectedVersion + 1
+      const run = this.conversationRun(runtime)
+      if (run) {
+        validateConversationEdit(run, graph)
+        const now = Date.now()
+        run.tasks = graph.nodes.map(node => run.tasks.find(task => task.nodeId === node.id) ?? { nodeId: node.id, phase: graph.edges.some(edge => edge.toNode === node.id) ? 'waiting' : 'ready', attempts: 0, message: '', evidence: [], certificates: [], updatedAt: now })
+        run.graph = structuredClone(graph); run.revision++; run.updatedAt = now
+      } else if (this.provider(runtime.agent)) {
+        const provider = this.provider(runtime.agent)
+        if (!provider) throw new Error('Conversation adapter changed during graph validation')
+        // An AEA draft is a future chat flow, not authorization to start a child.
+        const draft: ProductionRun = { id: 'draft' as ProductionRunId, revision: 1, objective: 'draft', graph: createConversationGraph(this.limits.defaultMaxExecutions, provider.toolNames), phase: 'active', executions: 0, input: null, tasks: [], history: [], createdAt: 0, updatedAt: 0 }
+        validateConversationEdit(draft, graph)
+      }
+      runtime.state.graph = graph
+      const provider = this.provider(runtime.agent)
+      if (provider) runtime.state.conversationProvider = provider.id
+      await this.publish(runtime)
+      return this.snapshot(runtime)
+    })
   }
 
   /**
@@ -296,6 +548,7 @@ export class ProductionStudio extends TypertRemoteService {
   @Remote
   async start(sessionId: SessionId, request: StartProductionRunRequest): Promise<ProductionSnapshot> {
     const runtime = await this.runtime(sessionId)
+    if (this.provider(runtime.agent) || this.conversationRun(runtime)) throw new Error('This profile executes its workflow directly through conversation; do not start a second run')
     const parsed = z.object({
       graphVersion: z.number().int().positive(), objective: z.string().trim().min(1), input: z.json(),
       goalContractAcknowledged: z.literal(true),
@@ -322,19 +575,29 @@ export class ProductionStudio extends TypertRemoteService {
   @Remote
   async pause(sessionId: SessionId, ref: ProductionRef): Promise<ProductionSnapshot> {
     const runtime = await this.runtime(sessionId)
-    const run = this.expect(runtime, ref)
-    const tasks = ref.nodeId ? [this.task(run, ref.nodeId)] : run.tasks
-    if (!ref.nodeId) runtime.pausedRun.add(run.id)
-    for (const task of tasks) {
-      if (task.phase === 'running') {
-        this.transition(run, task, 'unknown', 'Execution interrupted; reconcile the existing operation before continuing')
-        runtime.workers.get(`${run.id}/${task.nodeId}`)?.controller.abort()
-      } else if (task.phase === 'ready' || task.phase === 'waiting' || task.phase === 'human') this.transition(run, task, 'paused', 'Paused by the user')
-    }
-    this.updateRun(run)
-    if (!ref.nodeId) run.phase = 'paused'
-    await this.publish(runtime)
-    return this.snapshot(runtime)
+    return this.mutate(runtime, async () => {
+      const run = this.expect(runtime, ref)
+      const tasks = ref.nodeId ? [this.task(run, ref.nodeId)] : run.tasks
+      if (run.mode === 'conversation') {
+        runtime.pausedRun.add(run.id)
+        // Pause admission, not an already-dispatched native operation. Its known
+        // receipt must still settle into this same run before the next step.
+        for (const task of tasks.filter(item => item.phase === 'ready' || item.phase === 'running' && !item.operationId)) this.transition(run, task, 'paused', 'Paused by the user; existing operation is not replayed')
+        run.phase = 'paused'; run.revision++
+        await this.publish(runtime); return this.snapshot(runtime)
+      }
+      if (!ref.nodeId) runtime.pausedRun.add(run.id)
+      for (const task of tasks) {
+        if (task.phase === 'running') {
+          this.transition(run, task, 'unknown', 'Execution interrupted; reconcile the existing operation before continuing')
+          runtime.workers.get(`${run.id}/${task.nodeId}`)?.controller.abort()
+        } else if (task.phase === 'ready' || task.phase === 'waiting' || task.phase === 'human') this.transition(run, task, 'paused', 'Paused by the user')
+      }
+      this.updateRun(run)
+      if (!ref.nodeId) run.phase = 'paused'
+      await this.publish(runtime)
+      return this.snapshot(runtime)
+    })
   }
 
   /**
@@ -346,18 +609,23 @@ export class ProductionStudio extends TypertRemoteService {
   @Remote
   async resume(sessionId: SessionId, ref: ProductionRef): Promise<ProductionSnapshot> {
     const runtime = await this.runtime(sessionId)
-    const run = this.expect(runtime, ref)
-    const tasks = ref.nodeId ? [this.task(run, ref.nodeId)] : run.tasks
-    if (ref.nodeId && tasks[0]?.phase === 'unknown') throw new Error('Unknown operation cannot be replayed; use reconcile')
-    if (!ref.nodeId) runtime.pausedRun.delete(run.id)
-    for (const task of tasks.filter(item => item.phase === 'paused')) {
-      const node = this.node(run, task.nodeId)
-      this.transition(run, task, task.breakpoint || node.kind === 'human' ? 'human' : this.hasInputs(node, task, run) ? 'ready' : 'waiting', 'Resumed by the user')
-    }
-    this.updateRun(run)
-    await this.publish(runtime)
-    this.schedule(runtime)
-    return this.snapshot(runtime)
+    return this.mutate(runtime, async () => {
+      const run = this.expect(runtime, ref)
+      const tasks = ref.nodeId ? [this.task(run, ref.nodeId)] : run.tasks
+      if (ref.nodeId && tasks[0]?.phase === 'unknown') throw new Error('Unknown operation cannot be replayed; use reconcile')
+      if (run.mode === 'conversation' && run.tasks.some(item => item.phase === 'unknown')) throw new Error('Unknown operation cannot be replayed; reconcile the exact existing receipt')
+      if (!ref.nodeId || run.mode === 'conversation') runtime.pausedRun.delete(run.id)
+      for (const task of tasks.filter(item => item.phase === 'paused')) {
+        const node = this.node(run, task.nodeId)
+        this.transition(run, task, task.breakpoint || node.kind === 'human' ? 'human' : run.mode === 'conversation' && task.attempts > 0 && task.startedAt !== undefined ? 'running' : this.hasInputs(node, task, run) ? 'ready' : 'waiting', 'Resumed by the user')
+      }
+      this.updateRun(run)
+      await this.publish(runtime)
+      if (run.mode === 'conversation') await this.advanceConversation(runtime, run)
+      this.schedule(runtime)
+      this.wakeConversation(runtime, run)
+      return this.snapshot(runtime)
+    })
   }
 
   /**
@@ -369,29 +637,33 @@ export class ProductionStudio extends TypertRemoteService {
   @Remote
   async answer(sessionId: SessionId, request: AnswerProductionRequest): Promise<ProductionSnapshot> {
     const runtime = await this.runtime(sessionId)
-    const run = this.expect(runtime, request)
-    const task = this.task(run, request.nodeId)
-    if (task.phase !== 'human') throw new Error('This production branch is not waiting for a human decision')
-    const unknownInput = run.graph.edges.some(edge => edge.toNode === task.nodeId && this.node(run, edge.fromNode).outputs.find(port => port.id === edge.fromPort)?.outlet === 'unknown' && this.task(run, edge.fromNode).phase === 'unknown')
-    if (unknownInput) throw new Error('A human answer cannot certify or replay an unknown operation; its exact existing result must be reconciled')
-    if (typeof request.answer !== 'string' || !request.answer.trim() || typeof request.accepted !== 'boolean') throw new Error('A human answer and explicit accepted flag are required')
-    task.evidence.push({ kind: 'human', nodeId: task.nodeId, attempt: task.attempts, data: { answer: request.answer, accepted: request.accepted }, observedAt: Date.now() })
-    if (task.breakpoint === 'before' && this.node(run, task.nodeId).kind !== 'human' && request.accepted) {
-      task.breakpointReleased = true
-      delete task.breakpoint
-      this.transition(run, task, 'ready', request.answer)
-    } else {
-      const outlet = request.accepted ? task.pendingOutlet ?? 'success' : 'failure'
-      delete task.breakpoint
-      delete task.pendingOutlet
-      this.transition(run, task, outlet === 'success' ? 'complete' : 'blocked', request.answer)
-      this.route(run, task, outlet)
-      this.activateQueued(run, task)
-    }
-    this.updateRun(run)
-    await this.publish(runtime)
-    this.schedule(runtime)
-    return this.snapshot(runtime)
+    return this.mutate(runtime, async () => {
+      const run = this.expect(runtime, request)
+      const task = this.task(run, request.nodeId)
+      if (task.phase !== 'human') throw new Error('This production branch is not waiting for a human decision')
+      const unknownInput = run.graph.edges.some(edge => edge.toNode === task.nodeId && this.node(run, edge.fromNode).outputs.find(port => port.id === edge.fromPort)?.outlet === 'unknown' && this.task(run, edge.fromNode).phase === 'unknown')
+      if (unknownInput) throw new Error('A human answer cannot certify or replay an unknown operation; its exact existing result must be reconciled')
+      if (typeof request.answer !== 'string' || !request.answer.trim() || typeof request.accepted !== 'boolean') throw new Error('A human answer and explicit accepted flag are required')
+      task.evidence.push({ kind: 'human', nodeId: task.nodeId, attempt: task.attempts, data: { answer: request.answer, accepted: request.accepted }, observedAt: Date.now() })
+      if (task.breakpoint === 'before' && this.node(run, task.nodeId).kind !== 'human' && request.accepted) {
+        task.breakpointReleased = true
+        delete task.breakpoint
+        this.transition(run, task, 'ready', request.answer)
+      } else {
+        const outlet = request.accepted ? task.pendingOutlet ?? 'success' : 'failure'
+        delete task.breakpoint
+        delete task.pendingOutlet
+        this.transition(run, task, outlet === 'success' ? 'complete' : 'blocked', request.answer)
+        this.route(run, task, outlet)
+        this.activateQueued(run, task)
+      }
+      this.updateRun(run)
+      await this.publish(runtime)
+      if (run.mode === 'conversation') await this.advanceConversation(runtime, run)
+      this.schedule(runtime)
+      this.wakeConversation(runtime, run)
+      return this.snapshot(runtime)
+    })
   }
 
   /**
@@ -451,33 +723,76 @@ export class ProductionStudio extends TypertRemoteService {
     }
     const runtime: SessionRuntime = {
       agent, state, committed: structuredClone(state), workers: new Map(), pausedRun: new Set(), scheduling: false, scheduleAgain: false,
+      mutationTail: Promise.resolve(),
     }
     this.runtimes.set(sessionId, runtime)
     let recovered = false
     for (const run of state.runs) {
       let hadInFlight = false
       if (run.phase === 'paused') runtime.pausedRun.add(run.id)
-      for (const task of run.tasks.filter(item => item.phase === 'running')) { this.transition(run, task, 'unknown', 'Host restarted with an in-flight operation; reconcile before continuing'); hadInFlight = true; recovered = true }
+      for (const task of run.tasks.filter(item => item.phase === 'running')) {
+        const inFlight = run.mode !== 'conversation' || task.operationId !== undefined
+        this.transition(run, task, inFlight ? 'unknown' : 'paused', inFlight ? 'Host restarted with an in-flight operation; reconcile before continuing' : 'Conversation stopped between known tool receipts; resume without replay')
+        hadInFlight ||= inFlight; recovered = true
+      }
       if (run.phase === 'active') { run.phase = hadInFlight ? 'unknown' : 'paused'; runtime.pausedRun.add(run.id); recovered = true }
     }
-    if (recovered) await this.publish(runtime)
+    if (recovered || state.pendingCheckpoints?.length) await this.publish(runtime, true)
     return runtime
   }
 
   /** Build detached UI data from committed state and current capabilities. */
   private snapshot(runtime: SessionRuntime): ProductionSnapshot {
     const state = structuredClone(runtime.committed)
-    return { sessionId: runtime.agent.id, revision: state.revision, graph: state.graph, runs: state.runs, capabilities: { subagent: this.ctx.subagents.list().includes(this.limits.subagentProvider), tools: [...this.ctx.tools.schemas(runtime.agent).map(tool => tool.name), 'production_aea_evidence'], filesystem: true }, ...(this.nativeLease?.status === 'unknown' ? { error: this.nativeLease.message } : {}) }
+    const provider = this.provider(runtime.agent)
+    if (provider && state.conversationProvider !== provider.id) {
+      state.graph = createConversationGraph(this.limits.defaultMaxExecutions, provider.toolNames)
+    }
+    return { sessionId: runtime.agent.id, revision: state.revision, graph: state.graph, runs: state.runs, capabilities: { subagent: this.ctx.subagents.list().includes(this.limits.subagentProvider), tools: [...this.ctx.tools.schemas(runtime.agent).map(tool => tool.name), 'production_aea_evidence'], filesystem: true, ...(provider ? { conversation: { provider: provider.id } } : {}) }, ...(runtime.publicationError ? { error: runtime.publicationError } : this.nativeLease?.status === 'unknown' ? { error: this.nativeLease.message } : {}) }
   }
 
   /** Commit before notifying UI subscribers. */
-  private async publish(runtime: SessionRuntime): Promise<void> {
-    runtime.state.revision++
+  private async publish(runtime: SessionRuntime, preserveReceipt = false): Promise<void> {
+    const previousState = runtime.committed
+    if (!runtime.pendingPublication) runtime.state.revision++
+    for (const run of runtime.state.runs.filter(item => item.mode === 'conversation')) {
+      const previous = previousState.runs.find(item => item.id === run.id)
+      const queued = runtime.state.pendingCheckpoints?.some(item => item.id === run.id && item.revision === run.revision)
+      if ((!previous || previous.revision !== run.revision) && !queued) {
+        runtime.state.pendingCheckpoints ??= []; runtime.state.pendingCheckpoints.push(structuredClone(run))
+      }
+    }
+    // A returned receipt can enrich an older pending control-state write.
+    // Always persist the current authoritative settlement, not a stale retry snapshot.
     const state = decodeProductionState(runtime.state)
     const domain = await this.domain
     try { await domain.table('sessions').put(runtime.agent.id, state) }
-    catch (error: unknown) { runtime.state = structuredClone(runtime.committed); throw error }
+    catch (error: unknown) {
+      if (preserveReceipt) { runtime.pendingPublication = structuredClone(state); runtime.publicationError = 'Known execution receipt retained; storage failed and no next operation may start until settlement commits' }
+      else runtime.state = structuredClone(runtime.committed)
+      throw error
+    }
+    delete runtime.pendingPublication
     runtime.committed = structuredClone(state)
+    delete runtime.publicationError
+    const pending = [...runtime.state.pendingCheckpoints ?? []]
+    while (runtime.state.pendingCheckpoints?.length) {
+      try {
+        const checkpoint = runtime.state.pendingCheckpoints[0]
+        if (!checkpoint) break
+        const accepted = this.ctx.sessionProjections.stateOf(runtime.agent.session, 'productionCheckpoints')
+        if (!accepted) throw new Error('Checkpoint cursor projection is unavailable')
+        if ((accepted[checkpoint.id] ?? 0) < checkpoint.revision) runtime.agent.session.append('production/checkpoint', { run: checkpoint }, { ignorable: true })
+        if (!await this.ctx.sessions.flush(runtime.agent.session)) throw new Error('Checkpoint Session was not durably flushed')
+        runtime.state.pendingCheckpoints.shift()
+      }
+      catch (error: unknown) { runtime.publicationError = 'Execution settlement is saved; conversation/trajectory checkpoint publication is pending'; this.ctx.logger.error('Production Studio checkpoint publication failed', error); break }
+    }
+    if (pending.length && runtime.state.pendingCheckpoints?.length !== pending.length) {
+      if (!runtime.state.pendingCheckpoints?.length) delete runtime.state.pendingCheckpoints
+      try { await domain.table('sessions').put(runtime.agent.id, decodeProductionState(runtime.state)); runtime.committed = structuredClone(runtime.state) }
+      catch (error: unknown) { runtime.state.pendingCheckpoints = pending; runtime.publicationError = 'Checkpoint appended; outbox acknowledgement is pending and will retry without duplicate history'; this.ctx.logger.error('Production Studio outbox acknowledgement failed', error) }
+    }
     for (const listener of this.listeners.get(runtime.agent.id) ?? []) { try { listener() } catch (error: unknown) { this.ctx.logger.warn('Production Studio subscriber failed', error) } }
   }
 
@@ -491,6 +806,7 @@ export class ProductionStudio extends TypertRemoteService {
   private node(run: ProductionRun, id: string): ProductionNode { const node = run.graph.nodes.find(item => item.id === id); if (!node) throw new Error('Production node not found'); return node }
   private task(run: ProductionRun, id: string): ProductionTask { const task = run.tasks.find(item => item.nodeId === id); if (!task) throw new Error('Production task not found'); return task }
   private transition(run: ProductionRun, task: ProductionTask, phase: ProductionTask['phase'], message: string): void {
+    if (['human', 'running', 'paused'].includes(phase)) task.admitted = true
     task.phase = phase; task.message = message; task.updatedAt = Date.now(); run.updatedAt = task.updatedAt; run.revision++
     run.history.push({ nodeId: task.nodeId, attempt: task.attempts, phase, message, time: task.updatedAt })
     if (run.history.length > this.limits.maxHistoryEntries) run.history.splice(0, run.history.length - this.limits.maxHistoryEntries)
@@ -552,6 +868,7 @@ export class ProductionStudio extends TypertRemoteService {
     queueMicrotask(() => { void (async () => {
       try {
         for (const run of runtime.state.runs) {
+          if (run.mode === 'conversation') continue
           if (run.phase === 'complete' || runtime.pausedRun.has(run.id)) continue
           for (const task of run.tasks.filter(item => item.phase === 'ready')) {
             const node = this.node(run, task.nodeId)
@@ -677,7 +994,7 @@ export class ProductionStudio extends TypertRemoteService {
             if (typeof value === 'string') { args[key] = value; break }
           }
         }
-        const receipt = evidence.filter(item => item.kind === 'tool' && ['get_case_context', 'begin_workflow', 'compare_candidates', 'finalize_candidate', 'submit_baseline', 'submit_revision', 'try_suggestion'].includes(item.toolName ?? '') && field(item.data, 'workflow') !== undefined).at(-1)
+        const receipt = evidence.filter(item => item.kind === 'tool' && (['get_case_context', 'begin_workflow', 'compare_candidates', 'finalize_candidate', 'submit_baseline', 'submit_revision', 'try_suggestion'].includes(item.toolName ?? '') || run.mode === 'conversation' && this.provider(agent)?.toolNames.includes(item.toolName ?? '')) && field(item.data, 'workflow') !== undefined).at(-1)
         if (receipt) args['receipt'] = receipt.data
         if (args['deliveryGoal'] === null) delete args['deliveryGoal']
       }

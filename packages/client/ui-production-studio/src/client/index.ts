@@ -9,12 +9,15 @@ import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-session/client'
+import type {} from '@deepseek-ai/dsh-client-ui-chat/client'
 import { createProductionSource, type ProductionSource } from './production-source.ts'
 import { createStudioDraftStore } from './stores.ts'
 import { ProductionMonitorView, ProductionDock } from './TaskMonitor.tsx'
 import { ProductionWorkflowView } from './WorkflowEditor.tsx'
 import { en, zh, type ProductionStudioKey } from './locales.ts'
 import type { StudioInjected } from './slots.ts'
+import { productionChatDefinition, productionTrajectoryDefinition } from './checkpoint.ts'
+import { ProductionCheckpointView } from './ProductionCheckpoint.tsx'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {
@@ -30,7 +33,7 @@ declare module '@deepseek-ai/dsh-api-session-controller/client' {
 }
 
 /** Required registry, Session, locale and generated production API services. */
-export const inject = ['slots', 'sessions', 'locale', 'remote', 'remote.productionStudio']
+export const inject = ['slots', 'sessions', 'locale', 'uiConversation', 'remote', 'remote.productionStudio']
 
 /**
  * Install three surfaces sharing one Session stream and draft store. Registrations
@@ -44,6 +47,11 @@ export function apply(ctx: Context): void {
   const sources = new Map<SessionId, ProductionSource>()
   const remote = ctx.remote.productionStudio
   ctx.effect(() => ctx.locale.register(namespace, { en, zh }), 'ui-production-studio: dictionaries')
+  ctx.uiConversation.events.register(productionChatDefinition)
+  ctx.uiConversation.events.register(productionTrajectoryDefinition)
+  ctx.slots.inject('conversation.chat.node', () => ctx.slots.register({
+    name: 'conversation.chat.node', key: 'production-checkpoint', locale: namespace,
+  }, ProductionCheckpointView))
   ctx.effect(() => () => { for (const source of sources.values()) source.dispose(); sources.clear() }, 'ui-production-studio: streams')
   const unwrap = (result: RemoteResult<ProductionSnapshot>): ProductionSnapshot => {
     if (!result.ok) throw result.error

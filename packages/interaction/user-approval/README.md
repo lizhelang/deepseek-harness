@@ -83,6 +83,8 @@ The system-prompt contribution `approval:policy` states the complete current mea
 
 ### Audit
 
+The `user-approval` message source may include an optional `rpcId` for an authenticated workflow continuation. It identifies the exact originating control request, grants no tool permission, and is absent on ordinary policy messages. [Production Studio](../../workflow/production-studio/README.md#evidence-and-recovery) owns continuation admission and duplicate-request handling.
+
 `request()` appends `approval/asked` with the request identity and tool, then `approval/decided` with the closed outcome; the exact appended fields live in [`src/index.ts`](src/index.ts). Both are log-only; the invariant validates the pair by id within one open turn and the closed outcome vocabulary.
 
 </details>

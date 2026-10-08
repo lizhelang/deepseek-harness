@@ -1,0 +1,24 @@
+# Test-only overlay; shipped headless bundles supply the actual runtime.
+- id: headless-startup
+  disabled: true
+- id: headless-runner
+  disabled: true
+- id: agent-loop
+  config:
+    agents:
+      - id: main
+        provider: reconciliation-fixture
+        model: reconciliation-fixture
+        cwd: !!js process.cwd()
+- id: session-persistence-jsonl
+  config:
+    root: './.sessions'
+    compression: none
+- id: storage-json
+  config:
+    root: './.state'
+- insert:
+    - id: production-studio
+      name: '@deepseek-ai/dsh-production-studio'
+    - id: seed-native-reconciliation
+      name: './seed-native-reconciliation.ts'

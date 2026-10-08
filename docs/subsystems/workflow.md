@@ -14,6 +14,8 @@ Sources: browser-safe vocabulary in [`packages/workflow/workflow/src/types.ts`](
 
 The monitor and editor follow current committed production state; Chat and Trajectory render optional, log-only checkpoints of that same run in Session order. Supported future-node edits preserve admitted operations, consumed routes, required checks and original budgets. The [package reference](../../packages/workflow/production-studio/README.md) owns controls and limitations; the [architecture decision](../../.agents/notes/implemented/architecture/2026-10-08-conversation-owned-production-workflow.md) owns the single-executor rationale.
 
+`NativeReconciliationProvider` binds original native call identities to read-only Host evidence. Its `NativeReconciliationRequest` contains DSH-owned Session events, arguments, run, task and lease; `NativeReconciliationResult` returns the matching identity, execution outcome and evidence. The [Production Studio reference](../../packages/workflow/production-studio/README.md#evidence-and-recovery) defines registration, durable settlement and recovery controls.
+
 ## The start request
 
 What a caller asks for when starting a run. The ordinary workflow tool builds this from the model's `{ script, meta, args }` call plus the calling agent; specialized consumers may also select one engine-wide `subagentProvider` and lower `maxTotalAgents` for the run, but the script cannot observe or replace either policy. `meta` and `args` are plain JSON DATA (the engine validates `meta` against its schema and rejects loud BEFORE anything runs — no script text is ever evaluated to obtain it). `parent` is REQUIRED — every child the script starts is attributed to it, and cwd, lineage, and depth pass through the [subagent seam](subagent.md).
@@ -206,9 +208,10 @@ registerConversationWorkflow(provider: ConversationWorkflowProvider): () => void
  * Resume only paused work; unknown work refuses replay.
  * @param sessionId - owning conversation.
  * @param ref - expected run revision and optional branch.
- * @returns committed state.
+ * @param continuation - optional uniquely identified instructions for one idle paused conversation.
+ * @returns committed state with the admitted continuation identity; uncertain delivery is never resent.
  */
-@Remote async resume(sessionId: SessionId, ref: ProductionRef): Promise<ProductionSnapshot>
+@Remote async resume(sessionId: SessionId, ref: ProductionRef, continuation?: ProductionContinuation): Promise<ProductionSnapshot>
 
 /**
  * Supply a human decision without certifying objective evidence.
@@ -219,10 +222,17 @@ registerConversationWorkflow(provider: ConversationWorkflowProvider): () => void
 @Remote async answer(sessionId: SessionId, request: AnswerProductionRequest): Promise<ProductionSnapshot>
 
 /**
- * Report whether an exact Host reconciliation provider is available for an interrupted invocation.
+ * Register a read-only Host resolver for original native invocations.
+ * @param provider - Trusted plugin adapter; overlapping tool registrations refuse reconciliation.
+ * @returns effect disposer removing only this registration.
+ */
+registerNativeReconciliationProvider(provider: NativeReconciliationProvider): () => void
+
+/**
+ * Settle one exact unknown invocation from Host evidence without replay or budget changes.
  * @param sessionId - owning conversation.
- * @param ref - expected unknown branch.
- * @returns observed state; unresolved outcomes stay unknown.
+ * @param ref - compare-and-set run revision and unknown branch.
+ * @returns paused original node, or unchanged unknown state when the Host cannot resolve it.
  */
 @Remote async reconcile(sessionId: SessionId, ref: ProductionRef): Promise<ProductionSnapshot>
 

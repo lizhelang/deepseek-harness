@@ -12,7 +12,11 @@ import { createUserMessage, type ToolCallId } from '@deepseek-ai/dsh-llm'
 import type { ContextFormed } from '@deepseek-ai/dsh-llm'
 declare module '@deepseek-ai/dsh-llm' {
   interface MessageSourceMap {
-    'user-approval': { kind: 'user-approval' } & ContextFormed
+    'user-approval': {
+      kind: 'user-approval'
+      /** Optional exact Remote request identity for a recorded workflow continuation. */
+      rpcId?: string
+    } & ContextFormed
   }
 }
 

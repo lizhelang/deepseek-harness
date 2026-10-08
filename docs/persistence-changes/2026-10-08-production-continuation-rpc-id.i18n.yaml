@@ -1,0 +1,28 @@
+# Bilingual-pair consistency record for 2026-10-08-production-continuation-rpc-id.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/persistence-changes/2026-10-08-production-continuation-rpc-id.md
+/:
+  en: 3d5a424ae7d7e46b
+  zh: c22a8e4a62d8cc1a
+/2026-10-08-production-continuation-rpc-id:
+  en: fc1e84ca9faee89c
+  zh: 4cb13dcf81770f1a
+/2026-10-08-production-continuation-rpc-id/summary:
+  en: ddac0486903d5feb
+  zh: e1ef81f20fdb8d0e
+/2026-10-08-production-continuation-rpc-id/table-of-contents:
+  en: 6cf314a069ceb451
+  zh: 9adff678e9ecab3b
+/2026-10-08-production-continuation-rpc-id/declaration:
+  en: 6907136f28e48c90
+  zh: 02f8298485f3d8e7
+/2026-10-08-production-continuation-rpc-id/compatibility:
+  en: 8bd3b62bbd7a6f30
+  zh: d349f1f96edcad99
+/2026-10-08-production-continuation-rpc-id/verification:
+  en: 494986a4fb22f698
+  zh: e7abb19a108b7dd6
+/2026-10-08-production-continuation-rpc-id/dev-note:
+  en: b75c8458928b72b9
+  zh: 003ba4e17b4b5269

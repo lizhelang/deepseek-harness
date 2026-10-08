@@ -6,7 +6,7 @@ import { z } from 'zod'
 import { Remote, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import { ToolCallId, createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import type { ToolCallId as ToolCallIdentity } from '@deepseek-ai/dsh-llm'
+import type { ToolCallId as ToolCallIdentity, UserMessage } from '@deepseek-ai/dsh-llm'
 import type { SessionEvent, SessionId } from '@deepseek-ai/dsh-session'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { assertSupportedJsonSchema, validateJsonSchemaValue } from '@deepseek-ai/dsh-tools'
@@ -17,7 +17,7 @@ import { defineDomain, domainTable, type Domain } from '@deepseek-ai/dsh-storage
 import { createConversationGraph, createProductionGraph, decodeProductionState, validateProductionGraph } from './domain.ts'
 import { validateConversationEdit } from './conversation.ts'
 import { readAeaEvidence } from './aea-evidence.ts'
-import type { AnswerProductionRequest, ConversationWorkflowProvider, ProductionEvidence, ProductionNode, ProductionOutlet, ProductionRef, ProductionRun, ProductionRunId, ProductionSnapshot, ProductionState, ProductionTask, SaveProductionGraphRequest, StartProductionRunRequest } from './types.ts'
+import type { AnswerProductionRequest, ConversationWorkflowProvider, NativeReconciliationProvider, NativeReconciliationRequest, NativeReconciliationResult, ProductionContinuation, ProductionEvidence, ProductionNode, ProductionOutlet, ProductionRef, ProductionRun, ProductionRunId, ProductionSnapshot, ProductionState, ProductionTask, SaveProductionGraphRequest, StartProductionRunRequest } from './types.ts'
 
 export type * from './types.ts'
 export { createProductionGraph, decodeProductionState, validateProductionGraph } from './domain.ts'
@@ -42,7 +42,13 @@ export interface Config {
   maxRetainedRuns?: number
 }
 
-const nativeLeaseSchema = z.object({ operationId: z.string(), toolName: z.string(), status: z.enum(['running', 'unknown']), observedAt: z.number(), message: z.string(), sessionId: z.string().optional(), markerSupported: z.boolean().default(false), dispatched: z.boolean().default(true) }).strict()
+const reconciliationResultSchema = z.object({ sessionId: z.string(), operationId: z.string(), toolName: z.string(), argumentSha256: z.string().regex(/^[a-f0-9]{64}$/), outcome: z.enum(['rejected_before_native', 'completed', 'unknown']), receipt: z.json(), evidence: z.json() }).strict()
+const settlementSchema = z.object({
+  providerId: z.string(), runId: z.string(), nodeId: z.string(), runRevision: z.number().int(),
+  attempts: z.number().int(), executions: z.number().int(), callEventSha256: z.string(),
+  resultEventSha256: z.string().optional(), preparedAt: z.number(), result: reconciliationResultSchema,
+}).strict()
+const nativeLeaseSchema = z.object({ operationId: z.string(), toolName: z.string(), status: z.enum(['running', 'unknown']), observedAt: z.number(), message: z.string(), sessionId: z.string().optional(), markerSupported: z.boolean().default(false), dispatched: z.boolean().default(true), settlement: settlementSchema.optional() }).strict()
 type NativeLease = z.infer<typeof nativeLeaseSchema>
 const productionDomain = defineDomain({ name: 'production_studio', version: 1, tables: { sessions: domainTable<SessionId, ProductionState>(z.unknown().transform(decodeProductionState)), native: domainTable<string, NativeLease>(nativeLeaseSchema) } })
 
@@ -133,6 +139,8 @@ export class ProductionStudio extends TypertRemoteService {
   private nativeController: AbortController | undefined
   private readonly nativeProviders = new Map<string, number>()
   private readonly notDispatched = new Set<string>()
+  private readonly reconciliationProviders = new Set<NativeReconciliationProvider>()
+  private readonly reconciliationCalls = new Set<Promise<void>>()
   private readonly conversationProviders = new Set<ConversationWorkflowProvider>()
   private readonly conversationCalls = new Set<Promise<void>>()
 
@@ -154,9 +162,36 @@ export class ProductionStudio extends TypertRemoteService {
       stateSchema: z.record(z.string(), z.number().int().nonnegative()), init: () => ({}),
       apply: (state, event) => event.type === 'production/checkpoint'
         ? { ...state, [event.data.run.id]: Math.max(state[event.data.run.id] ?? 0, event.data.run.revision) } : state })
+    ctx.sessionProjections.register({ key: 'productionContinuationRequests', stateVersion: 1,
+      stateSchema: z.record(z.string(), z.string()), init: () => ({}), apply: (state, event) => {
+        if (event.type !== 'production/checkpoint') return state
+        const requests = { ...state }
+        for (const task of event.data.run.tasks) for (const evidence of task.evidence) {
+          const requestId = field(evidence.data, 'productionContinuation.requestId')
+          const messageId = field(evidence.data, 'productionContinuation.messageId')
+          if (typeof requestId === 'string' && typeof messageId === 'string') requests[requestId] = messageId
+        }
+        return requests
+      } })
+    ctx.sessionProjections.register({ key: 'productionNativeInvocations', stateVersion: 1,
+      stateSchema: z.record(z.string(), z.object({ callCount: z.number().int(), resultCount: z.number().int(),
+        callEvent: z.custom<SessionEvent<'tool/call'>>().optional(), resultEvent: z.custom<SessionEvent<'tool/result'>>().optional() })),
+      init: () => ({}), apply: (state, event) => {
+        if (event.type === 'tool/call' && (nativeTool(event.data.name) || state[event.data.callId])) {
+          const prior = state[event.data.callId] ?? { callCount: 0, resultCount: 0 }
+          return { ...state, [event.data.callId]: { ...prior, callEvent: prior.callEvent ?? event, callCount: prior.callCount + 1 } }
+        }
+        if (event.type === 'tool/result') {
+          const prior = state[event.data.message.toolCallId]
+          if (prior) return { ...state, [event.data.message.toolCallId]: { ...prior,
+            resultEvent: prior.resultEvent ?? event, resultCount: prior.resultCount + 1 } }
+        }
+        return state
+      } })
     ctx.on('system-prompt/assemble', async (_assembly, { agent }, next) => {
       const assembled = await next()
       if (!agent || !this.provider(agent)) return assembled
+      await Promise.allSettled([...this.reconciliationCalls])
       const runtime = await this.runtime(agent.id)
       const run = this.conversationRun(runtime)
       if (!run) return assembled
@@ -320,6 +355,20 @@ export class ProductionStudio extends TypertRemoteService {
         } finally { exec.signal = originalSignal; if (this.nativeController === controller) this.nativeController = undefined }
       } finally { for (const listeners of this.listeners.values()) for (const listener of listeners) listener(); release?.() }
     })
+    ctx.on('session/event', (session, event) => {
+      if (event.type !== 'tool/result' || this.closing) return
+      const lease = this.nativeLease
+      if (!lease || lease.status !== 'unknown' || lease.sessionId !== session.id || lease.operationId !== event.data.message.toolCallId) return
+      if (!this.reconciliationProvidersFor(session.id, lease.toolName).length) return
+      const recovery = (async () => {
+        const runtime = await this.runtime(session.id)
+        const run = runtime.state.runs.find(item => item.tasks.some(task => task.phase === 'unknown' && (task.operationId ?? task.settledOperationId) === lease.operationId))
+        const task = run?.tasks.find(item => item.phase === 'unknown' && (item.operationId ?? item.settledOperationId) === lease.operationId)
+        if (run && task) await this.reconcileInvocation(session.id, { runId: run.id, revision: run.revision, nodeId: task.nodeId }, true)
+      })().catch((error: unknown) => { this.ctx.logger.warn('Native reconciliation retained quarantine', error) })
+      this.reconciliationCalls.add(recovery)
+      void recovery.finally(() => this.reconciliationCalls.delete(recovery))
+    })
     ctx.on('agent/disposed', ({ agent }) => {
       const runtime = this.runtimes.get(agent.id)
       if (!runtime || runtime.agent !== agent || this.closing) return
@@ -341,6 +390,7 @@ export class ProductionStudio extends TypertRemoteService {
         for (const worker of runtime.workers.values()) { worker.controller.abort(); workers.push(worker.done) }
       }
       await Promise.allSettled(workers)
+      await Promise.allSettled([...this.reconciliationCalls])
       await this.nativeTail
       await Promise.allSettled([...this.conversationCalls])
       for (const runtime of this.runtimes.values()) {
@@ -424,6 +474,7 @@ export class ProductionStudio extends TypertRemoteService {
     runtime.mutationTail = new Promise<void>((resolve) => { release = resolve })
     await previous
     try {
+      if (!allowSettlement && this.nativeLease?.settlement?.result.sessionId === runtime.agent.id) throw new Error('Native settlement publication is pending; reconcile the original invocation before modifying its run')
       if (!allowSettlement && (runtime.pendingPublication || runtime.state.pendingCheckpoints?.length)) {
         await this.publish(runtime, true)
         if (runtime.state.pendingCheckpoints?.length) throw new Error(runtime.publicationError ?? 'Checkpoint publication is pending; no new operation may start')
@@ -444,10 +495,10 @@ export class ProductionStudio extends TypertRemoteService {
     await this.publish(runtime, true)
   }
   /** An explicit UI resume/answer wakes the same parent without starting another run. */
-  private wakeConversation(runtime: SessionRuntime, run: ProductionRun): void {
+  private wakeConversation(runtime: SessionRuntime, run: ProductionRun, continuation?: UserMessage): void {
     if (this.closing || run.mode !== 'conversation' || run.phase !== 'active' || runtime.pausedRun.has(run.id) || run.tasks.some(task => task.operationId || task.phase === 'human' || task.phase === 'unknown')) return
     if (!run.tasks.some(task => this.node(run, task.nodeId).kind === 'agent' && ['ready', 'running'].includes(task.phase))) return
-    const message = createUserMessage({ content: [{ type: 'text', text: `The user explicitly released the workflow control for run ${run.id}. Continue this same run at its current graph node. Preserve its source binding, consumed routes, and remaining execution budget. Never repeat a settled invocation or start a second run.` }], source: { kind: 'user-approval' } })
+    const message = continuation ?? createUserMessage({ content: [{ type: 'text', text: `The user explicitly released the workflow control for run ${run.id}. Continue this same run at its current graph node. Preserve its source binding, consumed routes, and remaining execution budget. Never repeat a settled invocation or start a second run.` }], source: { kind: 'user-approval' } })
     runtime.agent.steer(message)
   }
   /** Execute only graph-bound read-only checks; conversational agent nodes stay in the parent. */
@@ -604,13 +655,31 @@ export class ProductionStudio extends TypertRemoteService {
  * Resume only paused work; unknown work refuses replay.
  * @param sessionId - owning conversation.
  * @param ref - expected run revision and optional branch.
- * @returns committed state.
+ * @param continuation - optional uniquely identified instructions for one idle paused conversation.
+ * @returns committed state with the admitted continuation identity; uncertain delivery is never resent.
  */
   @Remote
-  async resume(sessionId: SessionId, ref: ProductionRef): Promise<ProductionSnapshot> {
+  async resume(sessionId: SessionId, ref: ProductionRef, continuation?: ProductionContinuation): Promise<ProductionSnapshot> {
     const runtime = await this.runtime(sessionId)
     return this.mutate(runtime, async () => {
       const run = this.expect(runtime, ref)
+      let continuationMessage: UserMessage | undefined
+      if (continuation !== undefined) {
+        const parsed = z.object({ requestId: z.uuid(), text: z.string().trim().min(1) }).strict().parse(continuation)
+        if (this.nativeLease) throw new Error('Native execution is still leased; reconcile it before requesting continuation')
+        if (run.mode !== 'conversation' || run.phase !== 'paused' || runtime.agent.status !== 'idle'
+          || runtime.agent.inbox.nextStep.length || runtime.agent.inbox.nextTurn.length) throw new Error('A named continuation requires the original paused conversation and an idle, empty inbox')
+        const requests = this.ctx.sessionProjections.stateOf(runtime.agent.session, 'productionContinuationRequests')
+        if (!requests || requests[parsed.requestId] || runtime.state.runs.some(item => item.tasks.some(task => task.evidence.some(evidence => field(evidence.data, 'productionContinuation.requestId') === parsed.requestId)))) throw new Error('Continuation request is already admitted or its projection is unavailable; inspect the original message without resending')
+        const task = run.tasks.find(item => (!ref.nodeId || item.nodeId === ref.nodeId) && item.phase === 'paused' && this.node(run, item.nodeId).kind === 'agent')
+        if (!task || run.tasks.some(item => ['human', 'unknown'].includes(item.phase) || item.operationId)) throw new Error('No paused conversation agent node can accept this continuation')
+        continuationMessage = createUserMessage({ content: [{ type: 'text', text: `The user explicitly released the workflow control for run ${run.id}. Continue this same run at its current graph node. Preserve its source binding, consumed routes, and remaining execution budget. Never repeat a settled invocation or start a second run.\n\n${parsed.text}` }], source: { kind: 'user-approval', rpcId: parsed.requestId } })
+        if (Buffer.byteLength(JSON.stringify(continuationMessage)) > this.limits.maxEvidenceBytes) throw new Error('Continuation message exceeds the retained evidence limit')
+        const evidence: ProductionEvidence = { kind: 'human', nodeId: task.nodeId, attempt: task.attempts,
+          data: json({ productionContinuation: { ...parsed, messageId: continuationMessage.id } }), observedAt: Date.now() }
+        this.assertEvidenceSize([...task.evidence, evidence])
+        task.evidence.push(evidence)
+      }
       const tasks = ref.nodeId ? [this.task(run, ref.nodeId)] : run.tasks
       if (ref.nodeId && tasks[0]?.phase === 'unknown') throw new Error('Unknown operation cannot be replayed; use reconcile')
       if (run.mode === 'conversation' && run.tasks.some(item => item.phase === 'unknown')) throw new Error('Unknown operation cannot be replayed; reconcile the exact existing receipt')
@@ -623,7 +692,8 @@ export class ProductionStudio extends TypertRemoteService {
       await this.publish(runtime)
       if (run.mode === 'conversation') await this.advanceConversation(runtime, run)
       this.schedule(runtime)
-      this.wakeConversation(runtime, run)
+      if (continuationMessage && (runtime.pendingPublication || runtime.state.pendingCheckpoints?.length || runtime.publicationError)) throw new Error('Continuation admission checkpoint is pending; inspect the original request without resending')
+      this.wakeConversation(runtime, run, continuationMessage)
       return this.snapshot(runtime)
     })
   }
@@ -667,19 +737,126 @@ export class ProductionStudio extends TypertRemoteService {
   }
 
   /**
- * Report whether an exact Host reconciliation provider is available for an interrupted invocation.
- * @param sessionId - owning conversation.
- * @param ref - expected unknown branch.
- * @returns observed state; unresolved outcomes stay unknown.
- */
+   * Register a read-only Host resolver for original native invocations.
+   * @param provider - Trusted plugin adapter; overlapping tool registrations refuse reconciliation.
+   * @returns effect disposer removing only this registration.
+   */
+  registerNativeReconciliationProvider(provider: NativeReconciliationProvider): () => void {
+    this.reconciliationProviders.add(provider)
+    return () => { this.reconciliationProviders.delete(provider) }
+  }
+
+  /**
+   * Settle one exact unknown invocation from Host evidence without replay or budget changes.
+   * @param sessionId - owning conversation.
+   * @param ref - compare-and-set run revision and unknown branch.
+   * @returns paused original node, or unchanged unknown state when the Host cannot resolve it.
+   */
   @Remote
   async reconcile(sessionId: SessionId, ref: ProductionRef): Promise<ProductionSnapshot> {
+    return this.reconcileInvocation(sessionId, ref, false)
+  }
+
+  private async reconcileInvocation(sessionId: SessionId, ref: ProductionRef, automatic: boolean): Promise<ProductionSnapshot> {
     const runtime = await this.runtime(sessionId)
-    const run = this.expect(runtime, ref)
-    if (!ref.nodeId) throw new Error('Reconciliation requires one unknown node')
-    const task = this.task(run, ref.nodeId)
-    if (task.phase !== 'unknown') throw new Error('Only an unknown operation requires reconciliation')
-    throw new Error('No Host provider can bind this interrupted operation ID to its exact completed native receipt. The operation remains unknown and will not be replayed; inspect its persisted operation ledger and child trajectory.')
+    return this.mutate(runtime, async () => {
+      const run = this.expect(runtime, ref)
+      if (!ref.nodeId) throw new Error('Reconciliation requires one unknown node')
+      const task = this.task(run, ref.nodeId)
+      const wasPaused = runtime.pausedRun.has(run.id)
+      const previous = this.nativeTail
+      let release: (() => void) | undefined
+      this.nativeTail = new Promise<void>((resolve) => { release = resolve })
+      await previous
+      try {
+        const lease = this.nativeLease
+        if (!lease || lease.status !== 'unknown' || lease.sessionId !== sessionId
+          || lease.operationId !== (task.operationId ?? task.settledOperationId)) throw new Error('No matching unknown native lease belongs to this task')
+        if (task.phase !== 'unknown' && !(task.phase === 'paused' && lease.settlement)) throw new Error('Only an unknown operation or its pending settlement requires reconciliation')
+        if (!lease.settlement && !this.reconciliationProvidersFor(sessionId, lease.toolName).length) throw new Error('No Host provider can bind this interrupted operation to its exact native receipt; quarantine remains')
+        const request = this.reconciliationRequest(runtime, run, task, lease)
+        let settlement = lease.settlement
+        if (!settlement) {
+          const providers = this.reconciliationProvidersFor(sessionId, lease.toolName)
+          if (!providers.length) throw new Error('No Host provider can bind this interrupted operation to its exact native receipt; quarantine remains')
+          if (providers.length !== 1) throw new Error('More than one Host reconciliation provider matches this native tool')
+          const provider = providers[0]
+          if (!provider) throw new Error('No Host reconciliation provider is available')
+          const result: NativeReconciliationResult = await provider.reconcile(structuredClone(request))
+          const parsed = reconciliationResultSchema.parse(result)
+          if (parsed.sessionId !== request.sessionId || parsed.operationId !== request.operationId
+            || parsed.toolName !== request.toolName || parsed.argumentSha256 !== request.argumentSha256) throw new Error('Host reconciliation identity does not match the original invocation')
+          const currentProviders = this.reconciliationProvidersFor(sessionId, lease.toolName)
+          if (this.closing || currentProviders.length !== 1 || currentProviders[0] !== provider) throw new Error('Host reconciliation provider changed before settlement')
+          if (parsed.outcome === 'unknown') return this.snapshot(runtime)
+          const current = this.reconciliationRequest(runtime, run, task, lease)
+          if (this.eventSha(current.callEvent) !== this.eventSha(request.callEvent)
+            || (current.resultEvent ? this.eventSha(current.resultEvent) : undefined) !== (request.resultEvent ? this.eventSha(request.resultEvent) : undefined)) throw new Error('Original Session invocation changed during reconciliation')
+          settlement = { providerId: provider.id, runId: run.id, nodeId: task.nodeId, runRevision: run.revision,
+            attempts: task.attempts, executions: run.executions, callEventSha256: this.eventSha(request.callEvent),
+            ...(request.resultEvent ? { resultEventSha256: this.eventSha(request.resultEvent) } : {}),
+            preparedAt: Date.now(), result: parsed }
+          this.assertEvidenceSize([...task.evidence, { kind: 'tool', nodeId: task.nodeId, attempt: task.attempts,
+            toolName: lease.toolName, data: json({ nativeReconciliation: settlement }), observedAt: settlement.preparedAt }])
+          const prepared = { ...lease, settlement }
+          await (await this.domain).table('native').put('Rhino', prepared)
+          this.nativeLease = prepared
+        }
+        if (settlement.runId !== run.id || settlement.nodeId !== task.nodeId || settlement.attempts !== task.attempts
+          || settlement.executions !== run.executions || settlement.callEventSha256 !== this.eventSha(request.callEvent)
+          || settlement.resultEventSha256 !== (request.resultEvent ? this.eventSha(request.resultEvent) : undefined)) throw new Error('Persisted native settlement no longer matches its original task and events')
+        if (task.phase === 'unknown') {
+          if (run.revision !== settlement.runRevision) throw new Error('Production run changed after native settlement was prepared')
+          delete task.operationId
+          task.settledOperationId = lease.operationId
+          task.evidence.push({ kind: 'tool', nodeId: task.nodeId, attempt: task.attempts, toolName: lease.toolName,
+            data: json({ nativeReconciliation: settlement }), observedAt: settlement.preparedAt })
+          runtime.pausedRun.add(run.id)
+          this.transition(run, task, 'paused', settlement.result.outcome === 'rejected_before_native'
+            ? 'Host confirmed rejection before native execution; resume the same node without repeating the rejected call'
+            : 'Host confirmed the original native result; resume the same node using its retained receipt')
+          this.updateRun(run); run.phase = 'paused'
+          await this.publish(runtime, true)
+        } else {
+          const recorded = task.evidence.some(item => JSON.stringify(field(item.data, 'nativeReconciliation')) === JSON.stringify(settlement))
+          if (!recorded || run.revision !== settlement.runRevision + 1) throw new Error('Pending native settlement is not committed to this task')
+          await this.publish(runtime, true)
+        }
+        if (runtime.pendingPublication || runtime.state.pendingCheckpoints?.length || runtime.publicationError) throw new Error('Native settlement checkpoint is pending; quarantine remains until publication succeeds')
+        await (await this.domain).table('native').delete('Rhino')
+        this.nativeLease = undefined
+        if (automatic && !wasPaused && run.mode === 'conversation' && settlement.result.outcome === 'rejected_before_native') {
+          runtime.pausedRun.delete(run.id)
+          this.transition(run, task, 'running', 'Host confirmed rejection before native execution; continue from the error receipt without repeating the rejected call')
+          this.updateRun(run)
+          await this.publish(runtime, true)
+        }
+        for (const listener of this.listeners.get(sessionId) ?? []) { try { listener() } catch (error: unknown) { this.ctx.logger.warn('Production Studio subscriber failed', error) } }
+        return this.snapshot(runtime)
+      } finally { release?.() }
+    }, true)
+  }
+
+  private reconciliationProvidersFor(sessionId: SessionId, toolName: string): NativeReconciliationProvider[] {
+    return [...this.reconciliationProviders].filter(provider => provider.toolNames.includes(toolName)
+      && (provider.appliesTo === undefined || provider.appliesTo(sessionId)))
+  }
+
+  private eventSha(event: SessionEvent): string { return createHash('sha256').update(JSON.stringify(event)).digest('hex') }
+
+  private reconciliationRequest(
+    runtime: SessionRuntime, run: ProductionRun, task: ProductionTask, lease: NativeLease,
+  ): NativeReconciliationRequest {
+    const invocations = this.ctx.sessionProjections.stateOf(runtime.agent.session, 'productionNativeInvocations')
+    const invocation = invocations?.[lease.operationId]
+    const call = invocation?.callEvent, result = invocation?.resultEvent
+    if (!invocation || invocation.callCount !== 1 || !call || call.data.name !== lease.toolName || invocation.resultCount > 1
+      || !runtime.agent.session.isOwnSeq(call.seq)
+      || result && (result.seq <= call.seq || result.data.turn !== call.data.turn || result.data.step !== call.data.step)) throw new Error('Original Session invocation is missing, duplicated or mismatched')
+    return structuredClone({ sessionId: runtime.agent.id, operationId: lease.operationId, toolName: lease.toolName,
+      argumentSha256: createHash('sha256').update(call.data.arguments).digest('hex'), arguments: json(JSON.parse(call.data.arguments)),
+      callEvent: call, ...(result ? { resultEvent: result } : {}), runId: run.id, nodeId: task.nodeId, runRevision: run.revision,
+      run, task, lease: { status: 'unknown', dispatched: lease.dispatched, markerSupported: lease.markerSupported, observedAt: lease.observedAt } })
   }
 
   /**

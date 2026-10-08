@@ -1,6 +1,6 @@
 /** Session-owned production graphs and durable execution snapshots. */
 import type { Branded } from '@deepseek-ai/dsh-brand'
-import type { SessionId } from '@deepseek-ai/dsh-session/types'
+import type { SessionEvent, SessionId } from '@deepseek-ai/dsh-session/types'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import type { Agent } from '@deepseek-ai/dsh-agent/types'
 
@@ -140,6 +140,15 @@ declare module '@deepseek-ai/dsh-session-projection/types' {
   interface SessionProjectionStateMap {
     /** Last accepted checkpoint revision per run; retries append no duplicate history. */
     productionCheckpoints: Record<string, number>
+    /** Admitted continuation request IDs remain consumed across later task updates. */
+    productionContinuationRequests: Record<string, string>
+    /** Original native invocation events and duplicate counts used for exact reconciliation. */
+    productionNativeInvocations: Record<string, {
+      callEvent?: SessionEvent<'tool/call'> | undefined
+      resultEvent?: SessionEvent<'tool/result'> | undefined
+      callCount: number
+      resultCount: number
+    }>
   }
 }
 
@@ -165,4 +174,52 @@ declare module '@deepseek-ai/dsh-session/types' {
      */
     'production/checkpoint': { run: ProductionRun }
   }
+}
+
+/** DSH-authenticated identity of one original tool invocation. */
+export interface NativeInvocationIdentity {
+  sessionId: SessionId
+  operationId: string
+  toolName: string
+  /** SHA-256 of the exact UTF-8 tool/call arguments string, without reserialization. */
+  argumentSha256: string
+}
+/** Detached original events and execution ownership supplied only by DSH. */
+export interface NativeReconciliationRequest extends NativeInvocationIdentity {
+  arguments: JsonValue
+  callEvent: SessionEvent<'tool/call'>
+  resultEvent?: SessionEvent<'tool/result'>
+  runId: ProductionRunId
+  nodeId: string
+  runRevision: number
+  run: ProductionRun
+  task: ProductionTask
+  lease: { status: 'unknown'; dispatched: boolean; markerSupported: boolean; observedAt: number }
+}
+/** Host evidence settles execution only; it grants no engineering certificate. */
+export interface NativeReconciliationResult extends NativeInvocationIdentity {
+  outcome: 'rejected_before_native' | 'completed' | 'unknown'
+  receipt: JsonValue
+  evidence: JsonValue
+}
+/** Trusted read-only Host adapter; neither the model nor Remote callers register one. */
+export interface NativeReconciliationProvider {
+  id: string
+  toolNames: readonly string[]
+  /** Optional preset/session ownership filter; absent means every Session. */
+  appliesTo?(sessionId: SessionId): boolean
+  /**
+   * Resolve the original invocation without dispatching any tool or native operation.
+   * @param request - DSH-owned run, lease and original Session events.
+   * @returns matching execution identity and authoritative Host evidence, or unknown.
+   */
+  reconcile(request: NativeReconciliationRequest): Promise<NativeReconciliationResult>
+}
+
+/** One explicit continuation supplied by an authenticated workflow controller. */
+export interface ProductionContinuation {
+  /** UUID persisted before the one continuation message is admitted. */
+  requestId: string
+  /** Additional user-authorized instructions, bounded by maxEvidenceBytes with the message. */
+  text: string
 }

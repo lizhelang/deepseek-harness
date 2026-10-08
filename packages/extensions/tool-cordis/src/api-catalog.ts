@@ -1795,10 +1795,10 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'committed state.',
       },
       {
-        signature: '@Remote async resume(sessionId: SessionId, ref: ProductionRef): Promise<ProductionSnapshot>',
+        signature: '@Remote async resume(sessionId: SessionId, ref: ProductionRef, continuation?: ProductionContinuation): Promise<ProductionSnapshot>',
         description: 'Resume only paused work; unknown work refuses replay.',
-        parameters: [{ name: 'sessionId', description: 'owning conversation.' }, { name: 'ref', description: 'expected run revision and optional branch.' }],
-        returns: 'committed state.',
+        parameters: [{ name: 'sessionId', description: 'owning conversation.' }, { name: 'ref', description: 'expected run revision and optional branch.' }, { name: 'continuation', description: 'optional uniquely identified instructions for one idle paused conversation.' }],
+        returns: 'committed state with the admitted continuation identity; uncertain delivery is never resent.',
       },
       {
         signature: '@Remote async answer(sessionId: SessionId, request: AnswerProductionRequest): Promise<ProductionSnapshot>',
@@ -1807,10 +1807,16 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'committed dependent state.',
       },
       {
+        signature: 'registerNativeReconciliationProvider(provider: NativeReconciliationProvider): () => void',
+        description: 'Register a read-only Host resolver for original native invocations.',
+        parameters: [{ name: 'provider', description: 'Trusted plugin adapter; overlapping tool registrations refuse reconciliation.' }],
+        returns: 'effect disposer removing only this registration.',
+      },
+      {
         signature: '@Remote async reconcile(sessionId: SessionId, ref: ProductionRef): Promise<ProductionSnapshot>',
-        description: 'Report whether an exact Host reconciliation provider is available for an interrupted invocation.',
-        parameters: [{ name: 'sessionId', description: 'owning conversation.' }, { name: 'ref', description: 'expected unknown branch.' }],
-        returns: 'observed state; unresolved outcomes stay unknown.',
+        description: 'Settle one exact unknown invocation from Host evidence without replay or budget changes.',
+        parameters: [{ name: 'sessionId', description: 'owning conversation.' }, { name: 'ref', description: 'compare-and-set run revision and unknown branch.' }],
+        returns: 'paused original node, or unchanged unknown state when the Host cannot resolve it.',
       },
       {
         signature: '@Remote({ mode: \'stream\' }) async *follow(sessionId: SessionId, signal: AbortSignal): AsyncIterable<ProductionSnapshot>',
@@ -5919,6 +5925,22 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface NativeFileApplication {\n    readonly id: string;\n    readonly name: string;\n    readonly default: boolean;\n    readonly icon: string | null;\n}',
   },
   {
+    name: 'NativeInvocationIdentity',
+    declaration: 'export interface NativeInvocationIdentity {\n    sessionId: SessionId;\n    operationId: string;\n    toolName: string;\n    argumentSha256: string;\n}',
+  },
+  {
+    name: 'NativeReconciliationProvider',
+    declaration: 'export interface NativeReconciliationProvider {\n    id: string;\n    toolNames: readonly string[];\n    appliesTo?(sessionId: SessionId): boolean;\n    reconcile(request: NativeReconciliationRequest): Promise<NativeReconciliationResult>;\n}',
+  },
+  {
+    name: 'NativeReconciliationRequest',
+    declaration: 'export interface NativeReconciliationRequest extends NativeInvocationIdentity {\n    arguments: JsonValue;\n    callEvent: SessionEvent<\'tool/call\'>;\n    resultEvent?: SessionEvent<\'tool/result\'>;\n    runId: ProductionRunId;\n    nodeId: string;\n    runRevision: number;\n    run: ProductionRun;\n    task: ProductionTask;\n    lease: {\n        status: \'unknown\';\n        dispatched: boolean;\n        markerSupported: boolean;\n        observedAt: number;\n    };\n}',
+  },
+  {
+    name: 'NativeReconciliationResult',
+    declaration: 'export interface NativeReconciliationResult extends NativeInvocationIdentity {\n    outcome: \'rejected_before_native\' | \'completed\' | \'unknown\';\n    receipt: JsonValue;\n    evidence: JsonValue;\n}',
+  },
+  {
     name: 'NotFutureError',
     declaration: 'export interface NotFutureError {\n    readonly code: \'not_future\';\n    readonly message: string;\n}',
   },
@@ -6113,6 +6135,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'ProductEventMap',
     declaration: 'export interface ProductEventMap {\n    desktop_app_launch: Record<string, never>;\n    auth_page_view: Record<string, never>;\n    auth_page_click: {\n        button_name: \'sign_in\' | \'api-key\';\n    };\n    api_key_save_click: Record<string, never>;\n    onboarding_page_view: {\n        page_name: OnboardingPage;\n    };\n    onboarding_page_click: {\n        page_name: OnboardingPage;\n        button_name: \'next\' | \'back\' | \'skip\' | \'charge\' | \'later\' | \'continue\';\n        selected_content?: \'office\' | \'code\' | \'code_office\' | \'focus_result\' | \'key_detail\' | \'full_process\';\n    };\n    onboarding_popup_view: {\n        popup_name: \'skip_charge\' | \'skip_setting\';\n    };\n    onboarding_popup_click: {\n        popup_name: \'skip_charge\' | \'skip_setting\';\n        button_name: \'charge\' | \'know\' | \'enter\' | \'setting\' | \'close\';\n    };\n    desktop_upgrade_click: Record<string, never>;\n    desktop_upgrade_download_result: {\n        is_success: boolean;\n        error_reason?: string;\n    };\n    desktop_upgrade_install_restart_click: Record<string, never>;\n    send_button_click: {\n        session_id?: SessionId;\n        model_name?: string;\n        thinking_effort?: string;\n        run_mode: \'plan\' | \'goal\' | \'default\';\n        msg_type: \'default\' | \'steer\' | \'queue\';\n    };\n    model_switch: {\n        session_id?: SessionId;\n        switch_from: string;\n        switch_to: string;\n    };\n    thinking_level_switch: {\n        session_id?: SessionId;\n        switch_from: string;\n        switch_to: str /* …truncated — full shape in source */',
+  },
+  {
+    name: 'ProductionContinuation',
+    declaration: 'export interface ProductionContinuation {\n    requestId: string;\n    text: string;\n}',
   },
   {
     name: 'ProductionEdge',

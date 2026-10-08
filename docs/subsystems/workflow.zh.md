@@ -14,6 +14,8 @@ Service Definition：[dsh-workflow](../../packages/workflow/workflow)（`ctx.wor
 
 监控和编辑器追踪当前已提交的生产状态，对话和轨迹按 Session 顺序渲染同一次运行的可选仅日志检查点。受支持的未来节点编辑保留已准入操作、已消费接线、必需检查和原预算。[包参考](../../packages/workflow/production-studio/README.zh.md)负责控制方式与限制，[架构决策](../../.agents/notes/implemented/architecture/2026-10-08-conversation-owned-production-workflow.zh.md)负责单执行器的理由。
 
+`NativeReconciliationProvider` 将原生调用的原始身份绑定到只读 Host 证据。其 `NativeReconciliationRequest` 包含 DSH 持有的 Session 事件、参数、运行、任务与租约；`NativeReconciliationResult` 返回匹配的身份、执行结果和证据。[Production Studio 参考](../../packages/workflow/production-studio/README.zh.md#evidence-and-recovery)定义注册方式、持久化结清与恢复控制。
+
 ## 启动请求
 
 本节定义调用方启动一次运行时提交的请求。普通工作流工具会根据模型的 `{ script, meta, args }` 调用和发起调用的 agent 构建该请求；专用消费方还可以为本次运行选择引擎级 `subagentProvider`，并将 `maxTotalAgents` 调低，但脚本无法观察或替换这两项策略。`meta` 与 `args` 是普通 JSON 数据；引擎会用 schema 校验 `meta`，并在任何工作开始前明确报错并拒绝无效数据。引擎绝不会通过对脚本文本求值来获取它们。`parent` 是必填字段——脚本启动的每个子 agent 都归属于它，cwd、谱系与深度通过 [subagent seam](subagent.zh.md) 传递。
@@ -206,9 +208,10 @@ registerConversationWorkflow(provider: ConversationWorkflowProvider): () => void
  * Resume only paused work; unknown work refuses replay.
  * @param sessionId - owning conversation.
  * @param ref - expected run revision and optional branch.
- * @returns committed state.
+ * @param continuation - optional uniquely identified instructions for one idle paused conversation.
+ * @returns committed state with the admitted continuation identity; uncertain delivery is never resent.
  */
-@Remote async resume(sessionId: SessionId, ref: ProductionRef): Promise<ProductionSnapshot>
+@Remote async resume(sessionId: SessionId, ref: ProductionRef, continuation?: ProductionContinuation): Promise<ProductionSnapshot>
 
 /**
  * Supply a human decision without certifying objective evidence.
@@ -219,10 +222,17 @@ registerConversationWorkflow(provider: ConversationWorkflowProvider): () => void
 @Remote async answer(sessionId: SessionId, request: AnswerProductionRequest): Promise<ProductionSnapshot>
 
 /**
- * Report whether an exact Host reconciliation provider is available for an interrupted invocation.
+ * Register a read-only Host resolver for original native invocations.
+ * @param provider - Trusted plugin adapter; overlapping tool registrations refuse reconciliation.
+ * @returns effect disposer removing only this registration.
+ */
+registerNativeReconciliationProvider(provider: NativeReconciliationProvider): () => void
+
+/**
+ * Settle one exact unknown invocation from Host evidence without replay or budget changes.
  * @param sessionId - owning conversation.
- * @param ref - expected unknown branch.
- * @returns observed state; unresolved outcomes stay unknown.
+ * @param ref - compare-and-set run revision and unknown branch.
+ * @returns paused original node, or unchanged unknown state when the Host cannot resolve it.
  */
 @Remote async reconcile(sessionId: SessionId, ref: ProductionRef): Promise<ProductionSnapshot>
 

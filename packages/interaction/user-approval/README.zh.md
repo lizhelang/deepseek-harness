@@ -83,6 +83,8 @@ kind: "package-reference"
 
 ### 审计
 
+`user-approval` 消息来源可携带可选的 `rpcId`，用于经过认证的工作流继续执行请求。它标识精确的原控制请求，不授予工具权限；普通策略消息不包含此字段。[Production Studio](../../workflow/production-studio/README.zh.md#evidence-and-recovery)持有继续执行准入与重复请求处理逻辑。
+
 `request()` 先追加携带请求身份与工具的 `approval/asked`，再追加携带最终结果的 `approval/decided`；确切追加字段见 [`src/index.ts`](src/index.ts)。两者都只写入日志；不变式会在同一个未结束轮次内按 id 校验这一事件对，并校验结果属于封闭词汇。
 
 </details>

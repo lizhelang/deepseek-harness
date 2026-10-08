@@ -18,7 +18,9 @@ describe('native reconciliation through the shipped Loader', () => {
         const run = decodeProductionState(Object.values(document.tables.sessions)[0]).runs[0]!
         expect(run.tasks[0]?.settledOperationId).toBe('loader-native-call')
         expect(run.tasks[0]?.evidence.at(-1)?.data).toMatchObject({ nativeReconciliation: { result: { outcome: 'rejected_before_native' } } })
-        expect(run.executions).toBe(1); expect(run.tasks[0]?.attempts).toBe(1)
+        expect(run.executions).toBe(2); expect(run.tasks[0]?.attempts).toBe(1)
+        expect(run.tasks[0]?.evidence[0]?.data).toHaveProperty('productionEvidenceReference')
+        expect(Buffer.byteLength(JSON.stringify(run.tasks[0]?.evidence))).toBeLessThanOrEqual(262144)
       },
     })
     expect(result.stderr).toBe('')
@@ -28,7 +30,8 @@ describe('native reconciliation through the shipped Loader', () => {
         "attempts": 1,
         "calls": 1,
         "certificates": [],
-        "executions": 1,
+        "diagnosticRestored": true,
+        "executions": 2,
         "otherSessionPresent": true,
         "phase": "active",
         "quarantine": false,

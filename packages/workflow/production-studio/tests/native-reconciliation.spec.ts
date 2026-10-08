@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createHash } from 'node:crypto'
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
@@ -17,8 +17,8 @@ import * as Fork from '@deepseek-ai/dsh-subagent-fork-in-process'
 import JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { MockAdapter, textResponse, toolCallResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
-import ProductionStudio from '../src/index.ts'
-import type { NativeReconciliationRequest, NativeReconciliationResult } from '../src/types.ts'
+import ProductionStudio, { decodeProductionState } from '../src/index.ts'
+import type { NativeReconciliationRequest, NativeReconciliationResult, ProductionEvidence } from '../src/types.ts'
 
 const contexts: Context[] = [], roots: string[] = []
 afterEach(async () => {
@@ -67,11 +67,99 @@ async function harness(maxEvidenceBytes = 262144) {
   const reconcile = async () => ctx.productionStudio.reconcile(agent.id, await ref())
   const reload = async () => { await fiber.dispose(); fiber = await ctx.plugin(ProductionStudio, { maxEvidenceBytes }); bind() }
   const durable = async (): Promise<{ tables: { native: Record<string, unknown> } }> => JSON.parse(await readFile(join(root, 'state/production_studio.json'), 'utf8')) as { tables: { native: Record<string, unknown> } }
+  // Exercise admission of the historical, already oversized representation from
+  // a temporary persisted domain. No production data or private runtime is used.
+  const legacyEvidence = async (evidence: ProductionEvidence) => {
+    await fiber.dispose()
+    const path = join(root, 'state/production_studio.json')
+    const saved = JSON.parse(await readFile(path, 'utf8')) as { tables: { sessions: Record<string, unknown>; evidence?: Record<string, unknown> } }
+    const state = decodeProductionState(saved.tables.sessions[agent.id])
+    state.runs[0]!.tasks[0]!.evidence = [evidence]
+    saved.tables.sessions[agent.id] = state
+    delete saved.tables.evidence
+    await writeFile(path, JSON.stringify(saved))
+    fiber = await ctx.plugin(ProductionStudio, { maxEvidenceBytes }); bind()
+  }
   return { ctx, agent, adapter, root, start, run, ref, resolver, register, reconcile, reload, durable,
-    calls: () => calls, unit: () => unit! }
+    legacyEvidence, calls: () => calls, unit: () => unit! }
 }
 
+const largeDiagnostic = (): ProductionEvidence => ({ kind: 'tool', nodeId: 'baseline', attempt: 1,
+  toolName: 'compare_candidates', data: { diagnostics: '诊断'.repeat(47000), candidates: [{ cost: 12.3, selected: true }] }, observedAt: 1720000000000 })
+
 describe('exact native invocation reconciliation', () => {
+  it('archives historical oversized diagnostic bytes before settling and restores them after restart without resetting budgets', async () => {
+    const h = await harness(); await h.start()
+    const original = largeDiagnostic(); await h.legacyEvidence(original); h.register()
+    const before = await h.run()
+    expect(Buffer.byteLength(JSON.stringify(before.tasks[0]!.evidence))).toBeGreaterThan(262144)
+    const after = (await h.reconcile()).runs[0]!
+    const retained = after.tasks[0]!.evidence[0]!
+    expect(retained.data).toHaveProperty('productionEvidenceReference')
+    expect(Buffer.byteLength(JSON.stringify(after.tasks[0]!.evidence))).toBeLessThanOrEqual(262144)
+    expect(after.phase).toBe('paused'); expect(after.executions).toBe(before.executions)
+    expect(after.tasks[0]!.attempts).toBe(before.tasks[0]!.attempts); expect(after.tasks[0]!.certificates).toEqual([])
+    expect(await h.ctx.productionStudio.readEvidence(h.agent.id, retained)).toEqual(original)
+    await h.reload()
+    expect(await h.ctx.productionStudio.readEvidence(h.agent.id, retained)).toEqual(original)
+    expect((await h.durable()).tables.native).toEqual({}); expect(h.calls()).toBe(1)
+    const paused = await h.run(), request = { requestId: 'f06bcb98-11f6-46d7-b1c6-13c9c9303d14', text: 'Use the exact retained result and continue.' }
+    const steer = vi.spyOn(h.agent, 'steer')
+    await h.ctx.productionStudio.resume(h.agent.id, await h.ref(), request); await h.agent.whenIdle()
+    expect(steer).toHaveBeenCalledTimes(1); expect((await h.run()).executions).toBe(paused.executions)
+    expect(h.calls()).toBe(1)
+  })
+
+  it('keeps the unknown lease and complete old evidence when archival durability fails', async () => {
+    const h = await harness(); await h.start(); const original = largeDiagnostic(); await h.legacyEvidence(original); h.register()
+    const unit = h.unit(), put = unit.putRecord.bind(unit)
+    vi.spyOn(unit, 'putRecord').mockImplementation(async (table, key, value) => {
+      if (table === 'evidence') throw new Error('Archive storage outage')
+      return put(table, key, value)
+    })
+    await expect(h.reconcile()).rejects.toThrow('Archive storage outage')
+    expect((await h.run()).tasks[0]!.evidence).toEqual([original])
+    expect((await h.run()).phase).toBe('unknown')
+    expect((await h.durable()).tables.native['Rhino']).not.toHaveProperty('settlement')
+    expect(h.calls()).toBe(1)
+  })
+
+  it.each(['missing', 'tampered'] as const)('retains the prepared lease when an archived observation is %s on restart', async (damage) => {
+    const h = await harness(); await h.start(); await h.legacyEvidence(largeDiagnostic()); h.register()
+    const unit = h.unit()
+    vi.spyOn(unit, 'deleteRecord').mockRejectedValueOnce(new Error('Hold the prepared native lease'))
+    await expect(h.reconcile()).rejects.toThrow('Hold the prepared native lease')
+    const path = join(h.root, 'state/production_studio.json')
+    const saved = JSON.parse(await readFile(path, 'utf8')) as { tables: { evidence: Record<string, { sessionId: string; text: string }> } }
+    const [key, value] = Object.entries(saved.tables.evidence)[0]!
+    if (damage === 'missing') await unit.deleteRecord('evidence', key)
+    else await unit.putRecord('evidence', key, { ...value, text: value.text.replace('诊断', '篡改') })
+    await h.reload()
+    await expect(h.reconcile()).rejects.toThrow('missing or its byte identity changed')
+    expect((await h.durable()).tables.native['Rhino']).toHaveProperty('settlement')
+    expect(h.calls()).toBe(1)
+  })
+
+  it('rejects changed observation identity and foreign Session references on exact readback', async () => {
+    const h = await harness(); await h.start(); await h.legacyEvidence(largeDiagnostic()); h.register()
+    const retained = (await h.reconcile()).runs[0]!.tasks[0]!.evidence[0]!
+    await expect(h.ctx.productionStudio.readEvidence(h.agent.id, { ...retained, attempt: 2 })).rejects.toThrow('observation identity changed')
+    const data = retained.data as { productionEvidenceReference: { sessionId: string } }
+    data.productionEvidenceReference.sessionId = 'another-session'
+    await expect(h.ctx.productionStudio.readEvidence(h.agent.id, retained)).rejects.toThrow('another Session')
+  })
+
+  it.each(['objective', 'human', 'file'] as const)('does not archive oversized %s evidence to admit reconciliation', async (kind) => {
+    const h = await harness(); await h.start()
+    const evidence = largeDiagnostic()
+    if (kind === 'objective') evidence.toolName = 'production_aea_evidence'
+    else evidence.kind = kind
+    await h.legacyEvidence(evidence); h.register()
+    await expect(h.reconcile()).rejects.toThrow('retained byte limit')
+    expect((await h.run()).tasks[0]!.evidence).toEqual([evidence])
+    expect((await h.durable()).tables.native['Rhino']).not.toHaveProperty('settlement')
+  })
+
   it('binds original raw arguments and settledOperationId, stores rejection and pauses without replay or budget reset', async () => {
     const h = await harness(); await h.start(); h.register()
     const before = await h.run()
@@ -236,7 +324,7 @@ describe('exact native invocation reconciliation', () => {
   })
 
   it.each(['sessions', 'native-delete'] as const)('recovers a durable settlement after %s failure and service restart without consulting or replaying the Host', async (failure) => {
-    const h = await harness(); await h.start(); h.register()
+    const h = await harness(); await h.start(); await h.legacyEvidence(largeDiagnostic()); h.register()
     const unit = h.unit(), put = unit.putRecord.bind(unit), remove = unit.deleteRecord.bind(unit)
     let failed = false
     vi.spyOn(unit, 'putRecord').mockImplementation(async (table, key, value) => {

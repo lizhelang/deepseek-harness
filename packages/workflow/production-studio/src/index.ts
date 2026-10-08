@@ -17,6 +17,7 @@ import { defineDomain, domainTable, type Domain } from '@deepseek-ai/dsh-storage
 import { createConversationGraph, createProductionGraph, decodeProductionState, validateProductionGraph } from './domain.ts'
 import { validateConversationEdit } from './conversation.ts'
 import { readAeaEvidence } from './aea-evidence.ts'
+import { EvidenceArchive, evidenceBlobSchema } from './evidence.ts'
 import type { AnswerProductionRequest, ConversationWorkflowProvider, NativeReconciliationProvider, NativeReconciliationRequest, NativeReconciliationResult, ProductionContinuation, ProductionEvidence, ProductionNode, ProductionOutlet, ProductionRef, ProductionRun, ProductionRunId, ProductionSnapshot, ProductionState, ProductionTask, SaveProductionGraphRequest, StartProductionRunRequest } from './types.ts'
 
 export type * from './types.ts'
@@ -50,7 +51,7 @@ const settlementSchema = z.object({
 }).strict()
 const nativeLeaseSchema = z.object({ operationId: z.string(), toolName: z.string(), status: z.enum(['running', 'unknown']), observedAt: z.number(), message: z.string(), sessionId: z.string().optional(), markerSupported: z.boolean().default(false), dispatched: z.boolean().default(true), settlement: settlementSchema.optional() }).strict()
 type NativeLease = z.infer<typeof nativeLeaseSchema>
-const productionDomain = defineDomain({ name: 'production_studio', version: 1, tables: { sessions: domainTable<SessionId, ProductionState>(z.unknown().transform(decodeProductionState)), native: domainTable<string, NativeLease>(nativeLeaseSchema) } })
+const productionDomain = defineDomain({ name: 'production_studio', version: 1, tables: { sessions: domainTable<SessionId, ProductionState>(z.unknown().transform(decodeProductionState)), native: domainTable<string, NativeLease>(nativeLeaseSchema), evidence: domainTable<string, z.infer<typeof evidenceBlobSchema>>(evidenceBlobSchema) } })
 
 interface SessionRuntime {
   agent: Agent
@@ -274,12 +275,15 @@ export class ProductionStudio extends TypertRemoteService {
                 // the latest objective receipt rather than duplicating every turn.
                 task.evidence = [...task.evidence.filter(item => item.toolName === 'production_aea_evidence'), { kind: 'tool', nodeId: task.nodeId, attempt: task.attempts, toolName: exec.name, data: receipt, observedAt: Date.now() }]
                 let observed: ReturnType<ConversationWorkflowProvider['observe']>
+                let receiptStage = 'diagnostic archival'
                 try {
+                  task.evidence = await this.retainEvidence(agent.id, task.evidence)
+                  receiptStage = 'workflow observation'
                   observed = provider.observe({ nodeId: task.nodeId, name: exec.name,
                     arguments: json(exec.arguments), receipt, run: structuredClone(run) })
                 } catch (error: unknown) {
                   runtime.pausedRun.add(run.id)
-                  this.transition(run, task, 'paused', `Known tool receipt retained; workflow observation failed: ${error instanceof Error ? error.message : String(error)}`)
+                  this.transition(run, task, 'paused', `Known tool receipt retained; ${receiptStage} failed: ${error instanceof Error ? error.message : String(error)}`)
                   this.updateRun(run); run.phase = 'paused'
                   await this.publish(runtime, true)
                   return
@@ -664,6 +668,8 @@ export class ProductionStudio extends TypertRemoteService {
     return this.mutate(runtime, async () => {
       const run = this.expect(runtime, ref)
       let continuationMessage: UserMessage | undefined
+      const archive = await this.evidenceArchive()
+      for (const task of run.tasks) for (const item of task.evidence) archive.read(sessionId, item)
       if (continuation !== undefined) {
         const parsed = z.object({ requestId: z.uuid(), text: z.string().trim().min(1) }).strict().parse(continuation)
         if (this.nativeLease) throw new Error('Native execution is still leased; reconcile it before requesting continuation')
@@ -677,8 +683,9 @@ export class ProductionStudio extends TypertRemoteService {
         if (Buffer.byteLength(JSON.stringify(continuationMessage)) > this.limits.maxEvidenceBytes) throw new Error('Continuation message exceeds the retained evidence limit')
         const evidence: ProductionEvidence = { kind: 'human', nodeId: task.nodeId, attempt: task.attempts,
           data: json({ productionContinuation: { ...parsed, messageId: continuationMessage.id } }), observedAt: Date.now() }
-        this.assertEvidenceSize([...task.evidence, evidence])
-        task.evidence.push(evidence)
+        const retained = await this.retainEvidence(sessionId, [...task.evidence, evidence])
+        this.assertEvidenceSize(retained)
+        task.evidence = retained
       }
       const tasks = ref.nodeId ? [this.task(run, ref.nodeId)] : run.tasks
       if (ref.nodeId && tasks[0]?.phase === 'unknown') throw new Error('Unknown operation cannot be replayed; use reconcile')
@@ -796,8 +803,8 @@ export class ProductionStudio extends TypertRemoteService {
             attempts: task.attempts, executions: run.executions, callEventSha256: this.eventSha(request.callEvent),
             ...(request.resultEvent ? { resultEventSha256: this.eventSha(request.resultEvent) } : {}),
             preparedAt: Date.now(), result: parsed }
-          this.assertEvidenceSize([...task.evidence, { kind: 'tool', nodeId: task.nodeId, attempt: task.attempts,
-            toolName: lease.toolName, data: json({ nativeReconciliation: settlement }), observedAt: settlement.preparedAt }])
+          this.assertEvidenceSize(await this.retainEvidence(sessionId, [...task.evidence, { kind: 'tool', nodeId: task.nodeId, attempt: task.attempts,
+            toolName: lease.toolName, data: json({ nativeReconciliation: settlement }), observedAt: settlement.preparedAt }]))
           const prepared = { ...lease, settlement }
           await (await this.domain).table('native').put('Rhino', prepared)
           this.nativeLease = prepared
@@ -807,10 +814,12 @@ export class ProductionStudio extends TypertRemoteService {
           || settlement.resultEventSha256 !== (request.resultEvent ? this.eventSha(request.resultEvent) : undefined)) throw new Error('Persisted native settlement no longer matches its original task and events')
         if (task.phase === 'unknown') {
           if (run.revision !== settlement.runRevision) throw new Error('Production run changed after native settlement was prepared')
+          const retained = await this.retainEvidence(sessionId, [...task.evidence, { kind: 'tool', nodeId: task.nodeId, attempt: task.attempts, toolName: lease.toolName,
+            data: json({ nativeReconciliation: settlement }), observedAt: settlement.preparedAt }])
+          this.assertEvidenceSize(retained)
           delete task.operationId
           task.settledOperationId = lease.operationId
-          task.evidence.push({ kind: 'tool', nodeId: task.nodeId, attempt: task.attempts, toolName: lease.toolName,
-            data: json({ nativeReconciliation: settlement }), observedAt: settlement.preparedAt })
+          task.evidence = retained
           runtime.pausedRun.add(run.id)
           this.transition(run, task, 'paused', settlement.result.outcome === 'rejected_before_native'
             ? 'Host confirmed rejection before native execution; resume the same node without repeating the rejected call'
@@ -818,6 +827,8 @@ export class ProductionStudio extends TypertRemoteService {
           this.updateRun(run); run.phase = 'paused'
           await this.publish(runtime, true)
         } else {
+          const archive = await this.evidenceArchive()
+          for (const item of task.evidence) archive.read(sessionId, item)
           const recorded = task.evidence.some(item => JSON.stringify(field(item.data, 'nativeReconciliation')) === JSON.stringify(settlement))
           if (!recorded || run.revision !== settlement.runRevision + 1) throw new Error('Pending native settlement is not committed to this task')
           await this.publish(runtime, true)
@@ -1115,7 +1126,8 @@ export class ProductionStudio extends TypertRemoteService {
     const upstream: JsonValue = incoming.length === 1 ? incoming[0]?.data ?? null
       : Object.fromEntries(Object.entries(task.incoming ?? {}).map(([key, token]) => [key, token.data]))
     const certificates = [...new Set(incoming.flatMap(token => token.certificates))]
-    const evidence = [...incoming.flatMap(token => token.evidence), ...task.evidence.filter(item => item.kind === 'human')]
+    const archive = await this.evidenceArchive()
+    const evidence = [...incoming.flatMap(token => token.evidence), ...task.evidence.filter(item => item.kind === 'human')].map(item => archive.read(agent.id, item))
     const failed = (message: string): NodeResult => ({ outlet: 'failure', data: { issue: message, input: upstream }, evidence, certificates: [], message })
     if (node.kind === 'agent') {
       const observations = new Map<SessionId, SessionEvent[]>()
@@ -1247,6 +1259,22 @@ export class ProductionStudio extends TypertRemoteService {
     return observation
   }
   private assertEvidenceSize(evidence: ProductionEvidence[]): void { if (Buffer.byteLength(JSON.stringify(evidence)) > this.limits.maxEvidenceBytes) throw new Error('Objective evidence exceeds the configured retained byte limit') }
+  private async evidenceArchive(): Promise<EvidenceArchive> { return new EvidenceArchive((await this.domain).table('evidence')) }
+  private async retainEvidence(sessionId: SessionId, evidence: ProductionEvidence[]): Promise<ProductionEvidence[]> {
+    return (await this.evidenceArchive()).retain(sessionId, evidence, this.limits.maxEvidenceBytes)
+  }
+
+  /**
+   * Read a retained diagnostic observation without dispatching work or granting a certificate.
+   * @param sessionId - active owning conversation.
+   * @param evidence - complete observation from its production snapshot or checkpoint.
+   * @returns original JSON after Session, SHA-256, byte-count and observation identity checks.
+   */
+  @Remote
+  async readEvidence(sessionId: SessionId, evidence: ProductionEvidence): Promise<ProductionEvidence> {
+    await this.runtime(sessionId)
+    return (await this.evidenceArchive()).read(sessionId, evidence)
+  }
   private markNotDispatched(operationId: string): void {
     this.notDispatched.add(operationId)
     if (this.notDispatched.size > this.limits.maxHistoryEntries) {

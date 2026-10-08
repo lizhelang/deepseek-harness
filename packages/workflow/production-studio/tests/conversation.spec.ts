@@ -92,6 +92,36 @@ async function harness(script?: ConstructorParameters<typeof MockAdapter>[0], co
 }
 
 describe('one conversation, one production executor', () => {
+  it('archives large ordinary receipts at ingestion but applies the unchanged gate byte limit to their restored contents', async () => {
+    const h = await harness()
+    h.receipt['diagnostic'] = '原始诊断'.repeat(25000)
+    expect((await h.call(false)).isError).toBe(false)
+    const first = await h.run(), retained = first.tasks[0]!.evidence[0]!
+    expect(retained.data).toHaveProperty('productionEvidenceReference')
+    expect(Buffer.byteLength(JSON.stringify(first.tasks[0]!.evidence))).toBeLessThanOrEqual(262144)
+    expect((await h.ctx.productionStudio.readEvidence(h.agent.id, retained)).data).toEqual(h.receipt)
+    expect((await h.call(true)).isError).toBe(false)
+    const gate = (await h.run()).tasks.find(item => item.nodeId === 'geometry')!
+    expect(gate.phase).toBe('blocked'); expect(gate.certificates).toEqual([])
+    expect(gate.output).toEqual({ error: 'Objective evidence exceeds the configured retained byte limit' })
+    expect(h.count()).toBe(2)
+  })
+
+  it('durably pauses with the complete known receipt if diagnostic archival fails before workflow observation', async () => {
+    const h = await harness(); h.receipt['diagnostic'] = '原始诊断'.repeat(25000)
+    const unit = h.storageUnit(), put = unit.putRecord.bind(unit)
+    vi.spyOn(unit, 'putRecord').mockImplementation(async (table, key, value) => {
+      if (table === 'evidence') throw new Error('Diagnostic archive unavailable')
+      return put(table, key, value)
+    })
+    expect((await h.call(true)).isError).toBe(false)
+    const task = (await h.run()).tasks[0]!
+    expect(task.phase).toBe('paused'); expect(task.message).toContain('diagnostic archival failed')
+    expect(task.evidence[0]!.data).toEqual(h.receipt); expect(task.output).toEqual(h.receipt)
+    expect((await h.saved()).runs[0]!.tasks[0]!.evidence[0]!.data).toEqual(h.receipt)
+    expect((await h.call(true)).isError).toBe(true); expect(h.count()).toBe(1)
+  })
+
   it('auto-starts from a real parent chat call, crosses actual file gates and emits replayable same-run checkpoints', async () => {
     const { ctx, agent, adapter, run, events, count, errors } = await harness()
     agent.followup(createUserMessage({ content: [{ type: 'text', text: 'Verify the supplied drawing' }], source: { kind: 'user' } }))

@@ -35,7 +35,7 @@ kind: "package-reference"
 <a id="understand-the-implementation"></a>
 ## 理解实现
 
-`src/client/index.ts` 负责 Cordis effect 和 slot 注入。`production-source.ts` 按修订顺序追踪当前 Host 状态并保留会话引用。`checkpoint.ts` 为 `production/checkpoint` 注册独立的对话与轨迹 Definition，以日志序号而非运行 ID 为键，因此每条完整运行记录都可独立回放。对话展示本地化流程卡片，轨迹通过已有原始记录渲染器保留精确数据，不开启第二条历史流。`stores.ts` 只负责未提交界面状态。组件接收 props 而非 Cordis context，文案与 CSS 使用现有语言和主题组件。
+`src/client/index.ts` 负责 Cordis effect 和 slot 注入。`production-source.ts` 按修订顺序追踪当前 Host 状态并保留会话引用。`checkpoint.ts` 为 `production/checkpoint` 注册独立的对话与轨迹 Definition，以日志序号而非运行 ID 为键，因此每条完整运行记录都可独立回放。对话展示本地化流程卡片。轨迹使用[业务记录扩展](../ui-trajectory/README.zh.md#business-records)渲染本地化摘要，并在 Payload 中展示检查点的完整运行数据，不开启第二条历史流。`stores.ts` 只负责未提交界面状态。组件接收 props 而非 Cordis context，文案与 CSS 使用现有语言和主题组件。
 
 没有发布 `./invariant` 附件：本包只负责展示和明确的用户操作，没有一份可能独立偏离执行状态的第二观察。生产执行证据与流程校验由 `dsh-production-studio` 负责。
 
@@ -62,7 +62,7 @@ kind: "package-reference"
 
 - **能力绑定：** 本界面不提供 AEA／Rhino 能力实现。任务快照列出当前 Host 的工具、子 Agent 和文件系统能力。能力不可用或客观证据未绑定时，会显示明确诊断。
 - **对话能力：** 绑定 AEA 对话不支持额外 Agent 身份或逐节点的模型／提供方覆盖。编辑器禁用这些选项，不暗示修改会生效。
-- **轨迹展示：** 检查点使用已有原始记录渲染器。专门的丰富轨迹卡片需要轨迹包提供扩展位置。
+- **轨迹展示：** 每行只描述自身已提交的检查点，不读取实时任务快照。Payload 检查器只读；打开历史记录不会恢复或重做执行。
 
 <a id="dev-note"></a>
 ### 开发备注

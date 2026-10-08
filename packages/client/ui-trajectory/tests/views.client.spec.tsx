@@ -114,7 +114,7 @@ function historySnapshot(
   }
 }
 
-function sessionSnapshot(nodes: LegacyConversationSlice['nodes']): SessionSnapshot {
+function sessionSnapshot(nodes: TrajectorySnapshot['eventNodes']): SessionSnapshot {
   return {
     sessionId: SID,
     pendingSubmissions: [],

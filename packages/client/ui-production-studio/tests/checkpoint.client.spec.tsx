@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import { SessionSeq } from '@deepseek-ai/dsh-session/types'
 import type { SessionLiveEventEntry } from '@deepseek-ai/dsh-api-session-controller/client'
@@ -9,6 +9,9 @@ import type { TrajectorySnapshot } from '@deepseek-ai/dsh-client-ui-trajectory/c
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import { chatViewDefinition } from '../../ui-chat/src/client/conversation-nodes/chat-snapshot-builder.ts'
 import { trajectoryViewDefinition } from '../../ui-trajectory/src/client/trajectory-snapshot-builder.ts'
+import { deriveTrajectoryLayout } from '../../ui-trajectory/src/client/layout.ts'
+import { TrajectoryTable } from '../../ui-trajectory/src/client/TrajectoryTable.tsx'
+import { t as trajectoryT } from '../../ui-trajectory/tests/locale.client.ts'
 import { productionChatDefinition, productionTrajectoryDefinition } from '../src/client/checkpoint.ts'
 import { ProductionCheckpointView } from '../src/client/ProductionCheckpoint.tsx'
 import { en } from '../src/client/locales.ts'
@@ -21,6 +24,7 @@ const t: TranslateNS<'productionStudio'> = (key, params = {}) =>
     const value = params[name]
     return typeof value === 'string' || typeof value === 'number' ? String(value) : ''
   })
+const trajectoryDefinition = productionTrajectoryDefinition(t)
 
 function checkpoint(seq: number, phase: 'running' | 'complete' | 'unknown'): SessionLiveEventEntry {
   const current = { ...run('same-workpiece', phase), mode: 'conversation' as const, revision: seq,
@@ -31,7 +35,7 @@ function checkpoint(seq: number, phase: 'running' | 'complete' | 'unknown'): Ses
 
 function replay(entries: SessionLiveEventEntry[] = [], hasMore = false) {
   const assembler = new ConversationNodeAssembler(
-    { entries: () => [productionChatDefinition, productionTrajectoryDefinition], fallbackEntry: () => undefined },
+    { entries: () => [productionChatDefinition, trajectoryDefinition], fallbackEntry: () => undefined },
     { entries: () => [chatViewDefinition, trajectoryViewDefinition] },
   )
   assembler.replaceWindow(entries, hasMore)
@@ -82,8 +86,17 @@ describe('committed production checkpoint replay', () => {
           },
         ]
       `)
-    expect(live.trajectory().eventNodes.map(node => node.kind === 'unknown' ? [node.seq, node.type, node.data] : node))
-      .toEqual([first, second, third].map(entry => [entry.event.seq, 'production/checkpoint', entry.event.data]))
+    expect(live.trajectory().eventNodes.map(node => node.kind === 'record' ? [node.seq, node.type, node.data] : node))
+      .toEqual([first, second, third].map(entry => [entry.event.seq, 'production/checkpoint', { seq: entry.event.seq, time: entry.event.time, ...entry.event.data }]))
+    const snapshot = live.trajectory()
+    const layout = deriveTrajectoryLayout({ ...snapshot, nodes: snapshot.eventNodes }, trajectoryT)
+    const rows = layout.flatMap(turn => turn.groups.flatMap(group => group.cells))
+    expect(rows.map(row => [row.kind, row.sourceSeq, row.kindLabel])).toEqual([
+      ['record', 4, 'Workflow progress'], ['record', 9, 'Workflow progress'], ['record', 12, 'Workflow progress'],
+    ])
+    expect(rows.map(row => row.text)).toEqual(expect.arrayContaining([
+      expect.stringContaining('Actual running transition'), expect.stringContaining('Actual unknown transition'), expect.stringContaining('Actual complete transition'),
+    ]))
   })
   it('renders the committed transition and source binding without reading live task state', () => {
     const h = replay([checkpoint(4, 'running')])
@@ -96,5 +109,32 @@ describe('committed production checkpoint replay', () => {
     h.assembler.append(checkpoint(9, 'unknown'))
     expect(container.querySelector('[data-production-checkpoint="4"]')).toBeTruthy()
     expect(screen.queryByText('Actual unknown transition')).toBeNull()
+  })
+  it('renders a real trajectory row and opens its exact historical run in Payload', () => {
+    const h = replay([checkpoint(9, 'unknown')], true)
+    const snapshot = h.trajectory()
+    const turns = deriveTrajectoryLayout({ ...snapshot, nodes: snapshot.eventNodes }, trajectoryT)
+    const { container, rerender } = render(<TrajectoryTable turns={turns} t={trajectoryT}
+      renderImages={() => null} collapsedTurns={new Set()} onToggleTurn={() => {}}
+      collapsedAssistants={new Set()} onToggleAssistant={() => {}} />)
+    const row = container.querySelector('tr[data-kind="record"][data-trajectory-row-key]')!
+    expect(row.textContent).toContain('production/checkpoint')
+    expect(row.textContent).toContain('Actual unknown transition')
+    expect(row.textContent).toContain('Workflow progress')
+    fireEvent.click(row)
+    fireEvent.click(screen.getByRole('tab', { name: 'Payload' }))
+    expect(screen.getByRole('tabpanel').textContent).toContain('same-workpiece')
+    fireEvent.click(screen.getByText('run:', { exact: true }))
+    fireEvent.click(screen.getByText('binding:', { exact: true }))
+    expect(screen.getByRole('tabpanel').textContent).toContain('/original-slanted.3dm')
+    expect(screen.getByRole('tabpanel').textContent).toContain('unknown')
+    h.assembler.append(checkpoint(12, 'complete'))
+    const updated = h.trajectory()
+    rerender(<TrajectoryTable turns={deriveTrajectoryLayout({ ...updated, nodes: updated.eventNodes }, trajectoryT)} t={trajectoryT}
+      renderImages={() => null} collapsedTurns={new Set()} onToggleTurn={() => {}}
+      collapsedAssistants={new Set()} onToggleAssistant={() => {}} />)
+    expect(screen.getByRole('tabpanel').textContent).toContain('revision: 9')
+    expect(screen.getByRole('tabpanel').textContent).toContain('unknown')
+    expect(screen.getByRole('tabpanel').textContent).not.toContain('Actual complete transition')
   })
 })

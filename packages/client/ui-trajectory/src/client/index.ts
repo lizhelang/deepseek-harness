@@ -33,6 +33,9 @@ export type {
   TrajectoryContribution,
   TrajectoryConversationViewNode,
   TrajectoryRequestHeaderState,
+  TrajectoryEventNode,
+  TrajectoryRecordNode,
+  TrajectoryRecordPresentation,
   TrajectorySnapshot,
   UseTrajectory,
 } from './trajectory-contract.ts'

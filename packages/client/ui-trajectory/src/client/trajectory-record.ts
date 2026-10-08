@@ -5,7 +5,7 @@ import type { FileAttachmentRef, ImageAttachmentRef } from '@deepseek-ai/dsh-att
 import type { ConversationPromptSnapshot } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { TrajectoryTranslate } from './locales.ts'
 
-/** Closed set of trajectory record kinds. */
+/** Built-in row kinds and the business-record extension row. */
 export type TrajectoryCellKind =
   | 'system'
   | 'user'
@@ -14,6 +14,7 @@ export type TrajectoryCellKind =
   | 'message'
   | 'tool'
   | 'subtool'
+  | 'record'
 
 /** Recorded inputs needed to derive assistant TTFT and decode throughput. */
 export interface AssistantMetricDetail {
@@ -43,6 +44,8 @@ export interface TrajectoryCellProps extends HTMLAttributes<HTMLDivElement> {
   /** Projection-stable identity when no single source event owns the record lifecycle. */
   recordId?: string
   kind: TrajectoryCellKind
+  /** Business formatter's localized role label, absent on built-in rows. */
+  kindLabel?: string
   /** Non-Markdown summary or prefix; CSS ellipsis when it overflows. */
   text: string
   /** Raw Markdown source converted into the single-line summary at its consumer. */

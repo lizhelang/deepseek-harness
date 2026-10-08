@@ -35,7 +35,7 @@ Sessions without a conversation provider retain the explicit scheduled Start for
 <a id="understand-the-implementation"></a>
 ## Understand the implementation
 
-`src/client/index.ts` owns Cordis effects and slot injections. `production-source.ts` follows current Host state with revision ordering and Session retention. `checkpoint.ts` contributes independent Chat and Trajectory Definitions for `production/checkpoint`, keyed by log sequence rather than run id, so each whole-run event remains independently replayable. Chat renders a localized workflow card; Trajectory retains the exact payload in its existing raw-record renderer, without a second history stream. `stores.ts` owns only unsent UI state. Components receive props, not Cordis context; copy and CSS use the existing locale and theme owners.
+`src/client/index.ts` owns Cordis effects and slot injections. `production-source.ts` follows current Host state with revision ordering and Session retention. `checkpoint.ts` contributes independent Chat and Trajectory Definitions for `production/checkpoint`, keyed by log sequence rather than run id, so each whole-run event remains independently replayable. Chat renders a localized workflow card. Trajectory uses the [business-record extension](../ui-trajectory/README.md#business-records) to render a localized summary and the checkpoint's complete run in Payload, without a second history stream. `stores.ts` owns only unsent UI state. Components receive props, not Cordis context; copy and CSS use the existing locale and theme owners.
 
 No `./invariant` companion is published: this package owns presentation and explicit user gestures, with no second observation of execution state that could diverge independently. Production execution evidence and graph enforcement belong to `dsh-production-studio`.
 
@@ -62,7 +62,7 @@ The UI does not change request history. Historical cards use their own committed
 
 - **Capability bindings:** This UI does not supply AEA/Rhino capability implementations. The task snapshot lists current Host tools, subagent and filesystem capabilities. Unavailable capabilities or unbound objective evidence produce an explicit diagnostic.
 - **Conversation capabilities:** Bound AEA conversations do not support additional Agent identities or per-node model/provider overrides. The editor disables those choices rather than suggesting that they apply.
-- **Trajectory presentation:** Checkpoints use the existing raw-record renderer. A dedicated rich Trajectory card requires an extension point owned by the Trajectory package.
+- **Trajectory presentation:** Each row describes its own committed checkpoint, not the live task snapshot. The Payload inspector is read-only; opening a historical row never resumes or replays execution.
 
 <a id="dev-note"></a>
 ### Dev Note

@@ -48,7 +48,7 @@ export function apply(ctx: Context): void {
   const remote = ctx.remote.productionStudio
   ctx.effect(() => ctx.locale.register(namespace, { en, zh }), 'ui-production-studio: dictionaries')
   ctx.uiConversation.events.register(productionChatDefinition)
-  ctx.uiConversation.events.register(productionTrajectoryDefinition)
+  ctx.uiConversation.events.register(productionTrajectoryDefinition(t))
   ctx.slots.inject('conversation.chat.node', () => ctx.slots.register({
     name: 'conversation.chat.node', key: 'production-checkpoint', locale: namespace,
   }, ProductionCheckpointView))

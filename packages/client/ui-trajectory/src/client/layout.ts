@@ -400,6 +400,23 @@ export function deriveTrajectoryLayout(
       continue
     }
     const { node, nodeIndex: i } = entry
+    if (node.kind === 'record') {
+      const { label, ...presentation } = node.format(node.data)
+      const laid: LaidCell = {
+        absTime: finiteTime(node.time),
+        cell: {
+          ...presentation,
+          kind: 'record', kindLabel: label, index: ++index,
+          recordId: `record\u0000${node.type}\u0000seq\u0000${node.seq}`,
+          sourceSeq: node.seq, startedAt: finiteTime(node.time), timeSeconds: 0,
+        },
+      }
+      const location = eventLocations?.get(node.seq)
+      if (location?.kind === 'step') pushStep(location.turn.turn, location.step.step, [laid])
+      else if (location?.kind === 'turn') pushMessage(location.turn.turn, laid)
+      else standaloneCompactions.push({ groups: [{ title: t('group.records'), laid: [laid] }] })
+      continue
+    }
     if (node.kind === 'user') {
       // user/message has no turn on the wire; enclose it in the next assistant
       // (or partial) turn, else open the turn after the last assistant.
@@ -567,10 +584,11 @@ export function deriveTrajectoryLayout(
     }
   }
 
-  return [
+  const sections = [
     ...[...turns.entries()].map(([turn, entry]) => toTurnModel(turn, entry, t)),
     ...standaloneCompactions.map(entry => toTurnModel(null, entry, t)),
   ].sort((left, right) => firstCellIndex(left) - firstCellIndex(right))
+  return standaloneCompactions.length === 0 ? sections : interleaveStandaloneSections(sections)
 }
 
 /**
@@ -601,8 +619,8 @@ export function appendTrajectoryPartialLayout(
       cells: group.cells.map(cell => ({ ...cell, index: cell.index + lastIndex })),
     })),
   }
-  const turnIndex = turns.findIndex(turn => turn.turn === streamed.turn)
-  if (turnIndex === -1) return [...turns, streamed]
+  const turnIndex = turns.findLastIndex(turn => turn.turn === streamed.turn)
+  if (turnIndex === -1 || turnIndex !== turns.length - 1) return [...turns, streamed]
   const current = turns[turnIndex]
   /* v8 ignore next -- findIndex proved the dense array position exists. */
   if (current === undefined) return turns
@@ -667,6 +685,50 @@ function firstCellIndex(turn: TrajectoryTurnModel): number {
     ...turn.groups.flatMap(group => group.cells.map(cell => cell.index)),
     Number.POSITIVE_INFINITY,
   )
+}
+
+/** Insert standalone records without changing existing group-cell order, identities or timing. */
+function interleaveStandaloneSections(sections: readonly TrajectoryTurnModel[]): readonly TrajectoryTurnModel[] {
+  const original = sections.flatMap((section, sectionIndex) =>
+    section.groups.flatMap((group, groupIndex) =>
+      group.cells.map(cell => ({ section, sectionIndex, group, groupIndex, cell })),
+    ),
+  )
+  const standalone = original.filter(entry => entry.section.turn === null)
+    .sort((left, right) => left.cell.index - right.cell.index)
+  const entries: typeof original = []
+  let nextStandalone = 0
+  for (const entry of original) {
+    if (entry.section.turn === null) continue
+    while (nextStandalone < standalone.length) {
+      const pending = standalone[nextStandalone]
+      if (pending === undefined || pending.cell.index >= entry.cell.index) break
+      entries.push(pending)
+      nextStandalone++
+    }
+    entries.push(entry)
+  }
+  entries.push(...standalone.slice(nextStandalone))
+  const ordered: TrajectoryTurnModel[] = []
+  let previousSection = -1
+  let previousGroup = -1
+  let groups: TrajectoryGroupModel[] = []
+  let cells: TrajectoryCellProps[] = []
+  for (const entry of entries) {
+    if (entry.sectionIndex !== previousSection) {
+      groups = []
+      ordered.push({ turn: entry.section.turn, groups })
+      previousSection = entry.sectionIndex
+      previousGroup = -1
+    }
+    if (entry.groupIndex !== previousGroup) {
+      cells = []
+      groups.push({ ...entry.group, cells })
+      previousGroup = entry.groupIndex
+    }
+    cells.push(entry.cell)
+  }
+  return ordered
 }
 
 /** Wall-span duration + tool histogram, e.g. `1.5 s bash×6`. */

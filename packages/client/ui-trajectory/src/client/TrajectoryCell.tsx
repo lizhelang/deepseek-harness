@@ -24,6 +24,7 @@ const KIND_LABEL_KEY: Record<TrajectoryCellKind, TrajectoryKey> = {
   message: 'kind.message',
   tool: 'kind.tool',
   subtool: 'kind.sub',
+  record: 'kind.record',
 }
 
 const TAG_CLASS: Record<TrajectoryCellKind, string | undefined> = {
@@ -34,6 +35,7 @@ const TAG_CLASS: Record<TrajectoryCellKind, string | undefined> = {
   message: css.tagMessage,
   tool: css.tagTool,
   subtool: css.tagSubtool,
+  record: undefined,
 }
 
 /**
@@ -45,6 +47,7 @@ export function TrajectoryCell({
   t,
   index,
   kind,
+  kindLabel,
   text,
   inputDetail: _inputDetail,
   promptDetail: _promptDetail,
@@ -78,7 +81,7 @@ export function TrajectoryCell({
     <div className={rootClass} data-kind={kind} data-selected={selected || undefined} {...rest}>
       <span className={css.index}>#{index}</span>
       <span className={css.tagSlot}>
-        <span className={[css.tag, TAG_CLASS[kind]].filter((c): c is string => c !== undefined).join(' ')}>{t(KIND_LABEL_KEY[kind])}</span>
+        <span className={[css.tag, TAG_CLASS[kind]].filter((c): c is string => c !== undefined).join(' ')}>{kindLabel ?? t(KIND_LABEL_KEY[kind])}</span>
       </span>
       <span className={css.text}>{text}</span>
       <span className={css.trailing}>

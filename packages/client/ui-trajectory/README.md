@@ -67,6 +67,13 @@ Long ledgers initially derive React data from 50 target Nodes ending at the moun
 
 Trajectory asks the conversation shell to float the composer over the full-height ledger, while its responsive vertical scrollers reserve the composer's live height so final rows remain reachable. Scrollable Summary regions keep their scrollbar thumbs transparent until hovered or focused, without changing the reserved scroll geometry. The package provides no service and declares no Context merge.
 
+<a id="business-records"></a>
+### Business records
+
+Other plugins register a Conversation Definition targeting Trajectory and contribute a `TrajectoryRecordNode` through the existing node contribution. Its pure Client-only formatter uses the node's own event data and current localized copy to supply a row label, summary and optional inspector payloads. The [public record types](src/client/trajectory-contract.ts) are exported from `ui-trajectory/client`; no additional service or history stream is required.
+
+Layout renders a real record row with identity derived from event type and sequence. Recorded locations retain their turn or step; a checkpoint without a loaded location renders independently under Between turns. Records are instantaneous markers and do not change model-duration accounting. The inspector preserves the historical payload through later updates and prepends, rather than substituting current domain state. Business events are not represented as unknown nodes or model messages.
+
 </details>
 
 -----

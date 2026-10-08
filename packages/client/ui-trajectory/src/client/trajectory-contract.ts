@@ -5,6 +5,36 @@ import type {
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { SnapshotSelectorHook } from '@deepseek-ai/dsh-client-ui-slots'
 
+/** Localized presentation of a business record, without model-message semantics. */
+export interface TrajectoryRecordPresentation {
+  readonly label: string
+  readonly text: string
+  readonly inputDetail?: string
+  readonly outputDetail?: string
+  readonly isError?: boolean
+}
+
+/**
+ * Event-owned business data and its pure, Client-only formatter. A registered
+ * Conversation Definition rebuilds both from the log; neither is persisted.
+ */
+export interface TrajectoryRecordNode<Data = unknown> {
+  readonly kind: 'record'
+  readonly type: string
+  readonly seq: number
+  readonly time: number
+  readonly data: Data
+  /**
+   * Format only this node's data using current localized copy.
+   * @param data - This node's event-owned data, never a current domain snapshot.
+   * @returns a row summary and optional complete inspector payloads.
+   */
+  format(data: Data): TrajectoryRecordPresentation
+}
+
+/** Built-in message nodes and independently registered business records. */
+export type TrajectoryEventNode = ConversationNode | TrajectoryRecordNode
+
 /** Request-header facts retained by the Trajectory target. */
 export interface TrajectoryRequestHeaderState {
   readonly seq: number
@@ -19,7 +49,7 @@ export type TrajectoryContribution =
   | { readonly kind: 'system-prompt'; readonly prompt: SystemPromptNode }
   | {
     readonly kind: 'node'
-    readonly node: ConversationNode
+    readonly node: TrajectoryEventNode
   }
   | {
     readonly kind: 'assistant'
@@ -64,7 +94,7 @@ export interface TrajectoryConversationViewNode extends ConversationViewNode {
 export interface TrajectorySnapshot {
   /** Complete loaded prompt text whose request header is outside the window. */
   readonly systemPrompts?: readonly SystemPromptNode[]
-  readonly eventNodes: readonly ConversationNode[]
+  readonly eventNodes: readonly TrajectoryEventNode[]
   readonly eventLocations: ReadonlyMap<number, ConversationLocation>
   readonly requests: readonly RequestView[]
   readonly callSchemas: ReadonlyMap<string, ConversationPromptSnapshot['tools'][number]>

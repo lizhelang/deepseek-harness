@@ -1,12 +1,12 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type {
-  AssistantMessageNode, ConversationNode, ConversationPromptSnapshot, ConversationViewBuilder,
+  AssistantMessageNode, ConversationPromptSnapshot, ConversationViewBuilder,
   ConversationViewDefinition, RequestPromptChange, RequestView, ToolCallBlock,
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { COMPACTION_INTERRUPTED_ERROR } from './copy-codes.ts'
 import type {
   TrajectoryConversationViewNode, TrajectoryRequestHeaderState,
-  TrajectorySnapshot,
+  TrajectorySnapshot, TrajectoryEventNode,
 } from './trajectory-contract.ts'
 
 const EMPTY_LIST: readonly never[] = []
@@ -202,7 +202,7 @@ export class TrajectorySnapshotBuilder implements ConversationViewBuilder<
     const representedPrompts = new Set(this.contributions.flatMap(node =>
       node.data.kind === 'request-header' && node.data.header.change !== undefined ? [node.data.header.change.seq] : []))
     const systemPrompts: NonNullable<TrajectorySnapshot['systemPrompts']>[number][] = []
-    const finalized: ConversationNode[] = []
+    const finalized: TrajectoryEventNode[] = []
     const eventLocations = new Map<number, TrajectoryConversationViewNode['location']>()
     const requests: RequestView[] = []
     const boundaries: { seq: number; time: number }[] = []

@@ -67,6 +67,13 @@ Trajectory 标签页让你以按轮次组织的事件记录表和交互式时间
 
 Trajectory 要求会话壳把 composer 作为浮层置于全高记录表上方；其响应式纵向滚动容器会预留 composer 的实时高度，确保仍可滚动到最后几行。可滚动的 Summary 区域在悬停或聚焦前保持滚动条滑块透明，同时不改变预留的滚动几何空间。本包不提供服务，也不声明上下文合并。
 
+<a id="business-records"></a>
+### 业务记录
+
+其他插件注册面向 Trajectory 的 Conversation Definition，通过现有节点贡献提供 `TrajectoryRecordNode`。其纯客户端格式化函数使用节点自身的事件数据与当前本地化文案，提供行标签、摘要及可选检查器数据。[公共记录类型](src/client/trajectory-contract.ts)从 `ui-trajectory/client` 导出，不需要额外 service 或历史流。
+
+布局渲染真实记录行，以事件类型和序号确定身份。已有位置记录保留所属轮次或步骤；尚未加载位置的检查点在轮次之间独立展示。记录是瞬时时间标记，不改变模型耗时统计。后续更新与补入历史保留检查器中的历史数据，不替换成当前领域状态。业务事件不伪装成 unknown 节点或模型消息。
+
 </details>
 
 -----

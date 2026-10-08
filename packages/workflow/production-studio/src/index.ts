@@ -737,7 +737,9 @@ export class ProductionStudio extends TypertRemoteService {
       }
       if (run.phase === 'active') { run.phase = hadInFlight ? 'unknown' : 'paused'; runtime.pausedRun.add(run.id); recovered = true }
     }
-    if (recovered || state.pendingCheckpoints?.length) await this.publish(runtime, true)
+    if (recovered || state.pendingCheckpoints?.length) {
+      await this.mutate(runtime, () => this.publish(runtime, true), true)
+    }
     return runtime
   }
 
@@ -806,7 +808,8 @@ export class ProductionStudio extends TypertRemoteService {
   private node(run: ProductionRun, id: string): ProductionNode { const node = run.graph.nodes.find(item => item.id === id); if (!node) throw new Error('Production node not found'); return node }
   private task(run: ProductionRun, id: string): ProductionTask { const task = run.tasks.find(item => item.nodeId === id); if (!task) throw new Error('Production task not found'); return task }
   private transition(run: ProductionRun, task: ProductionTask, phase: ProductionTask['phase'], message: string): void {
-    if (['human', 'running', 'paused'].includes(phase)) task.admitted = true
+    if (['human', 'running', 'paused', 'unknown'].includes(task.phase)
+      || ['human', 'running', 'paused'].includes(phase)) task.admitted = true
     task.phase = phase; task.message = message; task.updatedAt = Date.now(); run.updatedAt = task.updatedAt; run.revision++
     run.history.push({ nodeId: task.nodeId, attempt: task.attempts, phase, message, time: task.updatedAt })
     if (run.history.length > this.limits.maxHistoryEntries) run.history.splice(0, run.history.length - this.limits.maxHistoryEntries)

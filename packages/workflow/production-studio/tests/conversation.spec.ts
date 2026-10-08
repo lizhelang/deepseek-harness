@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
@@ -77,10 +77,16 @@ async function harness(script?: ConstructorParameters<typeof MockAdapter>[0], co
     const reader = await ctx.sessionPersistence.open(agent.id, 'read')
     try { return (await reader.read()).events } finally { await reader.close() }
   }
+  const seedSaved = async (state: ProductionState): Promise<void> => {
+    await writeFile(join(root, 'state', 'production_studio.json'), JSON.stringify({
+      unit: { name: 'production_studio', version: 1 }, global: null,
+      tables: { sessions: { [agent.id]: decodeProductionState(state) }, native: {} },
+    }))
+  }
   const storageUnit = (): KvUnit => { if (!unit) throw new Error('Production unit has not opened'); return unit }
   return {
     ctx, root, agent, adapter, fiber, events, call, run, snapshot, saved, persistedEvents, storageUnit, provider,
-    registerProvider, receipt, errors, release, dispatch,
+    registerProvider, receipt, errors, release, dispatch, seedSaved,
     defer: () => { deferred = true }, unknown: () => { unknown = true }, count: () => count,
   }
 }
@@ -400,5 +406,85 @@ describe('one conversation, one production executor', () => {
     expect(task?.output).toEqual(h.receipt); expect(task?.settledOperationId).toBe('direct-0'); expect(task?.operationId).toBeUndefined()
     expect(saved.pendingCheckpoints).toBeUndefined(); expect(h.count()).toBe(1)
     expect((await h.snapshot()).error).toBeUndefined()
+  })
+
+  it('serializes recovery publication with a concurrent graph save and retains the checkpoint whose flush returns false', async () => {
+    const h = await harness()
+    await h.call(false); await h.fiber.dispose()
+    const state = await h.saved(), run = state.runs[0]
+    if (!run) throw new Error('Expected the saved conversation run')
+    run.revision = 5
+    state.pendingCheckpoints = [{ ...structuredClone(run), revision: 4 }, structuredClone(run)]
+    await h.seedSaved(state)
+    const replacement = await h.ctx.plugin(ProductionStudio); h.registerProvider()
+    let releaseFourth = (): void => {}, fourthStarted = (): void => {}
+    const fourth = new Promise<void>((resolve) => { releaseFourth = resolve })
+    const started = new Promise<void>((resolve) => { fourthStarted = resolve })
+    releases.push(releaseFourth)
+    const flush = h.ctx.sessions.flush.bind(h.ctx.sessions)
+    let calls = 0, concurrent = 0, maximum = 0
+    const spy = vi.spyOn(h.ctx.sessions, 'flush').mockImplementation(async (session) => {
+      concurrent++; maximum = Math.max(maximum, concurrent)
+      const call = ++calls
+      try {
+        if (call === 1) { fourthStarted(); await fourth; return await flush(session) }
+        return false
+      } finally { concurrent-- }
+    })
+    const recovering = h.snapshot(); await started
+    const graph = structuredClone(state.graph); graph.name = 'Concurrent future draft'
+    const saving = h.ctx.productionStudio.saveGraph(h.agent.id, { expectedVersion: state.graph.version, graph })
+    const saveOutcome = saving.then(() => null, (error: unknown) => error)
+    const during = await h.snapshot()
+    expect(during.runs[0]?.id).toBe(run.id)
+    await new Promise(resolve => setTimeout(resolve, 30))
+    const callsBeforeRelease = calls
+    releaseFourth(); await recovering
+    const failure = await saveOutcome
+    expect(failure).toBeInstanceOf(Error)
+    expect(String(failure)).toContain('checkpoint publication is pending')
+    expect(callsBeforeRelease).toBe(1); expect(maximum).toBe(1)
+    const saved = await h.saved()
+    expect(saved.pendingCheckpoints?.map(checkpoint => checkpoint.revision)).toEqual([5])
+    expect(saved.runs[0]?.tasks.find(task => task.nodeId === 'baseline')?.output).toEqual(h.receipt)
+    expect(saved.graph.name).toBe(state.graph.name)
+    expect(h.count()).toBe(1)
+    spy.mockRestore()
+    await h.ctx.systemPrompt.assemble({ agent: h.agent })
+    expect((await h.saved()).pendingCheckpoints).toBeUndefined()
+    const persisted = (await h.persistedEvents()).filter(event => event.type === 'production/checkpoint')
+    expect(persisted.filter(event => event.data.run.id === run.id && event.data.run.revision === 5)).toHaveLength(1)
+    expect(h.count()).toBe(1)
+    await replacement.dispose()
+  })
+
+  it('locks a restored zero-attempt human breakpoint without a legacy admitted flag after approval makes it ready', async () => {
+    const h = await harness(); h.defer()
+    const pending = h.call(true); await h.dispatch
+    const before = await h.snapshot(), graph = structuredClone(before.graph)
+    const node = graph.nodes.find(item => item.id === 'manufacture')
+    if (!node) throw new Error('Expected the future manufacture node')
+    node.config.breakBefore = true
+    await h.ctx.productionStudio.saveGraph(h.agent.id, { expectedVersion: before.graph.version, graph })
+    h.release(); await pending; await h.fiber.dispose()
+    const state = await h.saved(), run = state.runs[0], legacy = run?.tasks.find(task => task.nodeId === 'manufacture')
+    if (!run || !legacy) throw new Error('Expected the saved human breakpoint')
+    expect(legacy.phase).toBe('human'); expect(legacy.attempts).toBe(0)
+    delete legacy.admitted
+    await h.seedSaved(state)
+    const replacement = await h.ctx.plugin(ProductionStudio); h.registerProvider()
+    const restored = await h.run()
+    expect(restored.tasks.find(task => task.nodeId === 'manufacture')?.admitted).toBeUndefined()
+    await h.ctx.productionStudio.answer(h.agent.id, { runId: restored.id, revision: restored.revision,
+      nodeId: 'manufacture', accepted: true, answer: 'Release the restored breakpoint' })
+    const approved = await h.run(), task = approved.tasks.find(item => item.nodeId === 'manufacture')
+    expect(task?.phase).toBe('ready'); expect(task?.attempts).toBe(0); expect(task?.admitted).toBe(true)
+    const current = await h.snapshot(), changed = structuredClone(current.graph), admitted = changed.nodes.find(item => item.id === 'manufacture')
+    if (!admitted) throw new Error('Expected the released manufacture node')
+    admitted.config.prompt = 'Rewrite an already approved legacy node'
+    await expect(h.ctx.productionStudio.saveGraph(h.agent.id, { expectedVersion: current.graph.version, graph: changed })).rejects.toThrow('immutable')
+    expect((await h.saved()).runs[0]?.tasks.find(item => item.nodeId === 'manufacture')?.admitted).toBe(true)
+    expect(h.count()).toBe(1)
+    await replacement.dispose()
   })
 })

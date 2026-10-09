@@ -716,7 +716,7 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 'production/checkpoint': { run: ProductionRun }
 ```
 
-来源：[`packages/workflow/production-studio/src/types.ts:175`](../packages/workflow/production-studio/src/types.ts)
+来源：[`packages/workflow/production-studio/src/types.ts:177`](../packages/workflow/production-studio/src/types.ts)
 
 ### `request/*`
 
@@ -8159,7 +8159,7 @@ SHA-256: `9a2a9029f8d7ede05336980d8342737557f487b913bfd28853d0ab5214600ab5`
 
 SHA-256: `72e434c3340c1a5933a384c8ca44a82e754c5ca472b876ac832c07f989ba7602`
 
-来源：[`packages/workflow/production-studio/src/types.ts:175`](../packages/workflow/production-studio/src/types.ts)
+来源：[`packages/workflow/production-studio/src/types.ts:177`](../packages/workflow/production-studio/src/types.ts)
 
 | 属性 | 存在性 | 类型 |
 |---|---|---|

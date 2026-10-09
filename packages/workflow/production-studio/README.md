@@ -45,6 +45,8 @@ Explicit resume and human answers release workflow restrictions and may advance 
 
 The conversation adapter retains AEA Host's bounded search, required manufacturing evaluations, comparison and repair actions under the original frozen settings and budget. It does not impose the scheduled default's baseline-only `user_requested` shortcut, treat a search score as manufacturing cost, or prove global optimality.
 
+A trusted provider can return `outlet: 'failure', terminal: true` when its Host confirms that no executable continuation remains. The service retains the known receipt and blocks the current node without routing to repair or requesting an after-node human decision. Ordinary failures retain their repair routes and configured human decisions; an unresolved receipt still takes precedence as unknown. Terminal flags inside tool receipt data alone do not change execution.
+
 ### Unbound scheduled runs
 
 Without a conversation provider, `start` requires a graph version, objective, JSON input and `goalContractAcknowledged: true`. `input.deliveryGoal` must contain `kind: 'verified-drawings'` and the exact objective as `objectiveText`; optional piece, weld, bend and manufacturing-score limits become frozen acceptance conditions. Scheduled runs capture their graph and input at start; draft edits affect later scheduled runs. Independent scheduled branches and real child agents remain supported.

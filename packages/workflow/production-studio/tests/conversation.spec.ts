@@ -92,6 +92,65 @@ async function harness(script?: ConstructorParameters<typeof MockAdapter>[0], co
 }
 
 describe('one conversation, one production executor', () => {
+  it.each([false, true])('retains a known terminal failure without scheduling repair or a human breakpoint (breakAfter=%s)', async (breakAfter) => {
+    const h = await harness()
+    h.receipt['workflow'] = { control: { status: 'capability_blocked', terminal: true,
+      reasonCode: 'no_executable_next_action', nextActions: [] } }
+    h.provider.observe = () => ({ outlet: 'failure', terminal: true, message: 'Development capability blocked: no_executable_next_action' })
+    const before = await h.snapshot(), graph = structuredClone(before.graph)
+    const baseline = graph.nodes.find(node => node.id === 'baseline')!
+    baseline.config.breakAfter = breakAfter
+    await h.ctx.productionStudio.saveGraph(h.agent.id, { expectedVersion: before.graph.version, graph })
+    expect((await h.call()).isError).toBe(false)
+    const run = await h.run(), task = run.tasks.find(item => item.nodeId === 'baseline')!
+    expect(run.phase).toBe('blocked')
+    expect(task.phase).toBe('blocked'); expect(task.output).toEqual(h.receipt)
+    expect(task.evidence.at(-1)?.data).toEqual(h.receipt)
+    expect(task.settledOperationId).toBe('direct-0'); expect(task.pendingOutlet).toBeUndefined()
+    expect(run.tasks.some(item => ['ready', 'running', 'human'].includes(item.phase))).toBe(false)
+    expect(run.tasks.find(item => item.nodeId === 'repair')?.attempts).toBe(0)
+    expect((await h.saved()).runs[0]?.phase).toBe('blocked')
+    expect((await h.call()).isError).toBe(true); expect(h.count()).toBe(1)
+  })
+
+  it('routes ordinary repair failures autonomously even when untrusted receipt data claims terminal', async () => {
+    const h = await harness()
+    h.receipt['terminal'] = true
+    h.provider.observe = () => ({ outlet: 'failure', message: 'Continue the legal repair' })
+    expect((await h.call()).isError).toBe(false)
+    const routed = await h.run()
+    expect(routed.phase).toBe('active')
+    expect(routed.tasks.find(item => item.nodeId === 'repair')?.phase).toBe('ready')
+    expect(h.errors.mock.calls).toEqual([])
+    h.provider.observe = () => undefined
+    expect((await h.call()).isError).toBe(false)
+    expect((await h.run()).tasks.find(item => item.nodeId === 'repair')?.phase).toBe('running')
+    expect(h.count()).toBe(2)
+  })
+
+  it('preserves a genuine human breakpoint on a nonterminal failure', async () => {
+    const h = await harness()
+    const before = await h.snapshot(), graph = structuredClone(before.graph)
+    graph.nodes.find(node => node.id === 'baseline')!.config.breakAfter = true
+    await h.ctx.productionStudio.saveGraph(h.agent.id, { expectedVersion: before.graph.version, graph })
+    h.provider.observe = () => ({ outlet: 'failure', message: 'Review the configured decision' })
+    expect((await h.call()).isError).toBe(false)
+    const task = (await h.run()).tasks.find(item => item.nodeId === 'baseline')!
+    expect(task.phase).toBe('human'); expect(task.pendingOutlet).toBe('failure')
+    expect((await h.call()).isError).toBe(true); expect(h.count()).toBe(1)
+  })
+
+  it('keeps an unresolved receipt unknown even if its provider claims a terminal failure', async () => {
+    const h = await harness(); h.unknown()
+    h.provider.observe = () => ({ outlet: 'failure', terminal: true, message: 'Claimed capability terminal' })
+    expect((await h.call()).isError).toBe(false)
+    const run = await h.run()
+    expect(run.phase).toBe('unknown')
+    expect(run.tasks.find(item => item.nodeId === 'baseline')?.phase).toBe('unknown')
+    expect(run.tasks.find(item => item.nodeId === 'repair')?.phase).toBe('waiting')
+    expect((await h.call()).isError).toBe(true); expect(h.count()).toBe(1)
+  })
+
   it('archives large ordinary receipts at ingestion but applies the unchanged gate byte limit to their restored contents', async () => {
     const h = await harness()
     h.receipt['diagnostic'] = '原始诊断'.repeat(25000)

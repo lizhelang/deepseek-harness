@@ -4972,7 +4972,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ConversationWorkflowProvider',
-    declaration: 'export interface ConversationWorkflowProvider {\n    id: string;\n    toolNames: readonly string[];\n    appliesTo(agent: Agent): boolean;\n    start(call: {\n        agent: Agent;\n        name: string;\n        arguments: JsonValue;\n    }): {\n        key: string;\n        objective: string;\n        input: JsonValue;\n    } | undefined;\n    observe(call: {\n        nodeId: string;\n        name: string;\n        arguments: JsonValue;\n        receipt: JsonValue;\n        run: ProductionRun;\n    }): {\n        key?: string;\n        input?: JsonValue;\n        outlet?: ProductionOutlet;\n        message?: string;\n    } | undefined;\n}',
+    declaration: 'export interface ConversationWorkflowProvider {\n    id: string;\n    toolNames: readonly string[];\n    appliesTo(agent: Agent): boolean;\n    start(call: {\n        agent: Agent;\n        name: string;\n        arguments: JsonValue;\n    }): {\n        key: string;\n        objective: string;\n        input: JsonValue;\n    } | undefined;\n    observe(call: {\n        nodeId: string;\n        name: string;\n        arguments: JsonValue;\n        receipt: JsonValue;\n        run: ProductionRun;\n    }): {\n        key?: string;\n        input?: JsonValue;\n        outlet?: ProductionOutlet;\n        terminal?: true;\n        message?: string;\n    } | undefined;\n}',
   },
   {
     name: 'CordisDynamicPackageId',

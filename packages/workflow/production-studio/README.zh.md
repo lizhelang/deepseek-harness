@@ -45,6 +45,8 @@ Production Studio 让已绑定的 AEA 对话、任务监控、轨迹和流程编
 
 对话适配器保留 AEA Host 的有界搜索、必需制造评估、比较和修复动作，沿用原冻结设置与预算。它不强加调度式默认流程的基线限定 `user_requested` 捷径，不把搜索分数当成制造成本，也不证明全局最优。
 
+可信提供方在 Host 确认没有可执行的后续动作时，可以返回 `outlet: 'failure', terminal: true`。服务保留已知回执并阻塞当前节点，不转到修复，也不请求节点结束后的人工决策。普通失败仍沿原修复接线或进入已配置的人工决策；未决回执仍优先标为未知。仅在工具回执数据中写入 terminal 标志不会改变执行。
+
 ### 未绑定的调度式运行
 
 没有对话提供方时，`start` 要求流程版本、目标、JSON 输入和 `goalContractAcknowledged: true`。`input.deliveryGoal` 必须包含 `kind: 'verified-drawings'`，以及与目标完全相同的 `objectiveText`；可选片数、焊接次数、折弯次数与制造分数上限成为冻结验收条件。调度式运行在启动时捕获流程和输入，草稿编辑只影响后续调度式运行。独立调度分支和真实子 agent 仍受支持。

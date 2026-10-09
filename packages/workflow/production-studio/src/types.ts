@@ -162,6 +162,8 @@ export interface ConversationWorkflowProvider {
     key?: string
     input?: JsonValue
     outlet?: ProductionOutlet
+    /** A known terminal failure stops routing; unresolved receipts still take precedence. */
+    terminal?: true
     message?: string
   } | undefined
 }

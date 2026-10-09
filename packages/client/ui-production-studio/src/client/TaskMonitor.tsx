@@ -4,7 +4,7 @@ import clsx from 'clsx'
 import { Button, Input, IconChevronRightOutlineRegular, writeClipboard } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ProductionRun, ProductionTask } from '@deepseek-ai/dsh-production-studio/types'
 import type { StudioSurfaceProps, StudioDockProps, StudioViewProps, StudioReadState } from './slots.ts'
-import { TASK_GROUPS, matchesRun, orderedBranches, runGroup } from './task-order.ts'
+import { TASK_GROUPS, matchesRun, orderedBranches, prominentBranch, runGroup } from './task-order.ts'
 import { verifiedDelivery } from './deliverables.ts'
 import css from './Studio.module.css'
 
@@ -153,7 +153,7 @@ export function TaskMonitor({ read, compact = false, ...props }: TaskMonitorProp
       if (members.length === 0) return null
       const body = <div className={css.runList}>{members.map((run) => {
         const complete = run.tasks.filter(task => task.phase === 'complete' || task.phase === 'skipped').length
-        const prominent = orderedBranches(run.tasks).find(task => task.phase !== 'complete' && task.phase !== 'skipped')
+        const prominent = prominentBranch(run)
         return <details className={css.run} key={run.id} data-production-run={run.id}>
           <summary className={css.runSummary}>
             <IconChevronRightOutlineRegular size={14} />

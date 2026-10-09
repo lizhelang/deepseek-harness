@@ -135,6 +135,28 @@ describe('one conversation, one production executor', () => {
     expect(h.count()).toBe(1)
   })
 
+  it('retains the immutable failed boundary when a repair terminates and is explicitly resumed', async () => {
+    const h = await harness()
+    h.provider.observe = () => ({ outlet: 'failure', message: 'Needs repair' })
+    await h.call()
+    const repairing = await h.run()
+    const incoming = structuredClone(repairing.tasks.find(task => task.nodeId === 'repair')?.incoming)
+    expect(incoming).toBeDefined()
+    h.provider.observe = () => ({ outlet: 'failure', terminal: true, message: 'Known capability failure' })
+    await h.call()
+    const failed = await h.run()
+    expect(failed.phase).toBe('blocked')
+    expect(failed.tasks.find(task => task.nodeId === 'repair')?.incoming).toEqual(incoming)
+    await h.ctx.productionStudio.pause(h.agent.id, { runId: failed.id, revision: failed.revision })
+    const paused = await h.run()
+    await h.ctx.productionStudio.resume(h.agent.id, { runId: paused.id, revision: paused.revision })
+    const resumed = await h.run()
+    expect(resumed.tasks.find(task => task.nodeId === 'repair')?.incoming).toEqual(incoming)
+    expect(resumed.executions).toBe(failed.executions)
+    expect((await h.saved()).runs[0]?.tasks.find(task => task.nodeId === 'repair')?.incoming).toEqual(incoming)
+    expect(h.count()).toBe(2)
+  })
+
   it('keeps a blocked run unchanged while native execution is leased and accepts pause after settlement', async () => {
     const h = await harness()
     h.provider.observe = () => ({ outlet: 'failure', terminal: true, message: 'Known capability failure' })

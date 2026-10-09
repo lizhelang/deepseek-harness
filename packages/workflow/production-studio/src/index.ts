@@ -294,9 +294,9 @@ export class ProductionStudio extends TypertRemoteService {
                 if (observed?.input !== undefined) run.input = observed.input
                 const outlet = unresolvedReceipt(receipt) ? 'unknown' : observed?.outlet
                 if (outlet) {
-                  delete task.incoming
                   if (outlet === 'failure' && observed?.terminal === true) this.transition(run, task, 'blocked', observed.message ?? `已返回 ${exec.name}`)
                   else {
+                    delete task.incoming
                     if (this.node(run, task.nodeId).config.breakAfter && outlet !== 'unknown') { task.breakpoint = 'after'; task.pendingOutlet = outlet; this.transition(run, task, 'human', observed?.message ?? 'Confirm before the next graph node') }
                     else { this.transition(run, task, outlet === 'success' ? 'complete' : outlet === 'unknown' ? 'unknown' : 'blocked', observed?.message ?? `已返回 ${exec.name}`); this.route(run, task, outlet) }
                     this.activateQueued(run, task)

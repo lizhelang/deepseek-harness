@@ -158,3 +158,5 @@ The supported execution modes have distinct limits:
 None.
 
 </details>
+
+A known terminal failure retains the node’s immutable incoming boundary, so explicit recovery can compare later repair receipts with the original failed state. Normal routed outcomes still consume that boundary; recovery does not reset evidence, attempts or budgets.

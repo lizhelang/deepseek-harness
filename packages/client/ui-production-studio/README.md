@@ -70,3 +70,5 @@ The UI does not change request history. Historical cards use their own committed
 ### Dev Note
 
 None.
+
+An active conversation with a running or ready recovery branch is summarized by that current branch. Historical blocked branches remain visible; unknown outcomes still take precedence, and scheduled mixed failures remain critical.

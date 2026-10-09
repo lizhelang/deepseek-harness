@@ -167,6 +167,24 @@ describe('production surfaces', () => {
     expect(screen.getByRole('button', { name: en['dock.collapse'] }).getAttribute('aria-expanded')).toBe('true')
     expect(b.props.start).not.toHaveBeenCalled()
   })
+  it('shows current conversation recovery in the dock and summary while retaining the earlier blocked branch', () => {
+    const current = run('recovering', 'blocked')
+    current.mode = 'conversation'
+    current.tasks[0]!.message = 'Earlier baseline failure'
+    current.graph.nodes.push({ ...current.graph.nodes[0]!, id: 'repair', label: 'repair' })
+    current.tasks.push({ ...current.tasks[0]!, nodeId: 'repair', phase: 'running', message: 'Repair is underway' })
+    const b = conversationFixture(current)
+    const { container } = render(<ProductionDock {...b.props as StudioDockProps} />)
+    expect(screen.getByText(t('dock.summary', { attention: 0, running: 1, done: 0 }))).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: en['dock.expand'] }))
+    const row = container.querySelector('[data-production-run="recovering"]')!
+    expect(row.closest('[data-production-group]')?.getAttribute('data-production-group')).toBe('running')
+    expect(row.querySelector('summary')?.textContent).toContain('Repair is underway')
+    expect(row.querySelector('summary')?.textContent).not.toContain('Earlier baseline failure')
+    expect(screen.getByText('Earlier baseline failure')).toBeTruthy()
+    expect(b.props.resume).not.toHaveBeenCalled()
+    expect(b.props.start).not.toHaveBeenCalled()
+  })
   it('edits real nodes, preserves start input and requires explicit saved-workflow start', async () => {
     const b = fixture([])
     const { container } = render(<ProductionWorkflowView {...b.props as StudioViewProps} />)

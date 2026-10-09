@@ -14,6 +14,16 @@ export interface TaskMonitorProps extends StudioSurfaceProps {
   compact?: boolean
 }
 
+/** Host pause rechecks native leases before reopening a settled failure. */
+function canPauseSettledFailure(run: ProductionRun, nodeId?: string): boolean {
+  const last = run.history.at(-1)
+  if (run.mode !== 'conversation' || run.phase !== 'blocked' || last?.phase !== 'blocked'
+    || run.executions >= run.graph.maxExecutions || run.tasks.some(task => task.operationId || task.phase === 'unknown')) return false
+  const task = run.tasks.find(item => item.nodeId === last.nodeId)
+  return task !== undefined && (nodeId === undefined || nodeId === task.nodeId) && task.phase === 'blocked'
+    && !!task.settledOperationId && run.graph.nodes.some(node => node.id === task.nodeId && node.kind === 'agent')
+}
+
 function Branch({ run, task, pending, perform, ...props }: StudioSurfaceProps & {
   run: ProductionRun
   task: ProductionTask
@@ -35,7 +45,7 @@ function Branch({ run, task, pending, perform, ...props }: StudioSurfaceProps & 
       <span className={css.phase} data-phase={task.phase}>{t(`phase.${task.phase}`)}</span>
       <span className={css.muted}>{t('task.attempt', { attempt: task.attempts, maximum: node?.maxAttempts ?? task.attempts })}</span>
       <div className={css.rowActions}>
-        {(task.phase === 'running' || task.phase === 'ready' || task.phase === 'waiting') &&
+        {(task.phase === 'running' || task.phase === 'ready' || task.phase === 'waiting' || canPauseSettledFailure(run, task.nodeId)) &&
           <Button size="sm" variant="ghost" disabled={pending} onClick={() => { void perform(() => pause(ref)) }}>{t('branch.pause')}</Button>}
         {task.phase === 'paused' &&
           <Button size="sm" variant="ghost" disabled={pending} onClick={() => { void perform(() => resume(ref)) }}>{t('branch.resume')}</Button>}
@@ -156,7 +166,7 @@ export function TaskMonitor({ read, compact = false, ...props }: TaskMonitorProp
           <div className={css.runDetails}>
             <div className={css.toolbar}>
               <span className={css.muted}>{t(run.mode === 'conversation' ? 'task.versionLive' : 'task.version', { version: run.graph.version })}</span>
-              {run.phase === 'active' && <Button size="sm" variant="ghost" disabled={pending}
+              {(run.phase === 'active' || canPauseSettledFailure(run)) && <Button size="sm" variant="ghost" disabled={pending}
                 onClick={() => { void perform(() => pause({ runId: run.id, revision: run.revision })) }}>{t('task.pause')}</Button>}
               {run.phase === 'paused' && <Button size="sm" variant="outline" disabled={pending}
                 onClick={() => { void perform(() => resume({ runId: run.id, revision: run.revision })) }}>{t('task.resume')}</Button>}

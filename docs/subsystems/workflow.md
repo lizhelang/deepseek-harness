@@ -154,9 +154,10 @@ Production Studio Host service and its authenticated Remote controller.
  * Register trusted tool providers that mark the actual native dispatch point.
  * The provider owns the returned disposer through its plugin effect.
  * @param toolNames - exact registered tool names implementing the dispatch marker.
- * @returns disposer removing only this provider's declaration.
+ * @param options - exact read-only names exempt from legacy native-name inference; native declarations win conflicts.
+ * @returns disposer removing only this provider's declarations.
  */
-registerNativeBoundaryProvider(toolNames: readonly string[]): () => void
+registerNativeBoundaryProvider(toolNames: readonly string[], options: { readOnlyToolNames?: readonly string[] } = {}): () => void
 
 /**
  * Commit the exact invocation's native dispatch before its provider starts native work.
@@ -243,6 +244,14 @@ registerNativeReconciliationProvider(provider: NativeReconciliationProvider): ()
  * @returns initial and committed subsequent snapshots.
  */
 @Remote({ mode: 'stream' }) async *follow(sessionId: SessionId, signal: AbortSignal): AsyncIterable<ProductionSnapshot>
+
+/**
+ * Read a retained diagnostic observation without dispatching work or granting a certificate.
+ * @param sessionId - active owning conversation.
+ * @param evidence - complete observation from its production snapshot or checkpoint.
+ * @returns original JSON after Session, SHA-256, byte-count and observation identity checks.
+ */
+@Remote async readEvidence(sessionId: SessionId, evidence: ProductionEvidence): Promise<ProductionEvidence>
 ```
 
 Types: [SessionId](core.md) · [ToolCallIdentity](core.md)

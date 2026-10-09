@@ -46,7 +46,10 @@ async function harness(script?: StreamChunk[][]) {
   const agent = await driver.create(SessionId('production-parent'), { provider: 'mock', model: 'mock' }, { cwd: root })
   const serviceFiber = await ctx.plugin(ProductionStudio)
   const { input, receipt } = await writeFixtureCase(root)
-  return { ctx, root, agent, adapter, serviceFiber, input, receipt }
+  const execute = (name: string, callId: string) => ctx.tools.execute({
+    callId: ToolCallId(callId), name, arguments: {}, agent, signal: new AbortController().signal,
+  })
+  return { ctx, root, agent, adapter, serviceFiber, input, receipt, execute }
 }
 
 function programGraph(): ProductionGraph {
@@ -374,9 +377,8 @@ describe('production scheduling and delivery', () => {
     expect(calls).toBe(1)
   })
 
-  it('leases controlled review-document mutation and rejects registering unmarked readonly tools', async () => {
+  it('leases controlled review-document mutation through a trusted declaration', async () => {
     const { ctx, agent } = await harness()
-    expect(() => ctx.productionStudio.registerNativeBoundaryProvider(['get_workpiece_configuration'])).toThrow('Unsupported')
     ctx.effect(() => ctx.productionStudio.registerNativeBoundaryProvider(['open_review_result']))
     let dispatched = false
     ctx.tools.register(defineContentToolFixture({ name: 'open_review_result', description: 'Controlled document boundary fixture', parameters: {}, execute: async (_args, exec) => { await ctx.productionStudio.noteNativeDispatch(exec.callId); dispatched = true; return [{ type: 'text', text: '{"opened":true}' }] } }))
@@ -384,6 +386,106 @@ describe('production scheduling and delivery', () => {
     expect(result.isError).toBe(false)
     expect(dispatched).toBe(true)
     expect((await ctx.productionStudio.get(agent.id)).error).toBeUndefined()
+  })
+
+  it.each(['verify_stage_plan', 'revalidate_candidate', 'future_native_command'])('leases provider-declared %s and retains its exact Session event identity', async (name) => {
+    const { ctx, agent, adapter } = await harness([toolCallResponse('declared-native-call', name, {}), textResponse('Recorded the tool result')])
+    ctx.effect(() => ctx.productionStudio.registerNativeBoundaryProvider(['create_case', name]))
+    let dispatched = 0
+    ctx.tools.register(defineContentToolFixture({ name, description: 'Provider-declared native fixture', parameters: {}, execute: async (_args, exec) => {
+      await expect(ctx.productionStudio.noteNativeDispatch(ToolCallId('another-call'))).rejects.toThrow('No matching trusted')
+      await ctx.productionStudio.noteNativeDispatch(exec.callId)
+      dispatched++
+      return [{ type: 'text', text: '{"accepted":true}' }]
+    } }))
+    agent.followup(createUserMessage({ content: [{ type: 'text', text: 'Execute the declared fixture' }], source: { kind: 'user' } }))
+    await agent.whenIdle()
+    expect(dispatched).toBe(1)
+    expect(adapter.requests).toHaveLength(2)
+    const invocation = ctx.sessionProjections.stateOf(agent.session, 'productionNativeInvocations')['declared-native-call']
+    expect(invocation).toMatchObject({ callCount: 1, resultCount: 1, callEvent: { data: { name } },
+      resultEvent: { data: { message: { isError: false } } } })
+    expect((await ctx.productionStudio.get(agent.id)).error).toBeUndefined()
+    await expect(ctx.productionStudio.noteNativeDispatch(ToolCallId('declared-native-call'))).rejects.toThrow('No matching trusted')
+  })
+
+  it('retains undeclared call identities across replay before a provider activates', async () => {
+    const { ctx, agent, serviceFiber } = await harness([toolCallResponse('late-call', 'future_native_command', {}), textResponse('Recorded')])
+    ctx.tools.register(defineContentToolFixture({ name: 'future_native_command', description: 'Late provider fixture', parameters: {}, execute: async () => [{ type: 'text', text: 'recorded' }] }))
+    agent.followup(createUserMessage({ content: [{ type: 'text', text: 'Record the call' }], source: { kind: 'user' } }))
+    await agent.whenIdle()
+    await serviceFiber.dispose()
+    await ctx.plugin(ProductionStudio)
+    const before = ctx.sessionProjections.stateOf(agent.session, 'productionNativeInvocations')['late-call']
+    expect(before).toMatchObject({ callCount: 1, resultCount: 1 })
+    ctx.effect(() => ctx.productionStudio.registerNativeBoundaryProvider(['future_native_command']))
+    expect(ctx.sessionProjections.stateOf(agent.session, 'productionNativeInvocations')['late-call']).toEqual(before)
+  })
+
+  it('keeps provider-declared unknown operations quarantined across Sessions while XML failures stay independent', async () => {
+    const { ctx, agent, execute } = await harness()
+    ctx.effect(() => ctx.productionStudio.registerNativeBoundaryProvider(['verify_stage_plan'], { readOnlyToolNames: ['rhino_api_lookup'] }))
+    let nativeCalls = 0, lookupCalls = 0
+    ctx.tools.register(defineContentToolFixture({ name: 'verify_stage_plan', description: 'Unresolved declared operation', parameters: {}, execute: async (_args, exec) => {
+      await ctx.productionStudio.noteNativeDispatch(exec.callId); nativeCalls++; throw new Error('Native outcome is unknown')
+    } }))
+    ctx.tools.register(defineContentToolFixture({ name: 'rhino_api_lookup', description: 'Local XML reader', parameters: {}, execute: async () => { lookupCalls++; throw new Error('XML unavailable') } }))
+    expect((await execute('rhino_api_lookup', 'lookup-before')).isError).toBe(true)
+    expect((await ctx.productionStudio.get(agent.id)).error).toBeUndefined()
+    expect((await execute('verify_stage_plan', 'uncertain-declared')).isError).toBe(true)
+    await expect(ctx.productionStudio.noteNativeDispatch(ToolCallId('uncertain-declared'))).rejects.toThrow('No matching trusted')
+    expect((await execute('rhino_api_lookup', 'lookup-during')).isError).toBe(true)
+    const other = await ctx.agents.create({ sessionId: SessionId('other-native-owner'), agentOptions: { provider: 'mock', model: 'mock' } })
+    const blocked = await ctx.tools.execute({ callId: ToolCallId('foreign-native'), name: 'verify_stage_plan', arguments: {}, agent: other, signal: new AbortController().signal })
+    expect(blocked.isError).toBe(true)
+    expect(nativeCalls).toBe(1); expect(lookupCalls).toBe(2)
+    expect((await ctx.productionStudio.get(agent.id)).error).toContain('uncertain result')
+  })
+
+  it('disposes exact native and readonly declarations without weakening another provider', async () => {
+    const { ctx, agent, execute } = await harness()
+    const service = ctx.productionStudio
+    const declarations = await ctx.plugin((inner) => {
+      inner.effect(() => service.registerNativeBoundaryProvider(['future_native_command'], { readOnlyToolNames: ['rhino_api_lookup'] }))
+    })
+    const nativeConflict = ctx.productionStudio.registerNativeBoundaryProvider(['rhino_api_lookup'])
+    let markers = 0
+    for (const name of ['future_native_command', 'rhino_api_lookup']) ctx.tools.register(defineContentToolFixture({ name, description: 'Declaration disposal fixture', parameters: {}, execute: async (_args, exec) => {
+      await ctx.productionStudio.noteNativeDispatch(exec.callId); markers++; return [{ type: 'text', text: 'marked' }]
+    } }))
+    expect((await execute('rhino_api_lookup', 'conflicting-native')).isError).toBe(false)
+    nativeConflict(); nativeConflict()
+    expect((await execute('rhino_api_lookup', 'readonly-has-no-marker')).isError).toBe(true)
+    expect((await ctx.productionStudio.get(agent.id)).error).toBeUndefined()
+    expect((await execute('future_native_command', 'declared-before-dispose')).isError).toBe(false)
+    await declarations.dispose()
+    expect((await execute('future_native_command', 'disposed-native')).isError).toBe(true)
+    expect((await ctx.productionStudio.get(agent.id)).error).toBeUndefined()
+    // After the readonly provider unloads, legacy rhino_* inference is conservative again.
+    expect((await execute('rhino_api_lookup', 'fallback-native')).isError).toBe(true)
+    expect((await ctx.productionStudio.get(agent.id)).error).toContain('uncertain result')
+    expect(markers).toBe(2)
+  })
+
+  it('schedules declared readonly XML work while the exclusive native resource is occupied', async () => {
+    const { ctx, agent, input, receipt } = await harness()
+    ctx.effect(() => ctx.productionStudio.registerNativeBoundaryProvider(['future_native_command'], { readOnlyToolNames: ['rhino_api_lookup'] }))
+    let release = (): void => {}, started = false
+    const held = new Promise<void>((resolve) => { release = resolve })
+    ctx.tools.register(defineContentToolFixture({ name: 'future_native_command', description: 'Held native fixture', parameters: {}, execute: async (_args, exec) => {
+      await ctx.productionStudio.noteNativeDispatch(exec.callId); started = true; await held; return [{ type: 'text', text: JSON.stringify(receipt) }]
+    } }))
+    ctx.tools.register(defineContentToolFixture({ name: 'rhino_api_lookup', description: 'Independent local XML fixture', parameters: {}, execute: async () => [{ type: 'text', text: 'Local XML' }] }))
+    const graph = programGraph()
+    graph.nodes.find(node => node.id === 'baseline')!.config = { toolName: 'future_native_command', arguments: {} }
+    graph.nodes.push({ id: 'xml', label: 'Local XML', kind: 'program', x: 0, y: 0, inputs: [], outputs: [], maxAttempts: 1, config: { toolName: 'rhino_api_lookup', arguments: {} } })
+    const saved = await ctx.productionStudio.saveGraph(agent.id, { expectedVersion: 1, graph })
+    const objective = 'Inspect docs without occupying native geometry'
+    try {
+      await ctx.productionStudio.start(agent.id, { graphVersion: saved.graph.version, objective, goalContractAcknowledged: true, input: { ...input, deliveryGoal: { kind: 'verified-drawings', objectiveText: objective } } })
+      await vi.waitFor(async () => { expect(started).toBe(true); expect((await current(ctx, agent.id)).tasks.find(task => task.nodeId === 'xml')?.phase).toBe('complete') })
+      expect((await current(ctx, agent.id)).tasks.find(task => task.nodeId === 'baseline')?.phase).toBe('running')
+    } finally { release() }
   })
 
   it('captures live tool receipts from a real child before settling its delivery branch', async () => {

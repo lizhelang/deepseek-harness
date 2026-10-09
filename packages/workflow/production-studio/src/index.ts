@@ -109,7 +109,7 @@ function field(value: JsonValue, path: string): JsonValue | undefined {
 function json(value: unknown): JsonValue { return z.json().parse(value) }
 
 /** These registered AEA operations may enter native execution even when their label sounds observational. */
-function nativeTool(name: string): boolean { return /^rhino_/.test(name) || ['create_case', 'begin_workflow', 'get_case_context', 'submit_baseline', 'submit_revision', 'try_suggestion', 'finalize_candidate', 'evaluate_candidate', 'suggest_candidates', 'finish_search', 'resume_search', 'compare_candidates', 'open_review_result', 'propose_candidate'].includes(name) }
+function legacyNativeTool(name: string): boolean { return /^rhino_/.test(name) || ['create_case', 'begin_workflow', 'get_case_context', 'submit_baseline', 'submit_revision', 'try_suggestion', 'finalize_candidate', 'evaluate_candidate', 'suggest_candidates', 'finish_search', 'resume_search', 'compare_candidates', 'open_review_result', 'propose_candidate'].includes(name) }
 
 /** Safe graph bindings use data selectors, never expressions or shell interpolation. */
 function bind(value: JsonValue, input: JsonValue, upstream: JsonValue): JsonValue {
@@ -139,6 +139,7 @@ export class ProductionStudio extends TypertRemoteService {
   private nativeLease: NativeLease | undefined
   private nativeController: AbortController | undefined
   private readonly nativeProviders = new Map<string, number>()
+  private readonly readOnlyProviders = new Map<string, number>()
   private readonly notDispatched = new Set<string>()
   private readonly reconciliationProviders = new Set<NativeReconciliationProvider>()
   private readonly reconciliationCalls = new Set<Promise<void>>()
@@ -174,11 +175,12 @@ export class ProductionStudio extends TypertRemoteService {
         }
         return requests
       } })
-    ctx.sessionProjections.register({ key: 'productionNativeInvocations', stateVersion: 1,
+    ctx.sessionProjections.register({ key: 'productionNativeInvocations', stateVersion: 2,
       stateSchema: z.record(z.string(), z.object({ callCount: z.number().int(), resultCount: z.number().int(),
         callEvent: z.custom<SessionEvent<'tool/call'>>().optional(), resultEvent: z.custom<SessionEvent<'tool/result'>>().optional() })),
       init: () => ({}), apply: (state, event) => {
-        if (event.type === 'tool/call' && (nativeTool(event.data.name) || state[event.data.callId])) {
+        // Index identities independently of provider activation and replay order.
+        if (event.type === 'tool/call') {
           const prior = state[event.data.callId] ?? { callCount: 0, resultCount: 0 }
           return { ...state, [event.data.callId]: { ...prior, callEvent: prior.callEvent ?? event, callCount: prior.callCount + 1 } }
         }
@@ -323,7 +325,7 @@ export class ProductionStudio extends TypertRemoteService {
       } finally { release?.(); this.conversationCalls.delete(completion) }
     })
     ctx.on('tools/execute', async (exec, next) => {
-      if (!nativeTool(exec.name)) return next()
+      if (!this.nativeTool(exec.name)) return next()
       const previous = this.nativeTail
       let release: (() => void) | undefined
       this.nativeTail = new Promise<void>((resolve) => { release = resolve })
@@ -419,22 +421,28 @@ export class ProductionStudio extends TypertRemoteService {
    * Register trusted tool providers that mark the actual native dispatch point.
    * The provider owns the returned disposer through its plugin effect.
    * @param toolNames - exact registered tool names implementing the dispatch marker.
-   * @returns disposer removing only this provider's declaration.
+   * @param options - exact read-only names exempt from legacy native-name inference; native declarations win conflicts.
+   * @returns disposer removing only this provider's declarations.
    */
-  registerNativeBoundaryProvider(toolNames: readonly string[]): () => void {
-    const names = [...new Set(toolNames)]
-    for (const name of names) if (!nativeTool(name)) throw new Error(`Unsupported native dispatch provider for ${name}`)
-    for (const name of names) this.nativeProviders.set(name, (this.nativeProviders.get(name) ?? 0) + 1)
+  registerNativeBoundaryProvider(toolNames: readonly string[], options: { readOnlyToolNames?: readonly string[] } = {}): () => void {
+    const declarations = [[this.nativeProviders, toolNames], [this.readOnlyProviders, options.readOnlyToolNames ?? []]] as const
+    const registrations = declarations.map(([registry, names]) => ({ registry, names: [...new Set(names)] }))
+    for (const { registry, names } of registrations) for (const name of names) registry.set(name, (registry.get(name) ?? 0) + 1)
     let disposed = false
     return () => {
       if (disposed) return
       disposed = true
-      for (const name of names) {
-        const remaining = (this.nativeProviders.get(name) ?? 1) - 1
-        if (remaining > 0) this.nativeProviders.set(name, remaining)
-        else this.nativeProviders.delete(name)
+      for (const { registry, names } of registrations) for (const name of names) {
+        const remaining = (registry.get(name) ?? 1) - 1
+        if (remaining > 0) registry.set(name, remaining)
+        else registry.delete(name)
       }
     }
+  }
+
+  /** Trusted exact declarations override name inference; conflicting native providers retain protection. */
+  private nativeTool(name: string): boolean {
+    return this.nativeProviders.has(name) || !this.readOnlyProviders.has(name) && legacyNativeTool(name)
   }
 
   /**
@@ -1007,7 +1015,7 @@ export class ProductionStudio extends TypertRemoteService {
   }
   private resourceKeys(node: ProductionNode, agent: Agent): string[] {
     const visible = this.ctx.tools.schemas(agent).map(tool => tool.name)
-    const native = node.kind === 'agent' ? (node.config.tools ?? visible).some(nativeTool) : node.config.toolName !== undefined && nativeTool(node.config.toolName)
+    const native = node.kind === 'agent' ? (node.config.tools ?? visible).some(name => this.nativeTool(name)) : node.config.toolName !== undefined && this.nativeTool(node.config.toolName)
     return [...new Set([...(native ? ['native:Rhino'] : []), ...(node.resource ? [node.resource] : [])])]
   }
 

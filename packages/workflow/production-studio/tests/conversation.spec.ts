@@ -113,6 +113,28 @@ describe('one conversation, one production executor', () => {
     expect((await h.call()).isError).toBe(true); expect(h.count()).toBe(1)
   })
 
+  it('explicit pause and resume reopen only the last settled failed node without resetting its receipt or budget', async () => {
+    const h = await harness()
+    h.provider.observe = () => ({ outlet: 'failure', terminal: true, message: 'Known capability failure' })
+    await h.call()
+    const failed = await h.run()
+    expect(failed.phase).toBe('blocked')
+    const original = structuredClone(failed.tasks[0]!)
+    await h.ctx.productionStudio.pause(h.agent.id, { runId: failed.id, revision: failed.revision })
+    const paused = await h.run()
+    expect(paused.tasks[0]?.phase).toBe('paused')
+    expect(paused.executions).toBe(failed.executions)
+    expect(paused.tasks[0]?.settledOperationId).toBe(original.settledOperationId)
+    expect(paused.tasks[0]?.evidence).toEqual(original.evidence)
+    expect((await h.call()).isError).toBe(true)
+    await h.ctx.productionStudio.resume(h.agent.id, { runId: paused.id, revision: paused.revision })
+    const resumed = await h.run()
+    expect(resumed.id).toBe(failed.id); expect(resumed.phase).toBe('active')
+    expect(resumed.executions).toBe(failed.executions)
+    expect(resumed.tasks[0]?.attempts).toBe(original.attempts)
+    expect(h.count()).toBe(1)
+  })
+
   it('routes ordinary repair failures autonomously even when untrusted receipt data claims terminal', async () => {
     const h = await harness()
     h.receipt['terminal'] = true

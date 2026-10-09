@@ -645,6 +645,7 @@ export class ProductionStudio extends TypertRemoteService {
       const run = this.expect(runtime, ref)
       const tasks = ref.nodeId ? [this.task(run, ref.nodeId)] : run.tasks
       if (run.mode === 'conversation') {
+        this.pauseSettledFailure(run, ref)
         runtime.pausedRun.add(run.id)
         // Pause admission, not an already-dispatched native operation. Its known
         // receipt must still settle into this same run before the next step.
@@ -664,6 +665,18 @@ export class ProductionStudio extends TypertRemoteService {
       await this.publish(runtime)
       return this.snapshot(runtime)
     })
+  }
+
+  private pauseSettledFailure(run: ProductionRun, ref: ProductionRef): void {
+    const last = run.history.at(-1)
+    if (run.phase !== 'blocked' || this.nativeLease || !last || last.phase !== 'blocked'
+      || run.executions >= run.graph.maxExecutions || run.tasks.some(task => task.operationId || task.phase === 'unknown')) return
+    const task = run.tasks.find(item => item.nodeId === last.nodeId)
+    if (!task || ref.nodeId && ref.nodeId !== task.nodeId || task.phase !== 'blocked'
+      || !task.settledOperationId || this.node(run, task.nodeId).kind !== 'agent') return
+    // Explicit pause/resume reopens this conversation node after an external
+    // repair. Its failed result, settled invocation and consumed budget remain.
+    this.transition(run, task, 'paused', 'Known failure retained; resume may read repaired capabilities without replaying the settled invocation')
   }
 
   /**

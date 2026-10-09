@@ -89,6 +89,8 @@ function LoadedRhino({ model, info, t }: { model: Object3D; info: RhinoSceneInfo
           setLayers(current.layers)
         }} />)}</div>
     </details>}
-    <div className={css.footer}>{t('hint')}<span>{t('readonly')}</span></div>
+    <div className={css.footer}>{t('hint')}
+      {info.adjustedLineCount > 0 && <span>{t('contrastAdjusted')}</span>}<span>{t('readonly')}</span>
+    </div>
   </div>
 }

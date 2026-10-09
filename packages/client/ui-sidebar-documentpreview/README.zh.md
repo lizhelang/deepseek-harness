@@ -69,7 +69,7 @@ PNG、JPEG、GIF、WebP、BMP、ICO 和 SVG 通过 Blob URL 在 `<img>` 静态�
 <a id="rhino-preview"></a>
 ## Rhino 预览
 
-使用随应用打包的 [rhino3dm](https://mcneel.github.io/rhino3dm/javascript/api/index.html) 解码器和 [Three.js Rhino3dmLoader](https://threejs.org/docs/pages/Rhino3dmLoader.html)，直接在侧栏查看 `.3dm` 文件。视口支持旋转、平移、缩放、适应视图、顶视图、轴测图和文件图层显隐。解码 JS 与 WASM 在本地 Worker 中加载，模型不会上传。现有会话文件读取器在文件大小限制内提供经过授权的完整字节，渲染器在转交 Worker 前复制数据。`rhino.timeoutMs` 默认 30,000 毫秒；解析 Worker、Blob URL 和 GPU 资源随预览生命周期释放。
+使用随应用打包的 [rhino3dm](https://mcneel.github.io/rhino3dm/javascript/api/index.html) 解码器和 [Three.js Rhino3dmLoader](https://threejs.org/docs/pages/Rhino3dmLoader.html)，直接在侧栏查看 `.3dm` 文件。视口支持旋转、平移、缩放、适应视图、顶视图、轴测图和文件图层显隐。浅色线在预览中自动加深，源对象颜色和着色网格保持不变。解码 JS 与 WASM 在本地 Worker 中加载，模型不会上传。现有会话文件读取器在文件大小限制内提供经过授权的完整字节，渲染器在转交 Worker 前复制数据。`rhino.timeoutMs` 默认 30,000 毫秒；解析 Worker、Blob URL 和 GPU 资源随预览生命周期释放。
 
 已保存的渲染网格用于显示着色曲面。没有缓存网格的 Brep 使用其有限边曲线的采样线框，并明确标出这一降级；缺少网格和不支持的对象仍会提示。线框预览不会重建裁剪曲面，也不证明几何、尺寸、折弯或制造验收通过。无效、空白、超时或 WebGL 不可用的预览会说明原因，不会显示为加载成功的空画布。
 

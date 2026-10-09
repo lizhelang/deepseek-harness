@@ -14,6 +14,7 @@ export const zh = {
   objects: '已显示 {count} 个几何对象',
   partial: '部分内容无法预览（{count} 项）。曲面显示依赖文件内的网格；请用 Rhino 核对完整模型。',
   hint: '拖动旋转 · 右键拖动平移 · 滚轮缩放',
+  contrastAdjusted: '浅色线已加深，仅影响预览',
   readonly: '只读预览，不修改模型', preview: 'Rhino 模型预览',
   unnamedLayer: '未命名图层 {index}', retry: '重试',
 } satisfies Record<string, string>
@@ -37,6 +38,7 @@ export const en = {
   objects: '{count} geometry objects displayed',
   partial: 'Some content cannot be previewed ({count} warnings). Surface display requires saved meshes. Check the complete model in Rhino.',
   hint: 'Drag to orbit · Right-drag to pan · Scroll to zoom',
+  contrastAdjusted: 'Light lines darkened for preview only',
   readonly: 'Read-only preview; model files remain unchanged', preview: 'Rhino model preview',
   unnamedLayer: 'Unnamed layer {index}', retry: 'Retry',
 } satisfies Record<RhinoPreviewKey, string>

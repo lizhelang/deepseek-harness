@@ -2,6 +2,7 @@
 import { AmbientLight, DirectionalLight, OrthographicCamera, Scene, Vector3, WebGLRenderer, type Object3D } from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { frameRhinoCamera, rhinoBounds, setRhinoLayerVisible } from './scene.ts'
+import { RHINO_PREVIEW_BACKGROUND } from './contrast.ts'
 
 /** View controls owned by one mounted document body. */
 export interface RhinoViewport {
@@ -37,7 +38,7 @@ export function createRhinoViewport(container: HTMLElement, model: Object3D, lab
   }
   try {
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
-    renderer.setClearColor(0xf2f4f7)
+    renderer.setClearColor(RHINO_PREVIEW_BACKGROUND)
     renderer.domElement.setAttribute('aria-label', label)
     renderer.domElement.setAttribute('role', 'img')
     scene.add(model, new AmbientLight(0xffffff, 2))

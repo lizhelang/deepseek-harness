@@ -6,6 +6,7 @@ import type { RhinoLimits } from './types.ts'
 import { parseRhinoWireframe } from './wireframe.ts'
 import { addRhinoWireframes } from './wireframe-scene.ts'
 import { applyRhinoVisibility } from './visibility.ts'
+import { improveRhinoLineContrast } from './contrast.ts'
 
 declare global {
   /** Same-version rhino3dm wrapper included by the package build. */
@@ -36,6 +37,7 @@ export async function parseRhino(source: Uint8Array<ArrayBuffer>, limits: RhinoL
     signal.throwIfAborted()
     addRhinoWireframes(model, wireframe)
     applyRhinoVisibility(model)
+    improveRhinoLineContrast(model)
     return model
   } catch (error) { disposeRhinoScene(model); throw error }
 }

@@ -8,7 +8,7 @@ it('keeps layer metadata and decoder warnings beside the rendered object count',
   model.add(new Mesh(new BoxGeometry(2, 4, 6), new MeshBasicMaterial()), new Line())
   model.userData.layers = [{ name: 'Bend marks', visible: true, hiddenByParent: false }, { name: 'Source', visible: false, hiddenByParent: false }]
   model.userData.warnings = [{ message: 'Brep has no associated mesh geometry.' }, 'Unsupported annotation']
-  expect(inspectRhinoScene(model)).toEqual({ objectCount: 2, visibleObjectCount: 2, wireframeCount: 0,
+  expect(inspectRhinoScene(model)).toEqual({ adjustedLineCount: 0, objectCount: 2, visibleObjectCount: 2, wireframeCount: 0,
     missingFaceCount: 0, omittedEdgeCount: 0, omittedObjectCount: 0, layers: [
       { index: 0, name: 'Bend marks', visible: true, hiddenByParent: false }, { index: 1, name: 'Source', visible: false, hiddenByParent: false },
     ], warnings: ['Brep has no associated mesh geometry.', 'Unsupported annotation'] })

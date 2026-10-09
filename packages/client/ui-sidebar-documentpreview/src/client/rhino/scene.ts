@@ -5,6 +5,7 @@ import { changeRhinoLayer, readRhinoLayers, type RhinoLayer } from './visibility
 
 /** Rendered content counts and decoder limitations presented beside the viewport. */
 export interface RhinoSceneInfo {
+  readonly adjustedLineCount: number
   readonly objectCount: number
   readonly visibleObjectCount: number
   readonly wireframeCount: number
@@ -32,7 +33,9 @@ export function inspectRhinoScene(model: Object3D): RhinoSceneInfo {
     if (typeof warning === 'string') return warning
     return typeof warning === 'object' && warning !== null && 'message' in warning && typeof warning.message === 'string' ? warning.message : ''
   }) : []
-  return { objectCount: all.size, visibleObjectCount: visible.size, wireframeCount: count('shown'),
+  const adjusted: unknown = model.userData.rhinoAdjustedLineMaterials
+  return { adjustedLineCount: typeof adjusted === 'number' && Number.isSafeInteger(adjusted) && adjusted > 0 ? adjusted : 0,
+    objectCount: all.size, visibleObjectCount: visible.size, wireframeCount: count('shown'),
     missingFaceCount: count('missingFaces'), omittedEdgeCount: count('omittedEdges'), omittedObjectCount: count('omittedObjects'), layers, warnings }
 }
 

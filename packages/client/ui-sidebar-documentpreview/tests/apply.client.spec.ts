@@ -29,6 +29,7 @@ import { ImageBody } from '../src/client/image/ImageBody.tsx'
 import { IMAGE_BODY_ID } from '../src/client/image/index.ts'
 import { LazyPdfBody } from '../src/client/pdf/LazyPdfBody.tsx'
 import { LazyExcelBody } from '../src/client/excel/LazyExcelBody.tsx'
+import { LazyRhinoBody } from '../src/client/rhino/LazyRhinoBody.tsx'
 import { PDF_BODY_ID } from '../src/client/pdf/index.ts'
 import { CodeBody } from '../src/client/code/CodeBody.tsx'
 import { en, zh } from '../src/client/locales.ts'
@@ -100,6 +101,7 @@ describe('ui-sidebar-documentpreview apply', () => {
       ['sidebar.right.tab.document', '@deepseek-ai/dsh-client-ui-sidebar-documentpreview/office', 'sidebarOffice', OfficeBody],
       ['sidebar.right.tab.document.office.pdf', '@deepseek-ai/dsh-client-ui-sidebar-documentpreview/office', 'sidebarPdf', LazyPdfBody],
       ['sidebar.right.tab.document', '@deepseek-ai/dsh-client-ui-sidebar-documentpreview/excel', 'sidebarExcel', LazyExcelBody],
+      ['sidebar.right.tab.document', '@deepseek-ai/dsh-client-ui-sidebar-documentpreview/rhino', 'sidebarRhino', LazyRhinoBody],
       ['sidebar.right.tab.document', '@deepseek-ai/dsh-client-ui-sidebar-documentpreview/code', 'sidebarCodePreview', CodeBody],
     ])
     expect(registered[0]?.store).toBeDefined()

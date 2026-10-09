@@ -12,8 +12,8 @@
   en: a74c16667d0baada
   zh: 4fd709ff9f98b84f
 /deepseek-ai-dsh-client-ui-sidebar-documentpreview/table-of-contents:
-  en: 0dd8c3a22e28aacf
-  zh: c27c11bf4b5cceba
+  en: 875705254eb0e437
+  zh: be16e8ea60b23af7
 /deepseek-ai-dsh-client-ui-sidebar-documentpreview/what-it-registers:
   en: a8eaf01a3a3390ee
   zh: ddea36dbcc4a0159
@@ -21,8 +21,11 @@
   en: 949156aa02ec8b07
   zh: d3675754e2a37b5d
 /deepseek-ai-dsh-client-ui-sidebar-documentpreview/how-it-reads:
-  en: 5cdbd4a218315e70
-  zh: d5054f541e0e0275
+  en: 78f9dcea9584ab7a
+  zh: b30283db06b21e9b
+/deepseek-ai-dsh-client-ui-sidebar-documentpreview/rhino-preview:
+  en: 651bac6063f5cfa4
+  zh: 1ca41b9545a38367
 /deepseek-ai-dsh-client-ui-sidebar-documentpreview/excel-preview:
   en: b99b0e0b8efc2853
   zh: 4327352d1334fc6b

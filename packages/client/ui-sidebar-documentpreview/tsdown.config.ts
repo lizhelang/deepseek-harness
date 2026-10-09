@@ -6,11 +6,29 @@ import { clientBundle } from '../tsdown.client.ts'
 
 const bundle = clientBundle('@deepseek-ai/dsh-client-ui-sidebar-documentpreview', ['lib/types/index.js'], {
   clientBanner: fileName => fileName.endsWith('client.pdf.js') ? pdfLicenseBanner()
-    : fileName.endsWith('client.excel.js') ? excelLicenseBanner() : undefined,
+    : fileName.endsWith('client.excel.js') ? excelLicenseBanner()
+    : fileName.endsWith('client.rhino.js') ? rhinoLicenseBanner() : undefined,
 })
 const require = createRequire(import.meta.url)
 const workerSpecifier = 'pdfjs-dist/build/pdf.worker.min.mjs?raw'
 const workerModule = '\0dsh-pdf-worker.mjs'
+
+/** Rhino's npm archive omits its MIT license; retain the pinned upstream notice. */
+function rhinoLicenseBanner(): string {
+  const threeRoot = dirname(dirname(require.resolve('three')))
+  const notice = [readFileSync(join(threeRoot, 'LICENSE'), 'utf8'),
+    readFileSync(join(import.meta.dirname, 'licenses/rhino3dm.txt'), 'utf8')].join('\n')
+  return ['//! Bundled Rhino viewer license notices', ...notice.trimEnd().split('\n').map(line => `// ${line}`)].join('\n')
+}
+
+/** Decoder assets stay offline and load only with the Rhino preview chunk. */
+function rhinoAssets(): Record<string, string> {
+  const root = dirname(require.resolve('rhino3dm'))
+  return {
+    __DSH_RHINO_JS_SOURCE__: JSON.stringify(readFileSync(join(root, 'rhino3dm.min.js'), 'utf8')),
+    __DSH_RHINO_WASM_BASE64__: JSON.stringify(readFileSync(join(root, 'rhino3dm.wasm')).toString('base64')),
+  }
+}
 
 /** FortuneSheet omits its repository license from the npm payload. */
 function excelLicenseBanner(): string {
@@ -105,6 +123,6 @@ export default (options: Parameters<typeof bundle>[0]): UserConfig[] => bundle(o
       resolve: { ...config.inputOptions?.resolve, mainFields: ['browser', 'module', 'main'], aliasFields: [['browser']] },
     },
     plugins: [config.plugins, pdfWorker, excelWorker],
-    define: { ...config.define, __DSH_PDFJS_ASSETS__: pdfAssets() },
+    define: { ...config.define, __DSH_PDFJS_ASSETS__: pdfAssets(), ...rhinoAssets() },
   } : config,
 )

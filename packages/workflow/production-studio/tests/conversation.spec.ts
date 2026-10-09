@@ -135,6 +135,45 @@ describe('one conversation, one production executor', () => {
     expect(h.count()).toBe(1)
   })
 
+  it('keeps a blocked run unchanged while native execution is leased and accepts pause after settlement', async () => {
+    const h = await harness()
+    h.provider.observe = () => ({ outlet: 'failure', terminal: true, message: 'Known capability failure' })
+    await h.call()
+    const failed = await h.run(), saved = await h.saved(), checkpoints = h.events.length
+    let markStarted = (): void => {}, release = (): void => {}
+    const started = new Promise<void>((resolve) => { markStarted = resolve })
+    const released = new Promise<void>((resolve) => { release = resolve })
+    releases.push(release)
+    h.ctx.tools.register(defineTool({ name: 'rhino_lease_fixture', description: 'Hold the native lease for the recovery check', parameters: {},
+      output: { schema: { type: 'string' }, render: (_args, value) => [{ type: 'text', text: value }] },
+      execute: async () => { markStarted(); await released; return 'Known native result' } }))
+    const pending = h.ctx.tools.execute({ callId: ToolCallId('leased-call'), name: 'rhino_lease_fixture', arguments: {}, agent: h.agent, signal: new AbortController().signal })
+    await started
+    try {
+      await expect(h.ctx.productionStudio.pause(h.agent.id, { runId: failed.id, revision: failed.revision })).rejects.toThrow('Native execution is still leased')
+      expect(await h.run()).toEqual(failed)
+      expect(await h.saved()).toEqual(saved)
+      expect(h.events).toHaveLength(checkpoints)
+    } finally { release(); await pending }
+    await h.ctx.productionStudio.pause(h.agent.id, { runId: failed.id, revision: failed.revision })
+    const paused = await h.run()
+    expect(paused.phase).toBe('paused'); expect(paused.tasks[0]?.phase).toBe('paused')
+    expect(paused.executions).toBe(failed.executions); expect(paused.tasks[0]?.attempts).toBe(failed.tasks[0]?.attempts)
+  })
+
+  it.each(['budget', 'different node'] as const)('rejects blocked pause without changing state when recovery fails its %s check', async (reason) => {
+    const h = await harness(undefined, reason === 'budget' ? { defaultMaxExecutions: 1 } : {})
+    h.provider.observe = () => ({ outlet: 'failure', terminal: true, message: 'Known capability failure' })
+    await h.call()
+    const failed = await h.run(), saved = await h.saved(), checkpoints = h.events.length
+    await expect(h.ctx.productionStudio.pause(h.agent.id, { runId: failed.id, revision: failed.revision,
+      ...(reason === 'different node' ? { nodeId: 'repair' } : {}) })).rejects.toThrow(reason === 'budget' ? 'budget exhausted' : 'Only the last settled failed')
+    expect(await h.run()).toEqual(failed)
+    expect(await h.saved()).toEqual(saved)
+    expect(h.events).toHaveLength(checkpoints)
+    expect(h.count()).toBe(1)
+  })
+
   it('routes ordinary repair failures autonomously even when untrusted receipt data claims terminal', async () => {
     const h = await harness()
     h.receipt['terminal'] = true

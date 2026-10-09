@@ -668,12 +668,14 @@ export class ProductionStudio extends TypertRemoteService {
   }
 
   private pauseSettledFailure(run: ProductionRun, ref: ProductionRef): void {
+    if (run.phase !== 'blocked') return
+    if (this.nativeLease) throw new Error('Native execution is still leased; settle or reconcile it before pausing a blocked conversation for continuation')
+    if (run.executions >= run.graph.maxExecutions) throw new Error('Conversation graph execution budget exhausted; blocked work cannot reopen')
     const last = run.history.at(-1)
-    if (run.phase !== 'blocked' || this.nativeLease || !last || last.phase !== 'blocked'
-      || run.executions >= run.graph.maxExecutions || run.tasks.some(task => task.operationId || task.phase === 'unknown')) return
-    const task = run.tasks.find(item => item.nodeId === last.nodeId)
-    if (!task || ref.nodeId && ref.nodeId !== task.nodeId || task.phase !== 'blocked'
-      || !task.settledOperationId || this.node(run, task.nodeId).kind !== 'agent') return
+    const task = last && run.tasks.find(item => item.nodeId === last.nodeId)
+    if (!last || last.phase !== 'blocked' || !task || ref.nodeId && ref.nodeId !== task.nodeId || task.phase !== 'blocked'
+      || !task.settledOperationId || this.node(run, task.nodeId).kind !== 'agent'
+      || run.tasks.some(item => item.operationId || item.phase === 'unknown')) throw new Error('Only the last settled failed conversation agent node can pause for continuation')
     // Explicit pause/resume reopens this conversation node after an external
     // repair. Its failed result, settled invocation and consumed budget remain.
     this.transition(run, task, 'paused', 'Known failure retained; resume may read repaired capabilities without replaying the settled invocation')

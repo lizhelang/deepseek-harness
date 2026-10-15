@@ -14,7 +14,7 @@ import * as StorageJson from '@deepseek-ai/dsh-storage-json'
 import * as StorageDomain from '@deepseek-ai/dsh-storage-domain'
 import Subagent from '@deepseek-ai/dsh-subagent'
 import * as Fork from '@deepseek-ai/dsh-subagent-fork-in-process'
-import JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
+import * as JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { MockAdapter, textResponse, toolCallResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
 import ProductionStudio, { decodeProductionState } from '../src/index.ts'
@@ -30,8 +30,9 @@ afterEach(async () => {
 async function harness(maxEvidenceBytes = 262144) {
   const root = await mkdtemp(join(tmpdir(), 'dsh-native-reconcile-')); roots.push(root)
   const ctx = new Context(); contexts.push(ctx)
-  await mountAgentLoopTestDependencies(ctx)
-  await ctx.plugin(FsLocal, { cwd: root }); await ctx.plugin(Storage); await ctx.plugin(StorageJson, { root: join(root, 'state') })
+  await ctx.plugin(FsLocal, { cwd: root })
+  await mountAgentLoopTestDependencies(ctx, { workingDirectory: true })
+  await ctx.plugin(Storage); await ctx.plugin(StorageJson, { root: join(root, 'state') })
   await ctx.plugin(StorageDomain, { backend: 'json' }); await ctx.plugin(Subagent); await ctx.plugin(Fork)
   await ctx.plugin(JsonlSessionPersistence, { root: join(root, 'sessions'), compression: 'none' })
   const kv = ctx.storage.backend.get('json').kv!

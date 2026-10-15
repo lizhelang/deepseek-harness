@@ -5,6 +5,7 @@ import { chromium, type Browser, type Page } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
 import { LlmAdapter, ToolCallId, type GenerateOptions, type StreamChunk } from '@deepseek-ai/dsh-llm'
 import { defineTool } from '@deepseek-ai/dsh-tools'
+import { Peer } from '@deepseek-ai/dsh-client-connection'
 import type { ProductionRun } from '@deepseek-ai/dsh-production-studio'
 import type {} from '@deepseek-ai/dsh-production-studio'
 import type {} from '@deepseek-ai/dsh-agent-default-model'
@@ -217,7 +218,7 @@ it('drives Chat, Trajectory, Tasks and Workflow from one parent conversation and
     if (!route) throw new Error('The current graph has no geometry success route')
     route.toNode = 'decision'
     graph.edges.push({ id: 'decision-manufacture', fromNode: 'decision', fromPort: 'success', toNode: 'manufacture', toPort: 'input' })
-    await world.ctx.typertGateway.invoke({ namespace: 'productionStudio', method: 'saveGraph',
+    await world.ctx.typertGateway.invoke({ peer: new Peer(world.ctx, { principal: { kind: 'owner' } }), namespace: 'productionStudio', method: 'saveGraph',
       args: { sessionId: parent.id, request: { expectedVersion: edited.graph.version, graph } } })
     const routed = await currentRun()
     expect(routed.id).toBe(admitted.id)

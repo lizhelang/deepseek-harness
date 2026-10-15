@@ -69,6 +69,7 @@ export function rejectPrompt(error: unknown, childSessionId: SessionId, signal: 
           { reason: error.code },
           { cause: error },
         )
+      case 'NOT_CONTINUABLE':
       case 'NOT_RESUMABLE':
         throw new RemoteError(
           'subagent/not-resumable',

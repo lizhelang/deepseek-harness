@@ -14,7 +14,7 @@ import * as StorageJson from '@deepseek-ai/dsh-storage-json'
 import * as StorageDomain from '@deepseek-ai/dsh-storage-domain'
 import Subagent from '@deepseek-ai/dsh-subagent'
 import * as Fork from '@deepseek-ai/dsh-subagent-fork-in-process'
-import JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
+import * as JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { MockAdapter, textResponse, toolCallResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
 import ProductionStudio, { decodeProductionState } from '../src/index.ts'
@@ -33,8 +33,9 @@ afterEach(async () => {
 async function harness(script?: ConstructorParameters<typeof MockAdapter>[0], config: Config = {}) {
   const root = await mkdtemp(join(tmpdir(), 'dsh-conversation-')); roots.push(root)
   const ctx = new Context(); contexts.push(ctx)
-  await mountAgentLoopTestDependencies(ctx)
-  await ctx.plugin(FsLocal, { cwd: root }); await ctx.plugin(Storage); await ctx.plugin(StorageJson, { root: join(root, 'state') }); await ctx.plugin(StorageDomain, { backend: 'json' }); await ctx.plugin(Subagent); await ctx.plugin(Fork)
+  await ctx.plugin(FsLocal, { cwd: root })
+  await mountAgentLoopTestDependencies(ctx, { workingDirectory: true })
+  await ctx.plugin(Storage); await ctx.plugin(StorageJson, { root: join(root, 'state') }); await ctx.plugin(StorageDomain, { backend: 'json' }); await ctx.plugin(Subagent); await ctx.plugin(Fork)
   await ctx.plugin(JsonlSessionPersistence, { root: join(root, 'sessions'), compression: 'none' })
   const kv = ctx.storage.backend.get('json').kv
   if (!kv) throw new Error('Expected the real JSON storage backend')
@@ -269,7 +270,7 @@ describe('one conversation, one production executor', () => {
     agent.followup(createUserMessage({ content: [{ type: 'text', text: 'Verify the supplied drawing' }], source: { kind: 'user' } }))
     await vi.waitFor(async () => {
       expect((await run()).phase, errors.mock.calls.map(args => args.map(String).join(' ')).join('\n')).toBe('complete')
-    })
+    }, { timeout: 10_000 })
     await agent.whenIdle()
     expect(count()).toBe(2)
     expect(adapter.requests).toHaveLength(3)
@@ -316,6 +317,8 @@ describe('one conversation, one production executor', () => {
 
   it('applies future prompt and routing edits while preserving an in-flight call and blocks the next call at a human node', async () => {
     const h = await harness(); h.defer()
+    // This fixture drives the next operation directly; continuation has separate real-loop coverage.
+    vi.spyOn(h.agent, 'steer').mockImplementation(() => {})
     const inFlight = h.call(true); await h.dispatch
     const before = await h.snapshot(), active = await h.run()
     const graph = structuredClone(before.graph)

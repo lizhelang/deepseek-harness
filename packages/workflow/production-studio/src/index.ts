@@ -18,6 +18,7 @@ import { createConversationGraph, createProductionGraph, decodeProductionState, 
 import { validateConversationEdit } from './conversation.ts'
 import { readAeaEvidence } from './aea-evidence.ts'
 import { EvidenceArchive, evidenceBlobSchema } from './evidence.ts'
+import { ProductionChildren } from './child-activation.ts'
 import type { AnswerProductionRequest, ConversationWorkflowProvider, NativeReconciliationProvider, NativeReconciliationRequest, NativeReconciliationResult, ProductionContinuation, ProductionEvidence, ProductionNode, ProductionOutlet, ProductionRef, ProductionRun, ProductionRunId, ProductionSnapshot, ProductionState, ProductionTask, SaveProductionGraphRequest, StartProductionRunRequest } from './types.ts'
 
 export type * from './types.ts'
@@ -129,6 +130,7 @@ export class ProductionStudio extends TypertRemoteService {
     maxFileBytes: schema.natural().min(1).default(4194304), maxHistoryEntries: schema.natural().min(1).default(400),
     maxRetainedRuns: schema.natural().min(1).default(20),
   })
+  private readonly children: ProductionChildren
   private readonly runtimes = new Map<SessionId, SessionRuntime>()
   private readonly resources = new Set<string>()
   private readonly listeners = new Map<SessionId, Set<() => void>>()
@@ -152,6 +154,7 @@ export class ProductionStudio extends TypertRemoteService {
  */
   constructor(ctx: Context, config: Config = {}) {
     super(ctx, 'productionStudio')
+    this.children = new ProductionChildren(ctx)
     this.domain = ctx.storageDomain.open(productionDomain)
     this.limits = {
       defaultMaxExecutions: config.defaultMaxExecutions ?? 80, defaultMaxConcurrent: config.defaultMaxConcurrent ?? 3,
@@ -1156,28 +1159,19 @@ export class ProductionStudio extends TypertRemoteService {
     const evidence = [...incoming.flatMap(token => token.evidence), ...task.evidence.filter(item => item.kind === 'human')].map(item => archive.read(agent.id, item))
     const failed = (message: string): NodeResult => ({ outlet: 'failure', data: { issue: message, input: upstream }, evidence, certificates: [], message })
     if (node.kind === 'agent') {
-      const observations = new Map<SessionId, SessionEvent[]>()
-      const stopWatching = this.ctx.on('session/event', (session, event) => {
-        if (session.header.parentSession !== agent.id || event.seq < session.firstLiveSeq) return
-        if (event.type !== 'tool/call' && event.type !== 'tool/result' && event.type !== 'tool/ptc-dispatch') return
-        const events = observations.get(session.id) ?? []
-        events.push(event)
-        observations.set(session.id, events)
-      })
-      const child = await this.ctx.subagents.start(this.limits.subagentProvider, {
-        parent: agent, signal, label: node.label, prompt: [{ type: 'text', text: `${node.config.prompt ?? node.label}\nObjective: ${run.objective}\nInput: ${JSON.stringify(run.input)}\nUpstream: ${JSON.stringify(upstream)}\nHuman decisions: ${JSON.stringify(evidence.filter(item => item.kind === 'human').map(item => item.data))}\nUse actual registered tools. A final assistant message is not delivery evidence. Never modify source code, frozen settings, credentials, or replay an unknown native operation.` }],
-        ...(node.config.provider && node.config.model
-          ? { agentOptions: { provider: node.config.provider, model: node.config.model } } : {}),
-        ...(node.config.tools ? { toolFilter: { allow: node.config.tools } } : {}),
-      }).catch((error: unknown) => { stopWatching(); throw error })
+      const child = await this.children.start({
+        provider: this.limits.subagentProvider, label: node.label, signal,
+        request: { parent: agent, prompt: [{ type: 'text', text: `${node.config.prompt ?? node.label}\nObjective: ${run.objective}\nInput: ${JSON.stringify(run.input)}\nUpstream: ${JSON.stringify(upstream)}\nHuman decisions: ${JSON.stringify(evidence.filter(item => item.kind === 'human').map(item => item.data))}\nUse actual registered tools. A final assistant message is not delivery evidence. Never modify source code, frozen settings, credentials, or replay an unknown native operation.` }],
+          ...(node.config.provider && node.config.model
+            ? { agentOptions: { provider: node.config.provider, model: node.config.model } } : {}),
+        },
+      }, { runId: run.id, nodeId: node.id, attempt: task.attempts }, node.config.tools)
       try {
         const runtime = this.runtimes.get(agent.id)
         const current = runtime?.state.runs.find(item => item.id === run.id)?.tasks.find(item => item.nodeId === node.id)
-        if (current) { current.childSessionId = child.id; if (runtime) await this.publish(runtime) }
+        if (current) { current.childSessionId = child.childId; if (runtime) await this.publish(runtime) }
         const result = await child.result
-        const childSession = child.localAgent?.session
-        const childEvents = childSession
-          ? (observations.get(child.id) ?? []).filter(event => event.seq >= childSession.firstLiveSeq) : []
+        const childEvents = child.events
         const calls = new Map<string, string>()
         for (const event of childEvents) {
           if (event.type === 'tool/call') calls.set(event.data.callId, event.data.name)
@@ -1195,11 +1189,11 @@ export class ProductionStudio extends TypertRemoteService {
           }
         }
         const text = result.output.filter(block => block.type === 'text').map(block => block.text).join('\n')
-        if (this.nativeLease?.status === 'unknown' && this.nativeLease.sessionId === child.id) return { outlet: 'unknown', data: { diagnostic: this.nativeLease.message }, evidence, certificates: [], message: this.nativeLease.message }
+        if (this.nativeLease?.status === 'unknown' && this.nativeLease.sessionId === child.childId) return { outlet: 'unknown', data: { diagnostic: this.nativeLease.message }, evidence, certificates: [], message: this.nativeLease.message }
         if (result.stopReason !== 'completed') return result.stopReason === 'aborted' ? { outlet: 'unknown', data: { diagnostic: result.diagnostic ?? result.stopReason }, evidence, certificates: [], message: 'Child interrupted; reconcile any native work before retry' } : failed(result.diagnostic ?? `Child stopped: ${result.stopReason}`)
         this.assertEvidenceSize(evidence)
         return { outlet: 'success', data: { assistant: text, observations: evidence.filter(item => item.kind === 'tool').map(item => item.data) }, evidence, certificates: node.outputs.some(port => port.type === 'candidate') ? [] : certificates, message: '' }
-      } finally { stopWatching(); await child.dispose() }
+      } finally { await child.dispose() }
     }
     if (node.config.toolName) {
       if (node.config.toolName !== 'production_aea_evidence' && !this.ctx.tools.get(node.config.toolName, agent)) return failed(`Required tool is unavailable: ${node.config.toolName}`)

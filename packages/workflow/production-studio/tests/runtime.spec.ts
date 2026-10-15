@@ -10,16 +10,28 @@ import Storage from '@deepseek-ai/dsh-storage'
 import * as StorageJson from '@deepseek-ai/dsh-storage-json'
 import * as StorageDomain from '@deepseek-ai/dsh-storage-domain'
 import Subagent from '@deepseek-ai/dsh-subagent'
+import * as JsonlPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import * as Fork from '@deepseek-ai/dsh-subagent-fork-in-process'
 import { MockAdapter, textResponse, toolCallResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
 import ProductionStudio, { createProductionGraph, validateProductionGraph } from '../src/index.ts'
+import { ProductionChildren } from '../src/child-activation.ts'
+import { TestSessionQuery } from '../../../subagent/subagent/tests/test-session-query.ts'
+import { PtcRuntime, type PtcRunRequest, type PtcRunResult } from '../../../ptc-runtime/ptc-runtime/src/index.ts'
 import { defineContentToolFixture, defineTool } from '@deepseek-ai/dsh-tools'
 import { applyReadTool } from '@deepseek-ai/dsh-tool-fs/src/read.ts'
 import { writeFixtureCase } from './fixture-case.ts'
 import type { ProductionGraph, ProductionRun } from '../src/types.ts'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
-import type { StreamChunk } from '@deepseek-ai/dsh-llm'
+
+/** Scripted runtime keeps the real PTC tool dispatch and its policy checks. */
+class PolicyPtcRuntime extends PtcRuntime {
+  readonly language = 'typescript'
+  readonly isolation = 'fake'
+  behavior: (request: PtcRunRequest) => Promise<PtcRunResult> = async () => ({ logs: [] })
+  resolve(request: PtcRunRequest) { return { ...request, cwd: request.cwd ?? process.cwd(), timeoutMs: request.timeoutMs ?? 1000 } }
+  run(request: PtcRunRequest) { return this.behavior(request) }
+}
 
 const contexts: Context[] = []
 const roots: string[] = []
@@ -28,23 +40,24 @@ afterEach(async () => {
   for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true })
 })
 
-async function harness(script?: StreamChunk[][]) {
+async function harness(script?: ConstructorParameters<typeof MockAdapter>[0], studio = true, mode: 'native' | 'ptc' = 'native') {
   const root = await mkdtemp(join(tmpdir(), 'dsh-production-'))
   roots.push(root)
   const ctx = new Context()
   contexts.push(ctx)
-  await mountAgentLoopTestDependencies(ctx)
   await ctx.plugin(FsLocal, { cwd: root })
+  await mountAgentLoopTestDependencies(ctx, { workingDirectory: true, tools: { mode } })
   await ctx.plugin(Storage)
   await ctx.plugin(StorageJson, { root: join(root, 'state') })
   await ctx.plugin(StorageDomain, { backend: 'json' })
+  await ctx.plugin(JsonlPersistence, { root: join(root, 'sessions') })
   await ctx.plugin(Subagent)
   await ctx.plugin(Fork)
   const driver = await mountAgentLoopTestHarness(ctx)
   const adapter = new MockAdapter(script ?? [textResponse('I am done; all checks passed')])
   ctx.llm.registerAdapter(['mock'], adapter)
   const agent = await driver.create(SessionId('production-parent'), { provider: 'mock', model: 'mock' }, { cwd: root })
-  const serviceFiber = await ctx.plugin(ProductionStudio)
+  const serviceFiber = await ctx.plugin(studio ? ProductionStudio : () => {})
   const { input, receipt } = await writeFixtureCase(root)
   const execute = (name: string, callId: string) => ctx.tools.execute({
     callId: ToolCallId(callId), name, arguments: {}, agent, signal: new AbortController().signal,
@@ -138,6 +151,123 @@ describe('production scheduling and delivery', () => {
     expect(run.phase).toBe('blocked')
     expect(run.tasks.find(task => task.nodeId === 'delivery')?.phase).toBe('waiting')
     expect(invocations).toBe(2)
+  })
+
+  it('restricts a reserved child before its first request, denies late tools, and leaves its parent usable', async () => {
+    const { ctx, agent, adapter } = await harness(['hang'], false)
+    const children = new ProductionChildren(ctx)
+    const calls: string[] = []
+    const register = (name: string, owner = ctx) => owner.tools.register(defineContentToolFixture({
+      name, description: 'Observed fixture capability', parameters: {},
+      execute: async () => { calls.push(name); return [{ type: 'text', text: 'fixture' }] },
+    }))
+    register('read_only')
+    register('source_write')
+    register('rhino_modify')
+    const controller = new AbortController()
+    const child = await children.start({ provider: 'fork', label: 'Restricted inspection',
+      request: { parent: agent, prompt: [{ type: 'text', text: 'Inspect only' }] }, signal: controller.signal }, { runId: 'run', nodeId: 'inspect', attempt: 1 }, ['read_only'])
+    try {
+      await vi.waitFor(() => expect(adapter.requests).toHaveLength(1))
+      expect(adapter.requests[0]!.tools?.map(tool => tool.name)).toEqual(['read_only'])
+      const local = ctx.agents.get(child.childId)
+      if (!local) throw new Error('Expected live reserved child')
+      register('late_global_write')
+      register('late_child_write', local.ctx)
+      const execute = (name: string, owner = local) => ctx.tools.execute({
+        callId: ToolCallId(`policy-${name}`), name, arguments: {}, agent: owner, signal: new AbortController().signal,
+      })
+      for (const name of ['source_write', 'rhino_modify', 'late_global_write', 'late_child_write']) {
+        const denied = await execute(name).catch(() => ({ isError: true }))
+        expect(denied.isError).toBe(true)
+      }
+      expect(calls).toEqual([])
+      await execute('read_only')
+      await execute('source_write', agent)
+      expect(calls).toEqual(['read_only', 'source_write'])
+      controller.abort()
+      expect((await child.result).stopReason).toBe('aborted')
+    } finally { await child.dispose() }
+  })
+
+  it('retains PTC transport for allowed capabilities while denying nested writes and an empty tool list', async () => {
+    const { ctx, agent, adapter } = await harness(['hang', 'hang'], false, 'ptc')
+    await ctx.plugin(PolicyPtcRuntime)
+    const children = new ProductionChildren(ctx)
+    const calls: string[] = []
+    ctx.tools.register(defineTool({ name: 'read_only', description: 'Read fixture', parameters: {},
+      output: { schema: { type: 'string' }, render: (_args, value) => [{ type: 'text', text: value }] },
+      execute: async () => { calls.push('read'); return 'read' } }))
+    const runtime = ctx.ptcRuntime as PolicyPtcRuntime
+    for (const tools of [['read_only'], []]) {
+      const child = await children.start({ provider: 'fork', label: 'PTC inspection',
+        request: { parent: agent, prompt: [{ type: 'text', text: 'Inspect' }] }, signal: new AbortController().signal },
+      { runId: 'ptc-run', nodeId: 'inspect', attempt: 1 }, tools)
+      try {
+        await vi.waitFor(() => expect(adapter.requests).toHaveLength(tools.length ? 1 : 2))
+        expect(adapter.requests.at(-1)!.tools?.map(tool => tool.name) ?? []).toEqual(tools.length ? ['run_code'] : [])
+        const local = ctx.agents.get(child.childId)
+        if (!local) throw new Error('Expected PTC child')
+        local.ctx.tools.register(defineTool({ name: 'late_child_write', description: 'Write fixture', parameters: {},
+          output: { schema: { type: 'string' }, render: (_args, value) => [{ type: 'text', text: value }] },
+          execute: async () => { calls.push('write'); return 'write' } }))
+        runtime.behavior = async (request) => {
+          const bindings = request.bindings[0]!.functions
+          expect(await bindings.read_only!({})).toBe('read')
+          await expect(bindings.late_child_write!({})).rejects.toThrow('does not allow')
+          return { logs: [] }
+        }
+        const result = await ctx.tools.execute({ callId: ToolCallId(`ptc-${tools.length}`), name: 'run_code',
+          arguments: { code: 'fixture', description: 'Read fixture' }, agent: local, signal: new AbortController().signal })
+        expect(result.isError).toBe(tools.length === 0)
+      } finally { await child.dispose() }
+    }
+    expect(calls).toEqual(['read'])
+  })
+
+  it('rejects an activation that never confirms the reserved child and disposes that exact receipt', async () => {
+    const { ctx, agent, adapter } = await harness(undefined, false)
+    const children = new ProductionChildren(ctx)
+    const dispose = vi.fn(async () => {})
+    const start = vi.spyOn(ctx.subagents, 'startActivation').mockResolvedValue({
+      childId: SessionId('wrong-child'), result: Promise.resolve({ output: [], stopReason: 'completed' }), dispose,
+    })
+    try {
+      await expect(children.start({ provider: 'fork', label: 'Bound task',
+        request: { parent: agent, prompt: [] }, signal: new AbortController().signal }, { runId: 'run', nodeId: 'inspect', attempt: 1 }, [])).rejects.toThrow('reserved identity')
+      expect(dispose).toHaveBeenCalledOnce()
+      expect(adapter.requests).toEqual([])
+    } finally { start.mockRestore() }
+  })
+
+  it('refuses production child cold resume and direct reopen after settlement and policy reload', async () => {
+    const { ctx, agent, adapter } = await harness([textResponse('inspected')], false)
+    await ctx.plugin(TestSessionQuery)
+    let children: ProductionChildren | undefined
+    let owner = await ctx.plugin({ inject: ['tools', 'agents', 'subagents'], apply: (inner) => { children = new ProductionChildren(inner) } })
+    if (!children) throw new Error('Expected policy owner')
+    const child = await children.start({ provider: 'fork', label: 'One-shot inspection',
+      request: { parent: agent, prompt: [{ type: 'text', text: 'Inspect once' }] }, signal: new AbortController().signal },
+    { runId: 'run', nodeId: 'inspect', attempt: 1 }, [])
+    expect((await child.result).stopReason).toBe('completed')
+    await child.dispose()
+    for (let reload = 0; reload < 2; reload++) {
+      await expect(ctx.subagents.sendMessage(agent, child.childId, [{ type: 'text', text: 'Continue with more tools' }],
+        { signal: new AbortController().signal })).rejects.toThrow(/no matching live run attempt|unavailable|continuation|follow-up/)
+      await expect(ctx.agents.resume({ resumeSessionId: child.childId, parentAgent: agent,
+        agentOptions: { provider: 'mock', model: 'mock' } })).rejects.toThrow('no matching live run attempt')
+      await owner.dispose()
+      owner = await ctx.plugin({ inject: ['tools', 'agents', 'subagents'], apply: (inner) => { children = new ProductionChildren(inner) } })
+    }
+    expect(adapter.requests).toHaveLength(1)
+  })
+
+  it('refuses a reserved-namespace child without a surviving run attempt before any first request', async () => {
+    const { ctx, agent, adapter } = await harness(undefined, false)
+    await ctx.plugin({ inject: ['tools', 'agents', 'subagents'], apply: (inner) => { new ProductionChildren(inner) } })
+    await expect(ctx.agents.create({ sessionId: SessionId('production-studio-child-interrupted-before-publication'),
+      parentAgent: agent, agentOptions: { provider: 'mock', model: 'mock' } })).rejects.toThrow('no matching live run attempt')
+    expect(adapter.requests).toHaveLength(0)
   })
 
   it('runs an actual forked child but rejects its claim of completed objective checks', async () => {
@@ -238,7 +368,7 @@ describe('production scheduling and delivery', () => {
     ctx.tools.register(defineContentToolFixture({ name: 'finalize_candidate', description: 'Trusted native boundary fixture', parameters: { node: { type: 'string' } }, execute: async (_args, exec) => { invocations++; if (invocations === 1) throw new Error('Fixture revision is stale'); await ctx.productionStudio.noteNativeDispatch(exec.callId); return [{ type: 'text', text: JSON.stringify(receipt) }] } }))
     const saved = await ctx.productionStudio.saveGraph(agent.id, { expectedVersion: 1, graph: programGraph() })
     await ctx.productionStudio.start(agent.id, { graphVersion: saved.graph.version, objective: 'Repair a known rejection', goalContractAcknowledged: true, input: { ...input, deliveryGoal: { kind: 'verified-drawings', objectiveText: 'Repair a known rejection' } } })
-    await vi.waitFor(async () => { expect((await current(ctx, agent.id)).phase).toBe('complete') })
+    await vi.waitFor(async () => { expect((await current(ctx, agent.id)).phase).toBe('complete') }, { timeout: 10_000 })
     const run = await current(ctx, agent.id)
     expect(run.history.some(item => item.nodeId === 'baseline' && item.phase === 'blocked')).toBe(true)
     expect(run.history.some(item => item.phase === 'unknown')).toBe(false)
@@ -402,7 +532,7 @@ describe('production scheduling and delivery', () => {
     await agent.whenIdle()
     expect(dispatched).toBe(1)
     expect(adapter.requests).toHaveLength(2)
-    const invocation = ctx.sessionProjections.stateOf(agent.session, 'productionNativeInvocations')['declared-native-call']
+    const invocation = ctx.sessionProjections.stateOf(agent.session, 'productionNativeInvocations')!['declared-native-call']
     expect(invocation).toMatchObject({ callCount: 1, resultCount: 1, callEvent: { data: { name } },
       resultEvent: { data: { message: { isError: false } } } })
     expect((await ctx.productionStudio.get(agent.id)).error).toBeUndefined()
@@ -416,10 +546,10 @@ describe('production scheduling and delivery', () => {
     await agent.whenIdle()
     await serviceFiber.dispose()
     await ctx.plugin(ProductionStudio)
-    const before = ctx.sessionProjections.stateOf(agent.session, 'productionNativeInvocations')['late-call']
+    const before = ctx.sessionProjections.stateOf(agent.session, 'productionNativeInvocations')!['late-call']
     expect(before).toMatchObject({ callCount: 1, resultCount: 1 })
     ctx.effect(() => ctx.productionStudio.registerNativeBoundaryProvider(['future_native_command']))
-    expect(ctx.sessionProjections.stateOf(agent.session, 'productionNativeInvocations')['late-call']).toEqual(before)
+    expect(ctx.sessionProjections.stateOf(agent.session, 'productionNativeInvocations')!['late-call']).toEqual(before)
   })
 
   it('keeps provider-declared unknown operations quarantined across Sessions while XML failures stay independent', async () => {
@@ -436,7 +566,7 @@ describe('production scheduling and delivery', () => {
     await expect(ctx.productionStudio.noteNativeDispatch(ToolCallId('uncertain-declared'))).rejects.toThrow('No matching trusted')
     expect((await execute('rhino_api_lookup', 'lookup-during')).isError).toBe(true)
     const other = await ctx.agents.create({ sessionId: SessionId('other-native-owner'), agentOptions: { provider: 'mock', model: 'mock' } })
-    const blocked = await ctx.tools.execute({ callId: ToolCallId('foreign-native'), name: 'verify_stage_plan', arguments: {}, agent: other, signal: new AbortController().signal })
+    const blocked = await ctx.tools.execute({ callId: ToolCallId('foreign-native'), name: 'verify_stage_plan', arguments: {}, agent: other.agent, signal: new AbortController().signal })
     expect(blocked.isError).toBe(true)
     expect(nativeCalls).toBe(1); expect(lookupCalls).toBe(2)
     expect((await ctx.productionStudio.get(agent.id)).error).toContain('uncertain result')

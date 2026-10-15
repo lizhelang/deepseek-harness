@@ -22,6 +22,7 @@ type CancellableRhinoLoader = Rhino3dmLoader & {
 }
 
 /**
+ * Decode borrowed 3DM bytes within the shared timeout and document lifetime.
  * @param source - Borrowed model bytes.
  * @param limits - Total decode lifetime.
  * @param signal - Document lifetime.

@@ -4,10 +4,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createConversationGraph } from '@deepseek-ai/dsh-production-studio/src/domain.ts'
 import { ResponsibilityFlow } from '../src/client/ResponsibilityFlow.tsx'
 import { isAeaResponsibilityGraph, responsibilityRows } from '../src/client/responsibility-flow.ts'
-import { en, type ProductionStudioKey } from '../src/client/locales.ts'
+import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
+import { en as commonEn } from '@deepseek-ai/dsh-client-locale/src/locales/en.ts'
+import { en } from '../src/client/locales.ts'
 import { graph } from './fixtures.ts'
 
-const t = (key: ProductionStudioKey) => en[key]
+const t = makeTranslate(en, commonEn)
 afterEach(cleanup)
 
 describe('three-lane responsibility projection', () => {

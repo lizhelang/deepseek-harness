@@ -49,9 +49,15 @@ The conversation adapter retains AEA Host's bounded search, required manufacturi
 
 A trusted provider can return `outlet: 'failure', terminal: true` when its Host confirms that no executable continuation remains. The service retains the known receipt and blocks the current node without routing to repair or requesting an after-node human decision. Ordinary failures retain their repair routes and configured human decisions; an unresolved receipt still takes precedence as unknown. Terminal flags inside tool receipt data alone do not change execution.
 
+A known terminal failure retains the node’s immutable incoming boundary, so explicit recovery can compare later repair receipts with the original failed state. Normal routed outcomes still consume that boundary; recovery does not reset evidence, attempts or budgets.
+
 ### Unbound scheduled runs
 
 Without a conversation provider, `start` requires a graph version, objective, JSON input and `goalContractAcknowledged: true`. `input.deliveryGoal` must contain `kind: 'verified-drawings'` and the exact objective as `objectiveText`; optional piece, weld, bend and manufacturing-score limits become frozen acceptance conditions. Scheduled runs capture their graph and input at start; draft edits affect later scheduled runs. Independent scheduled branches and real child agents remain supported.
+
+Scheduled agent nodes reserve a child Session ID before `ctx.subagents.startActivation` with `mode: 'one-shot'` and `delivery: 'caller'`. The service installs the node tool allowlist before the child's first model request and guards direct execution, including tools registered later. An empty allowlist forbids every tool and code transport; a nonempty list permits `run_code` as transport while its inner tool calls remain subject to the allowlist. The child must confirm the reserved identity, exact live parent and initial message; a provider that cannot honor a reserved local child ID is rejected without an unrestricted fallback. Evidence includes only new tool events from that child, excluding inherited or sibling history. Cancellation and cleanup belong to the activation.
+
+The shared subagent service records a durable one-shot descriptor and rejects follow-up input and cold resume across profiles, including profiles without Production Studio. The Production Studio child-ID prefix and live reservation checks add in-process protection; they do not replace the durable descriptor or its owner’s continuation checks.
 
 The default scheduled graph uses the confirmed limited trial: baseline first, with legal `finish_search(reason="user_requested")` when permitted, and necessary optimization after failure or an unmet condition. Its narrow baseline tool list and child-owned evidence remain separate from bound conversation execution. Pause and human decisions affect the chosen scheduled branch; other independent branches continue.
 
@@ -160,5 +166,3 @@ The supported execution modes have distinct limits:
 None.
 
 </details>
-
-A known terminal failure retains the node’s immutable incoming boundary, so explicit recovery can compare later repair receipts with the original failed state. Normal routed outcomes still consume that boundary; recovery does not reset evidence, attempts or budgets.

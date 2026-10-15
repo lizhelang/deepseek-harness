@@ -24,7 +24,10 @@ export interface Config {
     timeoutMs: number
   }
   /** Maximum Rhino parser lifetime in milliseconds, including local decoder initialization. */
-  rhino: { timeoutMs: number }
+  rhino: {
+    /** Maximum parser Worker lifetime in milliseconds. */
+    timeoutMs: number
+  }
 }
 
 /** Deployment limits applied before Office preview registration. */

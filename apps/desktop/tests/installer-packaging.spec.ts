@@ -77,6 +77,21 @@ describe('installer preparation preserves application dependencies', () => {
     expect(config.artifactName).toBe('deepseek-harness-${version}-${os}-${arch}-unsigned.${ext}')
   })
 
+  it('binds local fork source hashes without an official feed or mandatory update policy', async () => {
+    const { createElectronBuilderConfig } = await import('../scripts/electron-builder-config.mjs')
+    const source = { upstreamCommit: 'b'.repeat(40), preservedSourceCommit: 'c'.repeat(40), preservedDiffSha256: 'd'.repeat(64) }
+    const env = { DSH_DESKTOP_APP_ID: 'com.deepseek.dsh', DSH_DESKTOP_UNSIGNED: '1',
+      DSH_DESKTOP_BUILD_COMMIT: 'a'.repeat(40), DSH_DESKTOP_BUILD_DIRTY: '0',
+      DSH_DESKTOP_LOCAL_FORK_METADATA: JSON.stringify(source) }
+    const config = createElectronBuilderConfig(env, 'darwin', 'arm64')
+    expect(config.publish).toBeNull()
+    expect(config.extraMetadata).toMatchObject({ dshDesktopAppId: 'com.deepseek.dsh', dshBuildCommit: 'a'.repeat(40),
+      dshLocalFork: { schemaVersion: 2, sourceCommit: 'a'.repeat(40), sourceDirty: false, ...source, officialUpdates: 'disabled' } })
+    expect(config.extraMetadata).not.toHaveProperty('dshMandatoryUpdatePolicy')
+    expect(() => createElectronBuilderConfig({ ...env, DSH_DESKTOP_LOCAL_FORK_METADATA: '{"invalid":true}' }, 'darwin', 'arm64'))
+      .toThrow('invalid source hashes')
+  })
+
   it('packages every preload entry point the shell loads', async () => {
     const { readdirSync, readFileSync } = await import('node:fs')
     const sourceDirectory = new URL('../src/', import.meta.url)

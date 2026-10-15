@@ -9,7 +9,7 @@ English | [中文](2026-10-08-production-continuation-rpc-id.zh.md)
 
 ## Summary
 
-Adds an optional rpcId to user-approval message sources for uniquely identified workflow continuations.
+Adds an optional rpcId to user-approval message sources for uniquely identified workflow continuations, retaining the producer-owned working-directory attribution introduced by the preceding acknowledgement.
 
 ## Table of Contents
 
@@ -27,32 +27,32 @@ id: 2026-10-08-production-continuation-rpc-id
 baseline: false
 changes:
   - root: "event:agent/inbox/spliced"
-    previous: "2026-09-21-user-question-reply"
-    after: "fb3152ce785a267a88dce7edf550774364f68fda6f3790a5713b8032d0a02e4b"
+    previous: "2026-10-13-user-rpc-principal"
+    after: "07621d6df107e9dc7b4dc16c22e10dd5f2395f13691b54e0fb9f47ecbdb911cb"
     decision: same-version
   - root: "event:developer/message"
-    previous: "2026-09-21-user-question-reply"
-    after: "461637493f4aee23632422039f79bbf09281a62fa5ab8dc7c2acedca7b46e85a"
+    previous: "2026-10-13-user-rpc-principal"
+    after: "0b5885b5b5bc6c3cc92239e137b822db07d7d0e148cceae26f44e039218dfb91"
     decision: same-version
   - root: "event:session/title-llm-request"
-    previous: "2026-09-21-user-question-reply"
-    after: "8ccbf21ab0186887def2414725d29cdee72740ed7d57a71bd0f535703063fe4c"
+    previous: "2026-10-13-user-rpc-principal"
+    after: "22fbf8931a403735e180fe4ee93d006fe6f9996a1af255263bc2f8d3762b0a2e"
     decision: same-version
   - root: "event:user/message"
-    previous: "2026-09-21-user-question-reply"
-    after: "a19a83e2ecd043392193537ca190ebecfd25754985c1008fc3bc26b35db52038"
+    previous: "2026-10-13-user-rpc-principal"
+    after: "d179121f4cb52dc48571eea3bc38c579f90e1556c2a87468d25e9a2ff46fc11b"
     decision: same-version
 ```
 
 <a id="compatibility"></a>
 ## Compatibility
 
-Existing Session records remain valid and retain their original meaning. The optional field records an authenticated control request; it grants no tool permission and does not authorize replay. The production domain retains settlement evidence in existing JSON evidence fields; historical native leases without that metadata remain unknown.
+Existing Session records retain their meaning. Readers accept the optional rpcId as attribution only; it grants no tool permission and does not authorize replay. The merged source union retains working-directory notices and their declared unknown-attribution policy. Historical native leases without settlement metadata remain unknown. The Session writer version and finalized records are unchanged.
 
 <a id="verification"></a>
 ## Verification
 
-Focused native reconciliation tests pass, including exact original call binding, restart after partial settlement writes, duplicate continuation refusal, one user-approval message with its request ID, and unchanged attempts/executions. The real Loader test confirms automatic pre-native rejection settlement without tool replay.
+pnpm exec vitest run packages/workflow/production-studio/tests/conversation.spec.ts packages/workflow/production-studio/tests/native-reconciliation.spec.ts: 62 tests passed. Coverage includes request-id attribution, duplicate continuation refusal, restart reconciliation and unchanged execution attempts. pnpm exec vitest run packages/subagent/subagent/tests: 445 tests passed.
 
 <a id="dev-note"></a>
 ## Dev Note

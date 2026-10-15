@@ -89,8 +89,8 @@ export function SessionLogDownloadHeaderAction(props: SessionLogDownloadHeaderPr
         )}
       />
       <Modal
-        className={css.referenceDialog}
-        contentClassName={css.referenceContent}
+        className={css.referenceDialog ?? ''}
+        contentClassName={css.referenceContent ?? ''}
         open={reference?.sessionId === sessionId}
         onClose={() => { setReference(null) }}
         title={t(reference?.copied ? 'reference.copied' : 'reference.failed')}

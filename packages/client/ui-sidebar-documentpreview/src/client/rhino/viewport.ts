@@ -15,6 +15,7 @@ export interface RhinoViewport {
 }
 
 /**
+ * Attach a Z-up viewport whose controls and GPU context end on disposal.
  * @param container - Empty viewport element.
  * @param model - Decoded model retained by the caller.
  * @param label - Accessible viewport description.

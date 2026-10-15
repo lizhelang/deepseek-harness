@@ -6,13 +6,20 @@ let parseRhino: typeof import('../src/client/rhino/parse.ts').parseRhino
 vi.mock('../src/client/rhino/wireframe.ts', () => ({ parseRhinoWireframe: vi.fn(async () => ({ objects: [], brepCount: 0, unmeshedBrepCount: 0, unmeshedFaceCount: 0, omittedEdgeCount: 0 })) }))
 
 const state = vi.hoisted(() => ({ instances: [] as FakeLoader[], waitForWorker: false, revoke: vi.fn() }))
+class FakeWorker extends EventTarget implements Worker {
+  onerror: Worker['onerror'] = null
+  onmessage: Worker['onmessage'] = null
+  onmessageerror: Worker['onmessageerror'] = null
+  readonly postMessage = vi.fn<(message: unknown, transferOrOptions?: Transferable[] | StructuredSerializeOptions) => void>()
+  readonly terminate = vi.fn()
+}
 class FakeLoader {
   workerSourceURL = ''
   received?: ArrayBuffer
   complete?: (model: Object3D) => void
   fail?: () => void
   readonly dispose = vi.fn()
-  readonly worker = { terminate: vi.fn() }
+  readonly worker = new FakeWorker()
   readonly pending = Promise.withResolvers<Worker>()
   constructor(readonly manager: LoadingManager) { state.instances.push(this) }
   setWorkerLimit() { return this }
@@ -78,7 +85,7 @@ it('terminates a worker created after an aborted library initialization', async 
   await rejected
   const loader = state.instances[0]!
   loader.workerSourceURL = 'blob:late-worker'
-  loader.pending.resolve(loader.worker as Worker)
+  loader.pending.resolve(loader.worker)
   await vi.waitFor(() => { expect(loader.worker.terminate).toHaveBeenCalledOnce() })
   expect(state.revoke).toHaveBeenCalledWith('blob:late-worker')
 })

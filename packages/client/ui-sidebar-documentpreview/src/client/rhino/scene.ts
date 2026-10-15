@@ -16,7 +16,11 @@ export interface RhinoSceneInfo {
   readonly warnings: readonly string[]
 }
 
-/** @param model - Decoded Rhino scene. @returns Displayed object counts, layers, and decoder warnings. */
+/**
+ * Summarize distinct drawable objects and reported preview limitations.
+ * @param model - Decoded Rhino scene.
+ * @returns Displayed object counts, layers, and decoder warnings.
+ */
 export function inspectRhinoScene(model: Object3D): RhinoSceneInfo {
   const all = new Set<string>()
   const visible = new Set<string>()
@@ -48,7 +52,11 @@ function drawable(object: Object3D): object is Mesh | Line | Points | Sprite {
   return object instanceof Mesh || object instanceof Line || object instanceof Points || object instanceof Sprite
 }
 
-/** @param model - Scene whose visible finite geometry is measured. @returns Bounds, or undefined when no finite geometry is visible. */
+/**
+ * Measure the finite bounds of visible drawable objects.
+ * @param model - Scene whose visible finite geometry is measured.
+ * @returns Bounds, or undefined when no finite geometry is visible.
+ */
 export function rhinoBounds(model: Object3D): Box3 | undefined {
   model.updateMatrixWorld(true)
   const bounds = new Box3()
@@ -60,12 +68,18 @@ export function rhinoBounds(model: Object3D): Box3 | undefined {
   return bounds.isEmpty() ? undefined : bounds
 }
 
-/** @param model - Decoded model. @param index - File layer index. @param visible - Requested layer visibility. */
+/**
+ * Apply a preview layer override while retaining source and parent-layer hiding.
+ * @param model - Decoded model.
+ * @param index - File layer index.
+ * @param visible - Requested layer visibility.
+ */
 export function setRhinoLayerVisible(model: Object3D, index: number, visible: boolean): void {
   changeRhinoLayer(model, index, visible)
 }
 
 /**
+ * Fit the orthographic camera to the model bounds in the requested direction.
  * @param camera - Orthographic preview camera.
  * @param bounds - Finite model bounds.
  * @param aspect - Viewport width divided by height.
@@ -91,7 +105,10 @@ export function frameRhinoCamera(camera: OrthographicCamera, bounds: Box3, aspec
   return center
 }
 
-/** @param model - Retired model or scene. Releases shared resources once, including label textures. */
+/**
+ * Release each shared geometry, material, and texture once, including label textures.
+ * @param model - Retired model or scene.
+ */
 export function disposeRhinoScene(model: Object3D): void {
   const geometries = new Set<BufferGeometry>()
   const materials = new Set<Material>()

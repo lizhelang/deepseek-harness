@@ -9,7 +9,7 @@ kind: persistence-change
 
 ## 概述
 
-为 user-approval 消息来源增加可选 rpcId，用于具有唯一身份的工作流继续执行请求。
+为 user-approval 消息来源添加可选 rpcId，以唯一标识工作流继续请求，同时保留前序确认记录引入的生产方工作目录归属。
 
 ## 目录
 
@@ -27,32 +27,32 @@ id: 2026-10-08-production-continuation-rpc-id
 baseline: false
 changes:
   - root: "event:agent/inbox/spliced"
-    previous: "2026-09-21-user-question-reply"
-    after: "fb3152ce785a267a88dce7edf550774364f68fda6f3790a5713b8032d0a02e4b"
+    previous: "2026-10-13-user-rpc-principal"
+    after: "07621d6df107e9dc7b4dc16c22e10dd5f2395f13691b54e0fb9f47ecbdb911cb"
     decision: same-version
   - root: "event:developer/message"
-    previous: "2026-09-21-user-question-reply"
-    after: "461637493f4aee23632422039f79bbf09281a62fa5ab8dc7c2acedca7b46e85a"
+    previous: "2026-10-13-user-rpc-principal"
+    after: "0b5885b5b5bc6c3cc92239e137b822db07d7d0e148cceae26f44e039218dfb91"
     decision: same-version
   - root: "event:session/title-llm-request"
-    previous: "2026-09-21-user-question-reply"
-    after: "8ccbf21ab0186887def2414725d29cdee72740ed7d57a71bd0f535703063fe4c"
+    previous: "2026-10-13-user-rpc-principal"
+    after: "22fbf8931a403735e180fe4ee93d006fe6f9996a1af255263bc2f8d3762b0a2e"
     decision: same-version
   - root: "event:user/message"
-    previous: "2026-09-21-user-question-reply"
-    after: "a19a83e2ecd043392193537ca190ebecfd25754985c1008fc3bc26b35db52038"
+    previous: "2026-10-13-user-rpc-principal"
+    after: "d179121f4cb52dc48571eea3bc38c579f90e1556c2a87468d25e9a2ff46fc11b"
     decision: same-version
 ```
 
 <a id="compatibility"></a>
 ## 兼容性
 
-已有 Session 记录仍然有效且语义不变。可选字段记录经过认证的控制请求，不授予工具权限，也不允许重放。生产领域通过已有 JSON 证据字段保留结清证据；没有这些元数据的历史原生租约仍保持未知。
+已有 Session 记录保持原意。读取器将可选 rpcId 仅作为归属信息，它不授予工具权限，也不授权重放。合并后的来源联合类型保留工作目录通知及已声明的未知归属策略。缺少结算元数据的历史原生租约仍为 unknown。Session 写入版本与已定版记录保持不变。
 
 <a id="verification"></a>
 ## 验证
 
-定向原生对账测试通过，覆盖原调用精确绑定、部分结清写入后的重启、重复继续执行请求拒绝、带请求 ID 的唯一 user-approval 消息以及尝试／执行次数保持不变。真实 Loader 测试确认执行前拒绝可自动结清且不重放工具。
+pnpm exec vitest run packages/workflow/production-studio/tests/conversation.spec.ts packages/workflow/production-studio/tests/native-reconciliation.spec.ts：62 个测试通过，覆盖请求 ID 归属、重复继续拒绝、重启核对以及执行尝试数保持。pnpm exec vitest run packages/subagent/subagent/tests：445 个测试通过。
 
 <a id="dev-note"></a>
 ## 开发备注

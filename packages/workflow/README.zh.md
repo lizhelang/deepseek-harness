@@ -9,7 +9,7 @@ kind: "package-group"
 
 ## 概述
 
-workflow 组支持编排脚本与生产流程图。`workflow` 工具将脚本中的工作委派给 subagent；需显式启用的 `ralph` 工具运行固定的全新 agent 序列。Production Studio 运行显式生产流程图，保存监控状态与交付证据。脚本使用共享 PTC Node 进程运行时，遵守调用 Session 的文件策略；各自运行时负责执行与子 agent 生命周期。
+workflow 组支持编排脚本与生产流程图。`workflow` 工具将脚本中的工作委派给 subagent。Production Studio 运行显式生产流程图，保存监控状态与交付证据。脚本使用共享 PTC Node 进程运行时，遵守调用 Session 的文件策略；各自运行时负责执行与子 agent 生命周期。
 
 ## 目录
 
@@ -27,7 +27,6 @@ workflow 组支持编排脚本与生产流程图。`workflow` 工具将脚本中
 | [`workflow`](workflow/README.zh.md) | 运行由模型编写的、扇出 subagent 的编排脚本 | `ctx.workflowEngine` |
 | [`workflow-ptc`](workflow-ptc/README.zh.md) | 通过共享的沙箱化 PTC Node 进程运行时执行工作流脚本 | 注册到 `ctx.workflowEngine` |
 | [`tool-workflow`](tool-workflow/README.zh.md) | 把 `workflow` 工具交给模型，用于脚本化多 agent 编排 | 注册到 `ctx.tools` |
-| [`tool-ralph`](tool-ralph/README.zh.md) | 把 `ralph` 工具交给模型，用于全新 agent 迭代循环 | 注册到 `ctx.tools` |
 | [`production-studio`](production-studio/README.zh.md) | 运行持久生产流程图，执行客观检查并接受明确的人工决策 | `ctx.productionStudio` |
 
 -----
@@ -39,8 +38,8 @@ workflow 组支持编排脚本与生产流程图。`workflow` 工具将脚本中
 - [生成的工具目录](../../docs/tool-catalog.zh.md#deepseek-aidsh-tool-workflow)——模型接收的 `workflow` 工具 schema。
 - [生成的工具目录](../../docs/tool-catalog.zh.md#deepseek-aidsh-tool-ralph)——模型接收的 `ralph` 工具 schema。
 - [生成的配置目录](../../docs/config-catalog.zh.md#deepseek-aidsh-workflow-ptc)——每个受支持的引擎配置字段。
-- [动态工作流 Agent Note](../../.agents/notes/implemented/feature/2026-07-05-dynamic-workflows.zh.md)——seam 设计及其决策。
-- [Harness 层目标式执行 Agent Note](../../.agents/notes/implemented/feature/2026-07-16-harness-level-loop.zh.md)——固定全新 agent 循环的设计与暂缓事项。
+- [历史动态工作流 Agent Note](../../.agents/notes/archived/feature/2026-07-05-dynamic-workflows.md)——seam 设计及其决策。
+- [Harness 层目标式执行 参考](../experimental/tool-ralph/README.zh.md)——固定全新 agent 循环的设计与暂缓事项。
 
 -----
 

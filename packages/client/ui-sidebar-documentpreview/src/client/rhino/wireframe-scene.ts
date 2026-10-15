@@ -2,7 +2,11 @@
 import { BufferGeometry, Float32BufferAttribute, Group, Line, LineBasicMaterial, type Object3D } from 'three'
 import type { RhinoWireframe } from './wireframe.ts'
 
-/** @param model - Official loader scene. @param wireframe - Worker-decoded edges for Breps with missing meshes. */
+/**
+ * Add available non-definition Brep edge previews and record missing-surface counts.
+ * @param model - Official loader scene.
+ * @param wireframe - Worker-decoded edges for Breps with missing meshes.
+ */
 export function addRhinoWireframes(model: Object3D, wireframe: RhinoWireframe): void {
   let shown = 0
   const layers: unknown = model.userData.layers

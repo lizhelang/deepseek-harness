@@ -89,7 +89,7 @@ describe('Trajectory business records', () => {
     expect(overview?.spans.map(span => span.index)).toEqual([1, 2, 3])
     expect(overview?.turnBoundaries).toEqual([{ turn: 1, time: 0 }])
     expect(deriveTrajectoryTimeline(mixed, 'actual')?.turnBoundaries).toHaveLength(1)
-    const { container } = render(<TrajectoryTable turns={mixed} t={t} renderImages={() => null}
+    const { container } = render(<TrajectoryTable turns={mixed} t={t} renderSlot={() => null} loadImage={async () => { throw new Error('Record fixture contains no image attachments') }}
       collapsedTurns={new Set()} onToggleTurn={() => {}}
       collapsedAssistants={new Set()} onToggleAssistant={() => {}} />)
     expect(Array.from(container.querySelectorAll('tr[data-trajectory-row-key]'), row => row.getAttribute('data-record-index')))

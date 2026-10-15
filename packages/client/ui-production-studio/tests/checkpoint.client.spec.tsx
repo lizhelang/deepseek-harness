@@ -14,16 +14,14 @@ import { TrajectoryTable } from '../../ui-trajectory/src/client/TrajectoryTable.
 import { t as trajectoryT } from '../../ui-trajectory/tests/locale.client.ts'
 import { productionChatDefinition, productionTrajectoryDefinition } from '../src/client/checkpoint.ts'
 import { ProductionCheckpointView } from '../src/client/ProductionCheckpoint.tsx'
+import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
+import { en as commonEn } from '@deepseek-ai/dsh-client-locale/src/locales/en.ts'
 import { en } from '../src/client/locales.ts'
 import type {} from '../src/client/index.ts'
 import { run } from './fixtures.ts'
 
 afterEach(cleanup)
-const t: TranslateNS<'productionStudio'> = (key, params = {}) =>
-  en[key as keyof typeof en].replace(/\{(\w+)\}/g, (_match, name: string) => {
-    const value = params[name]
-    return typeof value === 'string' || typeof value === 'number' ? String(value) : ''
-  })
+const t: TranslateNS<'productionStudio'> = makeTranslate(en, commonEn)
 const trajectoryDefinition = productionTrajectoryDefinition(t)
 
 function checkpoint(seq: number, phase: 'running' | 'complete' | 'unknown'): SessionLiveEventEntry {
@@ -115,7 +113,7 @@ describe('committed production checkpoint replay', () => {
     const snapshot = h.trajectory()
     const turns = deriveTrajectoryLayout({ ...snapshot, nodes: snapshot.eventNodes }, trajectoryT)
     const { container, rerender } = render(<TrajectoryTable turns={turns} t={trajectoryT}
-      renderImages={() => null} collapsedTurns={new Set()} onToggleTurn={() => {}}
+      renderSlot={() => null} loadImage={async () => { throw new Error('Record fixture contains no image attachments') }} collapsedTurns={new Set()} onToggleTurn={() => {}}
       collapsedAssistants={new Set()} onToggleAssistant={() => {}} />)
     const row = container.querySelector('tr[data-kind="record"][data-trajectory-row-key]')!
     expect(row.textContent).toContain('production/checkpoint')
@@ -131,7 +129,7 @@ describe('committed production checkpoint replay', () => {
     h.assembler.append(checkpoint(12, 'complete'))
     const updated = h.trajectory()
     rerender(<TrajectoryTable turns={deriveTrajectoryLayout({ ...updated, nodes: updated.eventNodes }, trajectoryT)} t={trajectoryT}
-      renderImages={() => null} collapsedTurns={new Set()} onToggleTurn={() => {}}
+      renderSlot={() => null} loadImage={async () => { throw new Error('Record fixture contains no image attachments') }} collapsedTurns={new Set()} onToggleTurn={() => {}}
       collapsedAssistants={new Set()} onToggleAssistant={() => {}} />)
     expect(screen.getByRole('tabpanel').textContent).toContain('revision: 9')
     expect(screen.getByRole('tabpanel').textContent).toContain('unknown')

@@ -6,6 +6,8 @@ import { createSnapshotStore, type ObservableSnapshot, type SnapshotSelectorHook
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import { createConversationGraph } from '@deepseek-ai/dsh-production-studio/src/domain.ts'
 import type { ProductionRun } from '@deepseek-ai/dsh-production-studio/types'
+import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
+import { en as commonEn } from '@deepseek-ai/dsh-client-locale/src/locales/en.ts'
 import { en } from '../src/client/locales.ts'
 import type {} from '../src/client/index.ts'
 import { createStudioDraftStore } from '../src/client/stores.ts'
@@ -15,11 +17,7 @@ import type { StudioReadState, StudioSurfaceProps, StudioViewProps, StudioDockPr
 import { deliveredRun, run, snapshot } from './fixtures.ts'
 
 afterEach(cleanup)
-const t: TranslateNS<'productionStudio'> = (key, params = {}) =>
-  en[key as keyof typeof en].replace(/\{(\w+)\}/g, (_match, name: string) => {
-    const value = params[name]
-    return typeof value === 'string' || typeof value === 'number' ? String(value) : ''
-  })
+const t: TranslateNS<'productionStudio'> = makeTranslate(en, commonEn)
 function hook<T>(source: ObservableSnapshot<T>): SnapshotSelectorHook<T> {
   const subscribe = (listener: () => void) => source.subscribe(listener)
   const getSnapshot = () => source.getSnapshot()
@@ -33,7 +31,12 @@ function fixture(runs = [run('running', 'running')]) {
     saveGraph: vi.fn(async () => null), start: vi.fn(async () => null), pause: vi.fn(async () => null),
     resume: vi.fn(async () => null), answer: vi.fn(async () => null), reconcile: vi.fn(async () => null), refresh: vi.fn(),
   }
-  return { props, read, drafts }
+  // The business-view fixture supplies navigation owners; unused framework seats
+  // retain the existing surface-only test double used by the dock fixtures.
+  const viewProps: StudioViewProps = { ...props as StudioViewProps,
+    inspectCall: undefined, viewRequest: null, openView: vi.fn(), completeViewRequest: vi.fn(),
+  }
+  return { props, viewProps, read, drafts }
 }
 function conversationFixture(current: ProductionRun) {
   const b = fixture([current])
@@ -215,7 +218,7 @@ describe('production surfaces', () => {
   })
   it('edits real nodes, preserves start input and requires explicit saved-workflow start', async () => {
     const b = fixture([])
-    const { container } = render(<ProductionWorkflowView {...b.props as StudioViewProps} />)
+    const { container } = render(<ProductionWorkflowView {...b.viewProps} />)
     fireEvent.change(screen.getByLabelText(en['start.objective']), { target: { value: 'Deliver verified cut files' } })
     fireEvent.change(screen.getByLabelText(en['start.input']), { target: { value: '{"modelPath":"/source.3dm"}' } })
     act(() => { b.read.set({ snapshot: { ...snapshot(), revision: 5 }, loading: false, error: null }) })
@@ -233,7 +236,7 @@ describe('production surfaces', () => {
   })
   it('connects typed ports, rejects incompatible connections and protects delivery gates', () => {
     const b = fixture([])
-    const { container } = render(<ProductionWorkflowView {...b.props as StudioViewProps} />)
+    const { container } = render(<ProductionWorkflowView {...b.viewProps} />)
     fireEvent.click(screen.getByText(en['editor.addAgent']))
     fireEvent.click(screen.getByRole('button', { name: 'Connect from baseline output success' }))
     fireEvent.click(screen.getByRole('button', { name: 'Connect to Independent review agent input input' }))
@@ -246,7 +249,7 @@ describe('production surfaces', () => {
   })
   it('retains unfinished gate JSON across node switches and refuses to save the older parsed value', () => {
     const b = fixture([])
-    const { container } = render(<ProductionWorkflowView {...b.props as StudioViewProps} />)
+    const { container } = render(<ProductionWorkflowView {...b.viewProps} />)
     const select = (id: string) => { fireEvent.click(container.querySelector(`[data-production-node="${id}"] button`)!) }
     fireEvent.click(screen.getByRole('button', { name: en['editor.addGate'] }))
     fireEvent.change(screen.getByLabelText(en['field.expected']), { target: { value: '{' } })
@@ -258,7 +261,7 @@ describe('production surfaces', () => {
   })
   it('binds explicit numeric delivery conditions and resets their acknowledgement when edited', async () => {
     const b = fixture([])
-    render(<ProductionWorkflowView {...b.props as StudioViewProps} />)
+    render(<ProductionWorkflowView {...b.viewProps} />)
     expect(screen.getByText(en['start.goalScope'])).toBeTruthy()
     fireEvent.change(screen.getByLabelText(en['start.objective']), { target: { value: 'One piece, no welds' } })
     fireEvent.change(screen.getByLabelText(en['start.maxPieces']), { target: { value: '1' } })
@@ -277,7 +280,7 @@ describe('production surfaces', () => {
     const b = fixture([])
     const bound = { ...snapshot(), capabilities: { ...snapshot().capabilities, conversation: { provider: 'aea' } } }
     b.read.set({ snapshot: bound, loading: false, error: null })
-    const editor = render(<ProductionWorkflowView {...b.props as StudioViewProps} />)
+    const editor = render(<ProductionWorkflowView {...b.viewProps} />)
     expect(screen.queryByText(en['start.action'])).toBeNull()
     expect(screen.queryByLabelText(en['start.objective'])).toBeNull()
     expect(screen.getByText(en['conversation.autoStart'])).toBeTruthy()
@@ -296,7 +299,7 @@ describe('production surfaces', () => {
       { nodeId: 'files', phase: 'unknown', attempts: 1, message: 'Unresolved receipt', evidence: [], certificates: [], updatedAt: 2 })
     const b = fixture([current])
     b.read.set({ snapshot: { ...snapshot([current]), graph: authoritative, capabilities: { ...snapshot().capabilities, conversation: { provider: 'aea' } } }, loading: false, error: null })
-    const { container } = render(<ProductionWorkflowView {...b.props as StudioViewProps} />)
+    const { container } = render(<ProductionWorkflowView {...b.viewProps} />)
     expect(screen.getByText('Remaining goal check')).toBeTruthy()
     for (const [id, phase] of [['baseline', 'running'], ['geometry', 'complete'], ['files', 'unknown']]) {
       const element = container.querySelector(`[data-production-node="${id}"]`)!
@@ -320,7 +323,7 @@ describe('production surfaces', () => {
     current.tasks = current.tasks.map(task => ({ ...task, attempts: 0, admitted: false }))
     const b = fixture([current])
     b.read.set({ snapshot: { ...snapshot([current]), capabilities: { ...snapshot().capabilities, conversation: { provider: 'aea' } } }, loading: false, error: null })
-    const { container } = render(<ProductionWorkflowView {...b.props as StudioViewProps} />)
+    const { container } = render(<ProductionWorkflowView {...b.viewProps} />)
     fireEvent.click(container.querySelector('[data-production-node="baseline"] button')!)
     expect(screen.getByLabelText<HTMLInputElement>(en['field.provider']).readOnly).toBe(true)
     expect(screen.getByLabelText<HTMLInputElement>(en['field.model']).readOnly).toBe(true)
@@ -347,7 +350,7 @@ describe('production surfaces', () => {
       ? { ...node, kind, config: kind === 'human' ? { question: 'Approve the same run?' } : { breakBefore: true, prompt: 'Original role' } } : node) }
     current.tasks = current.tasks.map(task => ({ ...task, admitted: true, attempts: 0 }))
     const b = conversationFixture(current)
-    const { container } = render(<ProductionWorkflowView {...b.props as StudioViewProps} />)
+    const { container } = render(<ProductionWorkflowView {...b.viewProps} />)
     const { capture } = pointerCanvas()
     const assertLocked = () => {
       fireEvent.click(container.querySelector('[data-production-node="baseline"] button')!)
@@ -391,7 +394,7 @@ describe('production surfaces', () => {
     const current = { ...run('legacy', legacy.phase), mode: 'conversation' as const }
     current.tasks = current.tasks.map(task => ({ ...task, ...legacy }))
     const b = conversationFixture(current)
-    const { container } = render(<ProductionWorkflowView {...b.props as StudioViewProps} />)
+    const { container } = render(<ProductionWorkflowView {...b.viewProps} />)
     fireEvent.click(container.querySelector('[data-production-node="baseline"] button')!)
     expect(container.querySelector<HTMLFieldSetElement>('[data-production-inspector] fieldset')?.disabled).toBe(true)
     expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Connect from baseline output success' }).disabled).toBe(true)
@@ -402,7 +405,7 @@ describe('production surfaces', () => {
     const current = { ...run('layout', phase), mode: 'conversation' as const }
     current.tasks = current.tasks.map(task => ({ ...task, admitted: true, attempts: 0 }))
     const b = conversationFixture(current)
-    const { container } = render(<ProductionWorkflowView {...b.props as StudioViewProps} />)
+    const { container } = render(<ProductionWorkflowView {...b.viewProps} />)
     const { canvas } = pointerCanvas()
     const title = container.querySelector('[data-production-node="baseline"] button')!
     pointer(title, 'pointerdown', 10, 10)
@@ -421,7 +424,7 @@ describe('production surfaces', () => {
     const current = { ...run('future-wire', 'ready'), mode: 'conversation' as const }
     current.tasks = current.tasks.map(task => ({ ...task, attempts: 0, admitted: false }))
     const b = conversationFixture(current)
-    const { container } = render(<ProductionWorkflowView {...b.props as StudioViewProps} />)
+    const { container } = render(<ProductionWorkflowView {...b.viewProps} />)
     fireEvent.click(screen.getByRole('button', { name: en['editor.addHuman'] }))
     const { canvas } = pointerCanvas()
     const input = screen.getByRole('button', { name: `Connect to ${en['node.newHuman']} input input` })
@@ -449,7 +452,7 @@ describe('production surfaces', () => {
     current.tasks = current.tasks.map(task => ({ ...task, admitted: true, attempts: 0 }))
     current.graph = { ...current.graph, nodes: current.graph.nodes.map(node => node.id === 'geometry' ? { ...node, protected: false } : node) }
     const b = conversationFixture(current)
-    const { container } = render(<ProductionWorkflowView {...b.props as StudioViewProps} />)
+    const { container } = render(<ProductionWorkflowView {...b.viewProps} />)
     fireEvent.click(container.querySelector('[data-production-node="geometry"] button')!)
     expect(container.querySelector<HTMLFieldSetElement>('[data-production-inspector] fieldset')?.disabled).toBe(false)
     expect(screen.getByRole<HTMLButtonElement>('button', { name: en['editor.delete'] }).disabled).toBe(true)
@@ -465,7 +468,7 @@ describe('production surfaces', () => {
   })
   it('keeps unsaved future edits during a remote graph update and reloads only on request', () => {
     const b = fixture([])
-    render(<ProductionWorkflowView {...b.props as StudioViewProps} />)
+    render(<ProductionWorkflowView {...b.viewProps} />)
     fireEvent.click(screen.getByText(en['editor.addHuman']))
     const next = snapshot()
     next.graph = { ...next.graph, version: 2, nodes: next.graph.nodes.map(node => ({ ...node, label: `Current ${node.id}` })) }
@@ -484,7 +487,7 @@ it('defaults the canonical AEA graph to lanes and inserts a connected future gat
   current.mode = 'conversation'; current.graph = createConversationGraph(24, [])
   current.tasks = []
   const b = conversationFixture(current)
-  const view = render(<ProductionWorkflowView {...b.props} />)
+  const view = render(<ProductionWorkflowView {...b.viewProps} />)
   expect(screen.getByText(en['responsibility.aea'])).toBeTruthy()
   expect(view.container.querySelector('[data-production-canvas]')).toBeNull()
   const before = screen.getAllByRole('button', { name: en['responsibility.addGate'] })
@@ -503,7 +506,7 @@ it('moves detached additions to the connection editor and hides old scheduled ph
   current.graph = createConversationGraph(24, []); current.mode = 'scheduled'
   const b = fixture([current])
   b.read.set({ snapshot: { ...snapshot([current]), graph: current.graph }, loading: false, error: null })
-  const view = render(<ProductionWorkflowView {...b.props} />)
+  const view = render(<ProductionWorkflowView {...b.viewProps} />)
   expect(view.container.querySelector('[data-responsibility-node="baseline"] [data-phase="complete"]')).not.toBeNull()
   fireEvent.click(screen.getByRole('button', { name: en['editor.addGate'] }))
   expect(view.container.querySelector('[data-production-canvas]')).not.toBeNull()

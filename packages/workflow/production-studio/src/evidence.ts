@@ -5,6 +5,7 @@ import type { KvTable } from '@deepseek-ai/dsh-storage-domain'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import type { ProductionEvidence } from './types.ts'
 
+/** Persisted diagnostic text and the Session identity required for exact readback. */
 export const evidenceBlobSchema = z.object({ sessionId: z.string(), text: z.string() }).strict()
 type EvidenceBlob = z.infer<typeof evidenceBlobSchema>
 const referenceSchema = z.object({ productionEvidenceReference: z.object({

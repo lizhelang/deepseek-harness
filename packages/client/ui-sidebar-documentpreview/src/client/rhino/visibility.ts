@@ -48,7 +48,11 @@ function effectiveLayers(layers: readonly LayerRecord[]): Map<number, boolean> {
   return result
 }
 
-/** @param model - Decoded model with optional preview layer overrides. @returns Layer labels and inherited hiding. */
+/**
+ * Resolve layer visibility with preview overrides and parent-layer hiding.
+ * @param model - Decoded model with optional preview layer overrides.
+ * @returns Layer labels and inherited hiding.
+ */
 export function readRhinoLayers(model: Object3D): readonly RhinoLayer[] {
   const layers = layerRecords(model)
   const effective = effectiveLayers(layers)
@@ -56,7 +60,10 @@ export function readRhinoLayers(model: Object3D): readonly RhinoLayer[] {
     hiddenByParent: layer.visible && effective.get(layer.index) === false }))
 }
 
-/** @param model - Scene whose display visibility is refreshed without changing source attributes. */
+/**
+ * Combine source object hiding with effective layer visibility for display.
+ * @param model - Scene whose display visibility is refreshed without changing source attributes.
+ */
 export function applyRhinoVisibility(model: Object3D): void {
   const effective = effectiveLayers(layerRecords(model))
   model.traverse((object) => {
@@ -73,7 +80,12 @@ export function applyRhinoVisibility(model: Object3D): void {
   })
 }
 
-/** @param model - Preview model. @param index - File layer index. @param visible - Requested layer visibility. */
+/**
+ * Save one model-local layer override and refresh display visibility.
+ * @param model - Preview model.
+ * @param index - File layer index.
+ * @param visible - Requested layer visibility.
+ */
 export function changeRhinoLayer(model: Object3D, index: number, visible: boolean): void {
   let values = overrides.get(model)
   if (!values) { values = new Map(); overrides.set(model, values) }

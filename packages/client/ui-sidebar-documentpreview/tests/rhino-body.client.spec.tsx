@@ -7,7 +7,7 @@ import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { RhinoBody } from '../src/client/rhino/rhino.tsx'
 import type { RhinoBodyProps } from '../src/client/rhino/types.ts'
 import { en } from '../src/client/rhino/locales.ts'
-import { harness } from './fixtures.client.ts'
+import { ADDRESS, TAB_ID, harness } from './fixtures.client.ts'
 
 const calls = vi.hoisted(() => ({ parse: vi.fn(), viewport: vi.fn() }))
 vi.mock('../src/client/rhino/parse.ts', () => ({ parseRhino: calls.parse }))
@@ -22,10 +22,11 @@ beforeEach(() => {
 afterEach(cleanup)
 function props(bytes = new Uint8Array([1])): RhinoBodyProps {
   const h = harness()
-  const signal = new AbortController().signal
   return { ...h.props(), content: { kind: 'bytes', data: bytes }, limits: { timeoutMs: 1000 },
-    useTabInfo: () => ({ tab: { signal } }), t: makeTranslate(en),
-  } as RhinoBodyProps
+    addResource: (address) => { h.face.addResource(TAB_ID, address, h.controller.signal) },
+    setResources: (addresses) => { h.face.setResources(TAB_ID, addresses, h.controller.signal) },
+    resourceAddress: ADDRESS, wrap: false, scrollportRef: vi.fn(), t: makeTranslate(en),
+  }
 }
 function model() {
   const object = new Group()

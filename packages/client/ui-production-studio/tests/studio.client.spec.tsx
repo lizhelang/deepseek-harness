@@ -41,6 +41,13 @@ function conversationFixture(current: ProductionRun) {
     capabilities: { ...snapshot().capabilities, conversation: { provider: 'aea' } } }, loading: false, error: null })
   return b
 }
+function settledFailureRun(): ProductionRun {
+  const failed = run('settled-failure', 'blocked')
+  failed.mode = 'conversation'; failed.phase = 'blocked'
+  failed.tasks[0]!.settledOperationId = 'settled-call'
+  failed.history = [{ nodeId: 'baseline', phase: 'blocked', attempt: 1, message: 'Known failure', time: 2 }]
+  return failed
+}
 function pointerCanvas() {
   const canvas = screen.getByRole('group', { name: en['editor.canvas'] })
   const capture = vi.fn()
@@ -92,7 +99,52 @@ describe('production surfaces', () => {
     render(<TaskMonitor {...b.props} read={b.read.getSnapshot()} />)
     expect(screen.queryByText(en['branch.resume'])).toBeNull()
     expect(screen.queryByText(en['task.resume'])).toBeNull()
+    expect(screen.queryByText(en['branch.pause'])).toBeNull()
+    expect(screen.queryByText(en['task.pause'])).toBeNull()
     expect(screen.getByText(en['branch.blocked'])).toBeTruthy()
+  })
+  it.each(['task', 'branch'] as const)('pauses a settled conversation failure through the %s control before offering resume', async (control) => {
+    const failed = settledFailureRun(), b = conversationFixture(failed)
+    const { rerender } = render(<TaskMonitor {...b.props} read={b.read.getSnapshot()} />)
+    expect(screen.queryByText(en['task.resume'])).toBeNull()
+    expect(screen.queryByText(en['branch.resume'])).toBeNull()
+    await act(async () => { fireEvent.click(screen.getByText(en[`${control}.pause`])) })
+    const ref = { runId: failed.id, revision: failed.revision, ...(control === 'branch' ? { nodeId: 'baseline' } : {}) }
+    expect(b.props.pause).toHaveBeenCalledWith(ref)
+    expect(b.props.resume).not.toHaveBeenCalled()
+    const paused = structuredClone(failed)
+    paused.phase = 'paused'; paused.revision++; paused.tasks[0]!.phase = 'paused'
+    rerender(<TaskMonitor {...b.props} read={{ ...b.read.getSnapshot(), snapshot: snapshot([paused]) }} />)
+    await act(async () => { fireEvent.click(screen.getByText(en[`${control}.resume`])) })
+    expect(b.props.resume).toHaveBeenCalledWith({ ...ref, revision: paused.revision })
+  })
+  it.each<{ reason: string; change: (failed: ProductionRun) => void }>([
+    { reason: 'scheduled work', change: (failed) => { failed.mode = 'scheduled' } },
+    { reason: 'exhausted execution budget', change: (failed) => { failed.executions = failed.graph.maxExecutions } },
+    { reason: 'no settled receipt', change: (failed) => { delete failed.tasks[0]!.settledOperationId } },
+    { reason: 'an in-flight invocation', change: (failed) => { failed.tasks[0]!.operationId = 'pending-call' } },
+    { reason: 'another unknown branch', change: (failed) => { failed.tasks.push({ ...failed.tasks[0]!, nodeId: 'geometry', phase: 'unknown' }) } },
+    { reason: 'no last transition', change: (failed) => { failed.history = [] } },
+    { reason: 'a later non-failure transition', change: (failed) => { failed.history.push({ ...failed.history[0]!, phase: 'complete' }) } },
+    { reason: 'a failed verification node', change: (failed) => { failed.graph.nodes[0]!.kind = 'gate' } },
+  ])('keeps the settled-failure pause unavailable for $reason', ({ change }) => {
+    const failed = settledFailureRun(); change(failed)
+    const b = conversationFixture(failed)
+    render(<TaskMonitor {...b.props} read={b.read.getSnapshot()} />)
+    expect(screen.queryByText(en['task.pause'])).toBeNull()
+    expect(screen.queryByText(en['branch.pause'])).toBeNull()
+    expect(screen.queryByText(en['task.resume'])).toBeNull()
+    expect(screen.queryByText(en['branch.resume'])).toBeNull()
+  })
+  it('offers settled-failure pause only on the last failed branch', async () => {
+    const failed = settledFailureRun()
+    failed.graph.nodes.push({ ...failed.graph.nodes[0]!, id: 'repair', label: 'repair' })
+    failed.tasks.push({ ...failed.tasks[0]!, nodeId: 'repair' })
+    failed.history.push({ ...failed.history[0]!, nodeId: 'repair' })
+    const b = conversationFixture(failed)
+    render(<TaskMonitor {...b.props} read={b.read.getSnapshot()} />)
+    await act(async () => { fireEvent.click(screen.getByText(en['branch.pause'])) })
+    expect(b.props.pause).toHaveBeenCalledWith({ runId: failed.id, revision: failed.revision, nodeId: 'repair' })
   })
   it('lists verified delivered files directly, separates workshop acceptance and copies the exact saved path', async () => {
     const writeText = vi.fn(async () => {})
@@ -142,6 +194,24 @@ describe('production surfaces', () => {
     expect(screen.getByText('Workpiece running')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: en['refresh'] }))
     expect(b.props.refresh).toHaveBeenCalledOnce()
+  })
+  it('shows current conversation recovery in the dock and summary while retaining the earlier blocked branch', () => {
+    const current = run('recovering', 'blocked')
+    current.mode = 'conversation'
+    current.tasks[0]!.message = 'Earlier baseline failure'
+    current.graph.nodes.push({ ...current.graph.nodes[0]!, id: 'repair', label: 'repair' })
+    current.tasks.push({ ...current.tasks[0]!, nodeId: 'repair', phase: 'running', message: 'Repair is underway' })
+    const b = conversationFixture(current)
+    const { container } = render(<ProductionDock {...b.props as StudioDockProps} />)
+    expect(screen.getByText(t('dock.summary', { attention: 0, running: 1, waiting: 0, paused: 0, done: 0 }))).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: en['dock.expand'] }))
+    const row = container.querySelector('[data-production-run="recovering"]')!
+    expect(row.closest('[data-production-group]')?.getAttribute('data-production-group')).toBe('running')
+    expect(row.querySelector('summary')?.textContent).toContain('Repair is underway')
+    expect(row.querySelector('summary')?.textContent).not.toContain('Earlier baseline failure')
+    expect(screen.getByText('Earlier baseline failure')).toBeTruthy()
+    expect(b.props.resume).not.toHaveBeenCalled()
+    expect(b.props.start).not.toHaveBeenCalled()
   })
   it('edits real nodes, preserves start input and requires explicit saved-workflow start', async () => {
     const b = fixture([])

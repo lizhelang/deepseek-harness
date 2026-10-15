@@ -24,7 +24,9 @@ This browser plugin displays one conversation workflow in Chat, Trajectory, Task
 
 The Tasks view places blocked or unknown results first, then human decisions, waiting dependencies, running work, paused work and collapsed completed deliveries. Each workpiece is one row. Expanding it exposes Agent branches, then their attempts and observed evidence. Branch pause, resume, human input and unknown-result reconciliation call the actual Host methods with the run revision.
 
-Completed deliveries expose verified files directly, including absolute path, byte count, SHA-256 and a Copy path action. These rows use the completed delivery branch's latest internal `production_aea_evidence` receipt, never model output. Geometry, manufacturing, saved-file and goal verification remain distinct from workshop acceptance and physical refolding. Resume is offered only for paused work; blocked conversation work keeps its diagnostics and can receive supported future-node edits or additional chat input without starting another task.
+Completed deliveries expose verified files directly, including absolute path, byte count, SHA-256 and a Copy path action. These rows use the completed delivery branch's latest internal `production_aea_evidence` receipt, never model output. Geometry, manufacturing, saved-file and goal verification remain distinct from workshop acceptance and physical refolding.
+
+Resume is offered only for paused work. A blocked conversation offers Pause task and Pause branch for its last settled failed Agent when execution budget remains and no task has an unknown result or pending invocation; the Host rechecks admission before reopening that node. After repairing the capability, pause then resume the same task. Blocked conversations retain their diagnostics and can receive supported future-node edits or additional chat input without starting another task.
 
 Workflow supports node movement, typed port connections, canvas pan/zoom and explicit future-node settings. Bound AEA conversations use the existing baseline, manufacturing and repair Agents, with additional checks or human decisions. They inherit the chat model; provider/model overrides are read-only. Running, completed and unknown nodes cannot change, and execution or attempt budgets cannot increase. Required delivery checks remain read-only and cannot be bypassed; the Host revalidates each save.
 
@@ -70,3 +72,5 @@ The UI does not change request history. Historical cards use their own committed
 ### Dev Note
 
 None.
+
+An active conversation with a running or ready recovery branch is summarized by that current branch. Historical blocked branches remain visible; unknown outcomes still take precedence, and scheduled mixed failures remain critical.

@@ -790,6 +790,7 @@ export const LINK_MAP: Readonly<Record<string, string>> = {
   WorkflowRunInfo: 'workflow.md',
   WorkflowStartRequest: 'workflow.md',
   ProductionSnapshot: 'workflow.md',
+  ProductionEvidence: 'workflow.md',
   ConversationWorkflowProvider: 'workflow.md',
   NativeReconciliationProvider: 'workflow.md',
   ProductionContinuation: 'workflow.md',

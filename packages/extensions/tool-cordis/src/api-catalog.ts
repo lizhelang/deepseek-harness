@@ -1753,10 +1753,10 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     description: 'Production Studio Host service and its authenticated Remote controller.',
     methods: [
       {
-        signature: 'registerNativeBoundaryProvider(toolNames: readonly string[]): () => void',
+        signature: 'registerNativeBoundaryProvider(toolNames: readonly string[], options: { readOnlyToolNames?: readonly string[] } = {}): () => void',
         description: 'Register trusted tool providers that mark the actual native dispatch point. The provider owns the returned disposer through its plugin effect.',
-        parameters: [{ name: 'toolNames', description: 'exact registered tool names implementing the dispatch marker.' }],
-        returns: 'disposer removing only this provider\'s declaration.',
+        parameters: [{ name: 'toolNames', description: 'exact registered tool names implementing the dispatch marker.' }, { name: 'options', description: 'exact read-only names exempt from legacy native-name inference; native declarations win conflicts.' }],
+        returns: 'disposer removing only this provider\'s declarations.',
       },
       {
         signature: 'async noteNativeDispatch(operationId: ToolCallIdentity): Promise<void>',
@@ -1823,6 +1823,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'Reconnect-safe projection stream for the same conversation.',
         parameters: [{ name: 'sessionId', description: 'owning conversation.' }, { name: 'signal', description: 'subscription lifetime.' }],
         returns: 'initial and committed subsequent snapshots.',
+      },
+      {
+        signature: '@Remote async readEvidence(sessionId: SessionId, evidence: ProductionEvidence): Promise<ProductionEvidence>',
+        description: 'Read a retained diagnostic observation without dispatching work or granting a certificate.',
+        parameters: [{ name: 'sessionId', description: 'active owning conversation.' }, { name: 'evidence', description: 'complete observation from its production snapshot or checkpoint.' }],
+        returns: 'original JSON after Session, SHA-256, byte-count and observation identity checks.',
       },
     ],
   },
@@ -4966,7 +4972,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ConversationWorkflowProvider',
-    declaration: 'export interface ConversationWorkflowProvider {\n    id: string;\n    toolNames: readonly string[];\n    appliesTo(agent: Agent): boolean;\n    start(call: {\n        agent: Agent;\n        name: string;\n        arguments: JsonValue;\n    }): {\n        key: string;\n        objective: string;\n        input: JsonValue;\n    } | undefined;\n    observe(call: {\n        nodeId: string;\n        name: string;\n        arguments: JsonValue;\n        receipt: JsonValue;\n        run: ProductionRun;\n    }): {\n        key?: string;\n        input?: JsonValue;\n        outlet?: ProductionOutlet;\n        message?: string;\n    } | undefined;\n}',
+    declaration: 'export interface ConversationWorkflowProvider {\n    id: string;\n    toolNames: readonly string[];\n    appliesTo(agent: Agent): boolean;\n    start(call: {\n        agent: Agent;\n        name: string;\n        arguments: JsonValue;\n    }): {\n        key: string;\n        objective: string;\n        input: JsonValue;\n    } | undefined;\n    observe(call: {\n        nodeId: string;\n        name: string;\n        arguments: JsonValue;\n        receipt: JsonValue;\n        run: ProductionRun;\n    }): {\n        key?: string;\n        input?: JsonValue;\n        outlet?: ProductionOutlet;\n        terminal?: true;\n        message?: string;\n    } | undefined;\n}',
   },
   {
     name: 'CordisDynamicPackageId',

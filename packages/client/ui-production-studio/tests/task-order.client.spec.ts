@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { branchGroup, matchesRun, orderedBranches, runGroup } from '../src/client/task-order.ts'
+import { branchGroup, matchesRun, orderedBranches, prominentBranch, runGroup } from '../src/client/task-order.ts'
 import { run } from './fixtures.ts'
 
 describe('workpiece priority', () => {
@@ -30,5 +30,27 @@ describe('workpiece priority', () => {
     expect(runGroup({ ...human, tasks: [...human.tasks, { ...human.tasks[0]!, nodeId: 'geometry', phase: 'unknown' }] })).toBe('critical')
     expect(runGroup({ ...human, tasks: [...human.tasks, { ...human.tasks[0]!, nodeId: 'geometry', phase: 'blocked' }] })).toBe('critical')
     expect(runGroup({ ...waiting, tasks: [] })).toBe('critical')
+  })
+  it.each(['running', 'ready'] as const)('shows an active conversation recovery as %s without discarding the earlier failure', (phase) => {
+    const current = run('repairing', 'blocked')
+    current.mode = 'conversation'
+    const failed = current.tasks[0]!
+    const recovery = { ...failed, nodeId: 'repair', phase, message: 'Repair underway' }
+    current.tasks.push(recovery)
+    expect(runGroup(current)).toBe('running')
+    expect(prominentBranch(current)).toBe(recovery)
+    expect(orderedBranches(current.tasks)[0]).toBe(failed)
+    const human = { ...failed, nodeId: 'approval', phase: 'human' as const }
+    const awaitingApproval = { ...current, tasks: [...current.tasks, human] }
+    expect(runGroup(awaitingApproval)).toBe('human')
+    expect(prominentBranch(awaitingApproval)).toBe(human)
+    const unknown = { ...failed, nodeId: 'unknown', phase: 'unknown' as const }
+    expect(runGroup({ ...current, tasks: [...current.tasks, unknown] })).toBe('critical')
+    expect(runGroup({ ...current, phase: 'unknown' })).toBe('critical')
+    expect(runGroup({ ...current, mode: 'scheduled' })).toBe('critical')
+    expect(prominentBranch({ ...current, mode: 'scheduled' })).toBe(failed)
+    expect(runGroup({ ...current, tasks: [failed] })).toBe('critical')
+    expect(prominentBranch({ ...current, tasks: [failed] })).toBe(failed)
+    expect(prominentBranch(run('done', 'complete'))).toBeUndefined()
   })
 })

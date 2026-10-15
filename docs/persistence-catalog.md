@@ -714,7 +714,7 @@ Source: [`packages/plan/plan-mode/src/index.ts:53`](../packages/plan/plan-mode/s
 'production/checkpoint': { run: ProductionRun }
 ```
 
-Source: [`packages/workflow/production-studio/src/types.ts:175`](../packages/workflow/production-studio/src/types.ts)
+Source: [`packages/workflow/production-studio/src/types.ts:177`](../packages/workflow/production-studio/src/types.ts)
 
 ### `request/*`
 
@@ -8157,7 +8157,7 @@ Sources: [`packages/web/web-search-deepseek/src/provider.ts:64`](../packages/web
 
 SHA-256: `72e434c3340c1a5933a384c8ca44a82e754c5ca472b876ac832c07f989ba7602`
 
-Sources: [`packages/workflow/production-studio/src/types.ts:175`](../packages/workflow/production-studio/src/types.ts)
+Sources: [`packages/workflow/production-studio/src/types.ts:177`](../packages/workflow/production-studio/src/types.ts)
 
 | Property | Presence | Type |
 |---|---|---|

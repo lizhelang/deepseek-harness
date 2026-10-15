@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { edgePath, graphFindings, newNode, portPoint } from '../src/client/graph-editor.ts'
+import { insertGateBefore, edgePath, graphFindings, newNode, portPoint } from '../src/client/graph-editor.ts'
 import { graph } from './fixtures.ts'
 
 describe('editable typed workflow', () => {
@@ -28,4 +28,29 @@ describe('editable typed workflow', () => {
     expect(edgePath({ x: 276, y: 128 }, { x: 330, y: 128 })).toContain('C')
     expect(edgePath({ x: 276, y: 528 }, { x: 330, y: 128 })).toContain('V28')
   })
+})
+
+
+it('inserts a typed read-only gate without replacing mandatory checks or granting a certificate', () => {
+  const value = graph()
+  value.nodes.find(node => node.id === 'geometry')!.config.toolName = 'production_aea_evidence'
+  const result = insertGateBefore(value, 'geometry', 'Extra geometry evidence')!
+  expect(result.node.config.certification).toBeUndefined()
+  expect(result.node.config.toolName).toBe('production_aea_evidence')
+  expect(result.node.inputs[0]?.type).toBe('candidate')
+  expect(result.node.outputs[0]?.type).toBe('candidate')
+  expect(result.graph.nodes.find(node => node.id === 'geometry')?.protected).toBe(true)
+  expect(result.graph.edges.find(edge => edge.id === 'main-0')?.toNode).toBe(result.node.id)
+  expect(result.graph.edges.find(edge => edge.fromNode === result.node.id && edge.fromPort === 'success')?.toNode).toBe('geometry')
+  expect(graphFindings(result.graph)).toEqual([])
+  expect(value.nodes).toHaveLength(6)
+})
+
+it('refuses an entry, unsupported checker, or ambiguous success boundary', () => {
+  const value = graph()
+  expect(insertGateBefore(value, 'baseline', 'Entry')).toBeNull()
+  expect(insertGateBefore(value, 'geometry', 'No checker')).toBeNull()
+  value.nodes.find(node => node.id === 'geometry')!.config.toolName = 'production_aea_evidence'
+  value.edges.push({ ...value.edges[0]!, id: 'duplicate' })
+  expect(insertGateBefore(value, 'geometry', 'Ambiguous')).toBeNull()
 })

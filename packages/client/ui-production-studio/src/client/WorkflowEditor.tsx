@@ -6,7 +6,9 @@ import type { ProductionGraph, ProductionNode, ProductionPortType } from '@deeps
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type { StudioViewProps } from './slots.ts'
-import { edgePath, graphFindings, newNode, portPoint, PORT_TYPES } from './graph-editor.ts'
+import { edgePath, graphFindings, insertGateBefore, newNode, portPoint, PORT_TYPES } from './graph-editor.ts'
+import { ResponsibilityFlow } from './ResponsibilityFlow.tsx'
+import { isAeaResponsibilityGraph } from './responsibility-flow.ts'
 import type { StudioGoalDraft } from './stores.ts'
 import css from './Studio.module.css'
 
@@ -133,8 +135,12 @@ export function ProductionWorkflowView(props: StudioViewProps) {
   const conversation = snapshot?.capabilities.conversation !== undefined
   const currentRun = conversation ? snapshot.runs.findLast(run => run.mode === 'conversation' && run.phase !== 'complete')
     ?? snapshot.runs.findLast(run => run.mode === 'conversation' && run.graph.version === snapshot.graph.version) : undefined
+  const displayedRun = currentRun ?? (drafts.dirty ? undefined
+    : snapshot?.runs.findLast(run => run.graph.version === snapshot.graph.version))
   const tasks = new Map(currentRun?.tasks.map(task => [task.nodeId, task]))
   const graph = drafts.dirty ? drafts.graph ?? snapshot?.graph : snapshot?.graph
+  const [chosenView, setChosenView] = useState<'responsibility' | 'graph' | null>(null)
+  const responsibilityView = chosenView === 'responsibility' || chosenView === null && graph !== undefined && isAeaResponsibilityGraph(graph)
   const baseVersion = drafts.dirty ? drafts.baseVersion ?? snapshot?.graph.version ?? 0 : snapshot?.graph.version ?? 0
   const lockedNode = (id: string): boolean => {
     const task = tasks.get(id)
@@ -160,6 +166,12 @@ export function ProductionWorkflowView(props: StudioViewProps) {
   const pendingRef = useRef(false)
   const drag = useRef<Drag | null>(null)
   const canvas = useRef<HTMLDivElement>(null)
+  const inspector = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (responsibilityView && selected !== null && typeof inspector.current?.scrollIntoView === 'function') {
+      inspector.current.scrollIntoView({ block: 'nearest' })
+    }
+  }, [selected, responsibilityView])
   const fitted = useRef(false)
   const viewRef = useRef(view)
   viewRef.current = view
@@ -169,6 +181,17 @@ export function ProductionWorkflowView(props: StudioViewProps) {
   const change = (next: ProductionGraph): void => { actions.graph(next, baseVersion); setMessage(null) }
   const updateNode = (node: ProductionNode): void => {
     if (graph !== undefined && !lockedNode(node.id)) change({ ...graph, nodes: graph.nodes.map(item => item.id === node.id ? node : item) })
+  }
+  const canAddGateBefore = (nodeId: string): boolean => graph !== undefined
+    && !lockedNode(nodeId) && graph.edges.filter(edge => edge.toNode === nodeId && graph.nodes
+    .find(node => node.id === edge.fromNode)?.outputs.find(port => port.id === edge.fromPort)?.outlet === 'success').every(edge => !lockedNode(edge.fromNode))
+    && insertGateBefore(graph, nodeId, '') !== null
+  const addGateBefore = (nodeId: string): void => {
+    if (graph === undefined || !canAddGateBefore(nodeId)) return
+    const result = insertGateBefore(graph, nodeId, t('node.newGate'))
+    if (result === null) return
+    change(result.graph); setSelected(result.node.id); setSelectedEdge(null)
+    setMessage(t('responsibility.gateAdded'))
   }
   const moveNode = (id: string, x: number, y: number): void => {
     if (graph !== undefined) change({ ...graph, nodes: graph.nodes.map(node => node.id === id ? { ...node, x, y } : node) })
@@ -227,7 +250,7 @@ export function ProductionWorkflowView(props: StudioViewProps) {
   }
   useEffect(() => {
     if (!fitted.current && graph !== undefined && canvas.current !== null) { fitted.current = true; fit() }
-  }, [graph])
+  }, [graph, responsibilityView])
   useEffect(() => {
     const element = canvas.current
     if (element === null) return
@@ -241,7 +264,7 @@ export function ProductionWorkflowView(props: StudioViewProps) {
     }
     element.addEventListener('wheel', wheel, { passive: false })
     return () => { element.removeEventListener('wheel', wheel) }
-  }, [graph !== undefined])
+  }, [graph !== undefined, responsibilityView])
   const findings = graph === undefined ? [] : graphFindings(graph)
   const findingText = (): string => findings.map((finding) => {
     switch (finding.kind) {
@@ -308,75 +331,85 @@ export function ProductionWorkflowView(props: StudioViewProps) {
     {conflict && <div className={css.error} role="alert">{t('editor.conflict')}<Button size="sm" variant="outline" onClick={() => { actions.loaded(snapshot.graph); setMessage(null) }}>{t('editor.reload')}</Button></div>}
     {read.error !== null && <p className={css.error} role="alert">{read.error}</p>}
     <div className={css.toolbar}>
+      <Button size="sm" variant={responsibilityView ? 'primary' : 'outline'} aria-pressed={responsibilityView}
+        onClick={() => { setChosenView('responsibility') }}>{t('responsibility.view')}</Button>
+      <Button size="sm" variant={responsibilityView ? 'outline' : 'primary'} aria-pressed={!responsibilityView}
+        onClick={() => { setChosenView('graph') }}>{t('responsibility.graphView')}</Button>
       {(['agent', 'gate', 'human'] as const).map(kind => <Button key={kind} size="sm" variant="outline" disabled={conversation && kind === 'agent'} title={conversation && kind === 'agent' ? t('editor.agentUnsupported') : undefined} onClick={() => {
         const node = newNode(graph, kind, t(kind === 'agent' ? 'node.newAgent' : kind === 'gate' ? 'node.newGate' : 'node.newHuman'))
-        change({ ...graph, nodes: [...graph.nodes, node] }); setSelected(node.id); setSelectedEdge(null)
+        change({ ...graph, nodes: [...graph.nodes, node] }); setSelected(node.id); setSelectedEdge(null); setChosenView('graph')
       }}>{t(kind === 'agent' ? 'editor.addAgent' : kind === 'gate' ? 'editor.addGate' : 'editor.addHuman')}</Button>)}
-      <Button size="sm" variant="ghost" onClick={fit}>{t('editor.fit')}</Button>
-      <Button size="sm" variant="ghost" aria-label={t('editor.zoomOut')} onClick={() => { setView(current => ({ ...current, zoom: Math.max(0.2, current.zoom / 1.2) })) }}>−</Button>
-      <span className={css.muted}>{Math.round(view.zoom * 100)}{'%'}</span>
-      <Button size="sm" variant="ghost" aria-label={t('editor.zoomIn')} onClick={() => { setView(current => ({ ...current, zoom: Math.min(2, current.zoom * 1.2) })) }}>+</Button>
+      {!responsibilityView && <>
+        <Button size="sm" variant="ghost" onClick={fit}>{t('editor.fit')}</Button>
+        <Button size="sm" variant="ghost" aria-label={t('editor.zoomOut')} onClick={() => { setView(current => ({ ...current, zoom: Math.max(0.2, current.zoom / 1.2) })) }}>−</Button>
+        <span className={css.muted}>{Math.round(view.zoom * 100)}{'%'}</span>
+        <Button size="sm" variant="ghost" aria-label={t('editor.zoomIn')} onClick={() => { setView(current => ({ ...current, zoom: Math.min(2, current.zoom * 1.2) })) }}>+</Button>
+      </>}
       <Button size="sm" variant="outline" onClick={() => { setMessage(findings.length > 0 ? findingText() : t('editor.valid')) }}>{t('editor.check')}</Button>
     </div>
-    <p className={css.muted}>{t('editor.canvasHelp')}</p>
-    <div ref={canvas} className={css.canvas} role="group" aria-label={t('editor.canvas')} data-production-canvas
-      onPointerDown={(event) => { if (event.target === event.currentTarget || (event.target instanceof SVGElement && event.target.tagName === 'svg')) {
-        setSelected(null); setSelectedEdge(null); setWire(null)
-        capture(event, { kind: 'pan', clientX: event.clientX, clientY: event.clientY, x: view.x, y: view.y })
-      } }} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={() => { drag.current = null; setWire(null) }}>
-      <div className={css.world} style={{ '--studio-x': `${view.x}px`, '--studio-y': `${view.y}px`, '--studio-zoom': view.zoom } as LocalStyle}>
-        <svg className={css.wires} width={4000} height={4000} aria-hidden="true">
-          {graph.edges.map((edge) => {
-            const from = graph.nodes.find(node => node.id === edge.fromNode)
-            const to = graph.nodes.find(node => node.id === edge.toNode)
-            if (from === undefined || to === undefined) return null
-            const outlet = from.outputs.find(port => port.id === edge.fromPort)?.outlet
-            if (!recoveryVisible && outlet !== 'success') return null
-            const path = edgePath(portPoint(from, edge.fromPort, true), portPoint(to, edge.toPort, false))
-            return <g key={edge.id} data-production-edge={edge.id}>
-              <path d={path} className={clsx(css.wire, outlet !== 'success' && css.recoveryWire, selectedEdge === edge.id && css.selectedWire)} />
-              <path d={path} className={css.wireHit} onClick={(event) => {
-                event.stopPropagation(); setSelectedEdge(edge.id); setSelected(null)
-              }} />
-            </g>
-          })}
-          {wire !== null && wireNode !== undefined && <path className={clsx(css.wire, css.selectedWire)}
-            d={edgePath(portPoint(wireNode, wire.port, true), ghost)} />}
-        </svg>
-        {graph.nodes.map((node) => {
-          const task = tasks.get(node.id)
-          return <article key={node.id} className={clsx(css.node, selected === node.id && css.selectedNode)}
-            data-production-node={node.id} data-phase={task?.phase} style={{ '--studio-x': `${node.x}px`, '--studio-y': `${node.y}px` } as LocalStyle} onClick={() => { setSelected(node.id); setSelectedEdge(null) }}>
-            <button type="button" className={css.nodeTitle} onPointerDown={(event) => {
-              setSelected(node.id); setSelectedEdge(null)
-              capture(event, { kind: 'node', id: node.id, clientX: event.clientX, clientY: event.clientY, x: node.x, y: node.y })
-            }}>{node.label}</button>
-            <div className={css.nodeKind}>{t(`node.${node.kind}`)}
-              {task !== undefined && <span className={css.phase} data-phase={task.phase}>{' · '}{t(`phase.${task.phase}`)}</span>}
-              {node.protected ? ' · ' + t('editor.protected') : ''}</div>
-            <div className={css.ports}>
-              <div>{node.inputs.map(port => <button key={port.id} type="button" className={css.inputPort} data-studio-input data-node={node.id} data-port={port.id}
-                aria-label={t('editor.connectTo', { node: node.label, port: port.id })} onClick={(event) => { event.stopPropagation(); connect(node.id, port.id) }}>
-                <span className={css.portDot} />{t(`port.${port.type}`)}</button>)}</div>
-              <div>{node.outputs.map(port => <button key={port.id} type="button" disabled={lockedNode(node.id)} className={css.outputPort} data-studio-output data-node={node.id} data-port={port.id}
-                data-outlet={port.outlet} aria-label={t('editor.connectFrom', { node: node.label, port: port.id })}
-                onPointerDown={(event) => {
-                  if (lockedNode(node.id)) return
-                  setWire({ node: node.id, port: port.id }); setGhost(portPoint(node, port.id, true))
-                  capture(event, { kind: 'wire', clientX: event.clientX, clientY: event.clientY })
-                }}
-                onClick={(event) => {
-                  event.stopPropagation()
-                  if (lockedNode(node.id)) return
-                  setWire({ node: node.id, port: port.id }); setGhost(portPoint(node, port.id, true))
-                }}>
-                {port.outlet === undefined ? t(`port.${port.type}`) : t(`outlet.${port.outlet}`)}<span className={css.portDot} /></button>)}</div>
-            </div>
-            <div className={css.nodeBudget}>{t('field.attempts')}{': '}{node.maxAttempts}{node.resource ? ' · ' + node.resource : ''}</div>
-          </article>})}
+    {responsibilityView ? <ResponsibilityFlow graph={graph} tasks={displayedRun?.tasks ?? []} conversation={conversation} t={t}
+      onSelect={(nodeId) => { setSelected(nodeId); setSelectedEdge(null) }}
+      onAddGateBefore={addGateBefore} canAddGateBefore={canAddGateBefore} /> : <>
+      <p className={css.muted}>{t('editor.canvasHelp')}</p>
+      <div ref={canvas} className={css.canvas} role="group" aria-label={t('editor.canvas')} data-production-canvas
+        onPointerDown={(event) => { if (event.target === event.currentTarget || (event.target instanceof SVGElement && event.target.tagName === 'svg')) {
+          setSelected(null); setSelectedEdge(null); setWire(null)
+          capture(event, { kind: 'pan', clientX: event.clientX, clientY: event.clientY, x: view.x, y: view.y })
+        } }} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={() => { drag.current = null; setWire(null) }}>
+        <div className={css.world} style={{ '--studio-x': `${view.x}px`, '--studio-y': `${view.y}px`, '--studio-zoom': view.zoom } as LocalStyle}>
+          <svg className={css.wires} width={4000} height={4000} aria-hidden="true">
+            {graph.edges.map((edge) => {
+              const from = graph.nodes.find(node => node.id === edge.fromNode)
+              const to = graph.nodes.find(node => node.id === edge.toNode)
+              if (from === undefined || to === undefined) return null
+              const outlet = from.outputs.find(port => port.id === edge.fromPort)?.outlet
+              if (!recoveryVisible && outlet !== 'success') return null
+              const path = edgePath(portPoint(from, edge.fromPort, true), portPoint(to, edge.toPort, false))
+              return <g key={edge.id} data-production-edge={edge.id}>
+                <path d={path} className={clsx(css.wire, outlet !== 'success' && css.recoveryWire, selectedEdge === edge.id && css.selectedWire)} />
+                <path d={path} className={css.wireHit} onClick={(event) => {
+                  event.stopPropagation(); setSelectedEdge(edge.id); setSelected(null)
+                }} />
+              </g>
+            })}
+            {wire !== null && wireNode !== undefined && <path className={clsx(css.wire, css.selectedWire)}
+              d={edgePath(portPoint(wireNode, wire.port, true), ghost)} />}
+          </svg>
+          {graph.nodes.map((node) => {
+            const task = tasks.get(node.id)
+            return <article key={node.id} className={clsx(css.node, selected === node.id && css.selectedNode)}
+              data-production-node={node.id} data-phase={task?.phase} style={{ '--studio-x': `${node.x}px`, '--studio-y': `${node.y}px` } as LocalStyle} onClick={() => { setSelected(node.id); setSelectedEdge(null) }}>
+              <button type="button" className={css.nodeTitle} onPointerDown={(event) => {
+                setSelected(node.id); setSelectedEdge(null)
+                capture(event, { kind: 'node', id: node.id, clientX: event.clientX, clientY: event.clientY, x: node.x, y: node.y })
+              }}>{node.label}</button>
+              <div className={css.nodeKind}>{t(`node.${node.kind}`)}
+                {task !== undefined && <span className={css.phase} data-phase={task.phase}>{' · '}{t(`phase.${task.phase}`)}</span>}
+                {node.protected ? ' · ' + t('editor.protected') : ''}</div>
+              <div className={css.ports}>
+                <div>{node.inputs.map(port => <button key={port.id} type="button" className={css.inputPort} data-studio-input data-node={node.id} data-port={port.id}
+                  aria-label={t('editor.connectTo', { node: node.label, port: port.id })} onClick={(event) => { event.stopPropagation(); connect(node.id, port.id) }}>
+                  <span className={css.portDot} />{t(`port.${port.type}`)}</button>)}</div>
+                <div>{node.outputs.map(port => <button key={port.id} type="button" disabled={lockedNode(node.id)} className={css.outputPort} data-studio-output data-node={node.id} data-port={port.id}
+                  data-outlet={port.outlet} aria-label={t('editor.connectFrom', { node: node.label, port: port.id })}
+                  onPointerDown={(event) => {
+                    if (lockedNode(node.id)) return
+                    setWire({ node: node.id, port: port.id }); setGhost(portPoint(node, port.id, true))
+                    capture(event, { kind: 'wire', clientX: event.clientX, clientY: event.clientY })
+                  }}
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    if (lockedNode(node.id)) return
+                    setWire({ node: node.id, port: port.id }); setGhost(portPoint(node, port.id, true))
+                  }}>
+                  {port.outlet === undefined ? t(`port.${port.type}`) : t(`outlet.${port.outlet}`)}<span className={css.portDot} /></button>)}</div>
+              </div>
+              <div className={css.nodeBudget}>{t('field.attempts')}{': '}{node.maxAttempts}{node.resource ? ' · ' + node.resource : ''}</div>
+            </article>})}
+        </div>
       </div>
-    </div>
-    <Checkbox label={t('editor.recovery')} checked={recoveryVisible} onChange={setRecoveryVisible} />
+      <Checkbox label={t('editor.recovery')} checked={recoveryVisible} onChange={setRecoveryVisible} />
+    </>}
     {activeEdge !== undefined && <div className={css.toolbar}>
       <span>{t('editor.connection', { from: activeEdge.fromNode, to: activeEdge.toNode })}</span>
       <Button size="sm" variant="outline" disabled={lockedNode(activeEdge.fromNode)} onClick={() => {
@@ -385,7 +418,7 @@ export function ProductionWorkflowView(props: StudioViewProps) {
       }}>{t('editor.deleteEdge')}</Button>
     </div>}
     {message !== null && <p className={css.feedback} role="status">{message}</p>}
-    {activeNode === undefined ? <p className={css.muted}>{t('editor.select')}</p> : <NodeInspector key={activeNode.id} node={activeNode} t={t} tools={snapshot.capabilities.tools}
+    <div ref={inspector}>{activeNode === undefined ? <p className={css.muted}>{t('editor.select')}</p> : <NodeInspector key={activeNode.id} node={activeNode} t={t} tools={snapshot.capabilities.tools}
       locked={lockedNode(activeNode.id)} removeLocked={lockedRemoval(activeNode.id)} conversation={conversation}
       maxAttempts={conversation ? snapshot.graph.nodes.find(node => node.id === activeNode.id)?.maxAttempts ?? activeNode.maxAttempts : 100}
       update={updateNode} jsonFields={drafts.jsonFields} writeJson={actions.json} remove={() => {
@@ -395,7 +428,7 @@ export function ProductionWorkflowView(props: StudioViewProps) {
           nodes: graph.nodes.filter(node => node.id !== activeNode.id),
           edges: graph.edges.filter(edge => edge.fromNode !== activeNode.id && edge.toNode !== activeNode.id),
         }); setSelected(null)
-      }} />}
+      }} />}</div>
     <div className={css.fields}>
       <label className={css.field}>{t('field.executions')}<Input type="number" min={1} max={conversation ? snapshot.graph.maxExecutions : 1000} aria-label={t('field.executions')} value={graph.maxExecutions}
         onChange={(event) => {

@@ -1177,7 +1177,7 @@ export class ProductionStudio extends TypertRemoteService {
     }
     if (node.config.toolName) {
       if (node.config.toolName !== 'production_aea_evidence' && !this.ctx.tools.get(node.config.toolName, agent)) return failed(`Required tool is unavailable: ${node.config.toolName}`)
-      const args = node.config.toolName === 'production_aea_evidence' ? { caseId: field(run.input, 'caseId') ?? null, caseFilePath: field(run.input, 'caseFilePath') ?? null, stage: node.config.certification ?? 'geometry', deliveryGoal: field(run.input, 'deliveryGoal') ?? null } : bind(node.config.arguments ?? run.input, run.input, upstream)
+      const args = node.config.toolName === 'production_aea_evidence' ? { caseId: field(run.input, 'caseId') ?? null, caseFilePath: field(run.input, 'caseFilePath') ?? null, stage: node.config.certification ?? field(node.config.arguments ?? null, 'stage') ?? 'geometry', deliveryGoal: field(run.input, 'deliveryGoal') ?? null } : bind(node.config.arguments ?? run.input, run.input, upstream)
       if (node.config.toolName === 'production_aea_evidence' && typeof args === 'object' && args !== null && !Array.isArray(args)) {
         delete args['receipt']
         for (const key of ['caseId', 'caseFilePath']) if (args[key] === null) {

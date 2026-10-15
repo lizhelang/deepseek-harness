@@ -4,7 +4,7 @@ import clsx from 'clsx'
 import { Button, Input, IconChevronRightOutlineRegular, writeClipboard } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ProductionRun, ProductionTask } from '@deepseek-ai/dsh-production-studio/types'
 import type { StudioSurfaceProps, StudioDockProps, StudioViewProps, StudioReadState } from './slots.ts'
-import { TASK_GROUPS, matchesRun, orderedBranches, runGroup } from './task-order.ts'
+import { TASK_GROUPS, matchesRun, orderedBranches, prominentBranch, runGroup } from './task-order.ts'
 import { verifiedDelivery } from './deliverables.ts'
 import css from './Studio.module.css'
 
@@ -12,6 +12,16 @@ import css from './Studio.module.css'
 export interface TaskMonitorProps extends StudioSurfaceProps {
   read: StudioReadState
   compact?: boolean
+}
+
+/** Host pause rechecks native leases before reopening a settled failure. */
+function canPauseSettledFailure(run: ProductionRun, nodeId?: string): boolean {
+  const last = run.history.at(-1)
+  if (run.mode !== 'conversation' || run.phase !== 'blocked' || last?.phase !== 'blocked'
+    || run.executions >= run.graph.maxExecutions || run.tasks.some(task => task.operationId || task.phase === 'unknown')) return false
+  const task = run.tasks.find(item => item.nodeId === last.nodeId)
+  return task !== undefined && (nodeId === undefined || nodeId === task.nodeId) && task.phase === 'blocked'
+    && !!task.settledOperationId && run.graph.nodes.some(node => node.id === task.nodeId && node.kind === 'agent')
 }
 
 function Branch({ run, task, pending, perform, ...props }: StudioSurfaceProps & {
@@ -35,7 +45,7 @@ function Branch({ run, task, pending, perform, ...props }: StudioSurfaceProps & 
       <span className={css.phase} data-phase={task.phase}>{t(`phase.${task.phase}`)}</span>
       <span className={css.muted}>{t('task.attempt', { attempt: task.attempts, maximum: node?.maxAttempts ?? task.attempts })}</span>
       <div className={css.rowActions}>
-        {(task.phase === 'running' || task.phase === 'ready' || task.phase === 'waiting') &&
+        {(task.phase === 'running' || task.phase === 'ready' || task.phase === 'waiting' || canPauseSettledFailure(run, task.nodeId)) &&
           <Button size="sm" variant="ghost" disabled={pending} onClick={() => { void perform(() => pause(ref)) }}>{t('branch.pause')}</Button>}
         {task.phase === 'paused' &&
           <Button size="sm" variant="ghost" disabled={pending} onClick={() => { void perform(() => resume(ref)) }}>{t('branch.resume')}</Button>}
@@ -136,14 +146,14 @@ export function TaskMonitor({ read, compact = false, ...props }: TaskMonitorProp
     </div>}
     {read.error !== null && <div className={css.error} role="alert">{read.error}<Button size="sm" variant="ghost" onClick={refresh}>{t('refresh')}</Button></div>}
     {error !== null && <p className={css.error} role="alert">{t('action.failed')}{': '}{error}</p>}
-    {snapshot.runs.length === 0 && <div className={css.empty}><p>{t('empty')}</p>{!compact && <p>{t(snapshot.capabilities.conversation === undefined ? 'empty.detail' : 'conversation.autoStart')}</p>}</div>}
+    {snapshot.runs.length === 0 && <div className={css.empty}><p>{t('empty')}</p><p>{t(snapshot.capabilities.conversation === undefined ? 'empty.detail' : 'conversation.emptyDetail')}</p></div>}
     {snapshot.runs.length > 0 && runs.length === 0 && <p className={css.empty}>{t('search.empty')}</p>}
     {TASK_GROUPS.map((group) => {
       const members = runs.filter(run => runGroup(run) === group).sort((left, right) => right.updatedAt - left.updatedAt)
       if (members.length === 0) return null
       const body = <div className={css.runList}>{members.map((run) => {
         const complete = run.tasks.filter(task => task.phase === 'complete' || task.phase === 'skipped').length
-        const prominent = orderedBranches(run.tasks).find(task => task.phase !== 'complete' && task.phase !== 'skipped')
+        const prominent = prominentBranch(run)
         return <details className={css.run} key={run.id} data-production-run={run.id}>
           <summary className={css.runSummary}>
             <IconChevronRightOutlineRegular size={14} />
@@ -156,7 +166,7 @@ export function TaskMonitor({ read, compact = false, ...props }: TaskMonitorProp
           <div className={css.runDetails}>
             <div className={css.toolbar}>
               <span className={css.muted}>{t(run.mode === 'conversation' ? 'task.versionLive' : 'task.version', { version: run.graph.version })}</span>
-              {run.phase === 'active' && <Button size="sm" variant="ghost" disabled={pending}
+              {(run.phase === 'active' || canPauseSettledFailure(run)) && <Button size="sm" variant="ghost" disabled={pending}
                 onClick={() => { void perform(() => pause({ runId: run.id, revision: run.revision })) }}>{t('task.pause')}</Button>}
               {run.phase === 'paused' && <Button size="sm" variant="outline" disabled={pending}
                 onClick={() => { void perform(() => resume({ runId: run.id, revision: run.revision })) }}>{t('task.resume')}</Button>}
@@ -187,7 +197,7 @@ export function ProductionMonitorView(props: StudioViewProps) {
 /**
  * Keep a compact expandable priority monitor immediately above the composer.
  * @param props - Slot-derived runtime, draft and mutation props.
- * @returns a 36px summary with a bounded expanding list.
+ * @returns a readable summary with a bounded expanding list.
  */
 export function ProductionDock(props: StudioDockProps) {
   const { useProduction, useStore, actions, t } = props
@@ -196,14 +206,20 @@ export function ProductionDock(props: StudioDockProps) {
   const runs = read.snapshot?.runs ?? []
   const attention = runs.filter(run => ['critical', 'human'].includes(runGroup(run))).length
   const running = runs.filter(run => runGroup(run) === 'running').length
+  const waiting = runs.filter(run => runGroup(run) === 'waiting').length
+  const paused = runs.filter(run => runGroup(run) === 'paused').length
   const done = runs.filter(run => run.phase === 'complete').length
+  const summary = read.error !== null ? t('dock.disconnected')
+    : read.snapshot === null ? t(read.loading ? 'loading' : 'unavailable')
+      : runs.length === 0 ? t('dock.empty')
+        : t('dock.summary', { attention, running, waiting, paused, done })
   return <section className={css.dock} data-production-dock>
     <button type="button" className={css.dockToggle} aria-expanded={expanded}
       aria-label={t(expanded ? 'dock.collapse' : 'dock.expand')} onClick={() => { actions.expanded(!expanded) }}>
       <IconChevronRightOutlineRegular size={14} />
       <strong>{t('view.monitor')}</strong>
-      <span className={clsx(css.dockSummary, attention > 0 && css.attention)}>
-        {read.loading && read.snapshot === null ? t('loading') : t('dock.summary', { attention, running, done })}
+      <span className={clsx(css.dockSummary, (attention > 0 || read.error !== null) && css.attention)}>
+        {summary}
       </span>
     </button>
     {expanded && <div className={css.dockList}><TaskMonitor {...props} read={read} compact /></div>}

@@ -290,6 +290,7 @@ export type SessionRowActionProps<Injected extends object = object> =
 export type RowToast =
   | { kind: 'archived'; sessionId: SessionId }
   | { kind: 'stoppedAndArchived'; sessionId: SessionId }
+  | { kind: 'linkUnavailable' }
   | { kind: 'pinFailed' }
   | { kind: 'unpinFailed' }
   | { kind: 'archivedNotOpenable' }

@@ -97,3 +97,46 @@ export function edgePath(start: { x: number; y: number }, end: { x: number; y: n
   const rail = end.y > start.y ? Math.floor((start.y + end.y) / 2) : Math.min(start.y, end.y) - 100
   return `M${start.x},${start.y} H${start.x + 24} V${rail} H${end.x - 24} V${end.y} H${end.x}`
 }
+
+
+/**
+ * Insert an extra read-only evidence gate on one existing success route.
+ * @param graph - Editable future graph.
+ * @param targetId - Node whose forward input receives the new gate.
+ * @param label - Localized new-gate label.
+ * @returns Connected draft and new node, or null when no supported evidence check exists.
+ */
+export function insertGateBefore(
+  graph: ProductionGraph, targetId: string, label: string,
+): { graph: ProductionGraph; node: ProductionNode } | null {
+  const target = graph.nodes.find(item => item.id === targetId)
+  const incoming = graph.edges.filter(edge => edge.toNode === targetId && graph.nodes
+    .find(node => node.id === edge.fromNode)?.outputs.find(port => port.id === edge.fromPort)?.outlet === 'success')
+  if (target === undefined || incoming.length === 0
+    || new Set(incoming.map(item => `${item.fromNode}:${item.fromPort}`)).size !== incoming.length) return null
+  const edge = incoming[0]
+  if (edge === undefined) return null
+  const input = target.inputs.find(port => port.id === edge.toPort)
+  const checks = target.kind === 'gate' ? [target, ...graph.nodes] : graph.nodes
+  const checker = checks.find(item => item.kind === 'gate' && item.config.toolName === 'production_aea_evidence'
+    && (item.inputs.some(port => port.type === input?.type) || item.outputs.some(port => port.type === input?.type)))
+  if (input === undefined || input.type === 'input' || checker === undefined
+    || incoming.some(item => item.toPort !== edge.toPort)) return null
+  const { certification, ...settings } = checker.config
+  void certification
+  const node = { ...newNode(graph, 'gate', label), maxAttempts: 1,
+    x: target.x, y: target.y + 230, config: structuredClone(settings),
+    inputs: [{ id: 'input', type: input.type }],
+    outputs: [{ id: 'success', type: input.type, outlet: 'success' as const },
+      { id: 'failure', type: 'issue' as const, outlet: 'failure' as const },
+      { id: 'unknown', type: 'unknown' as const, outlet: 'unknown' as const }],
+  }
+  const edges = graph.edges.map(item => incoming.some(source => source.id === item.id)
+    ? { ...item, toNode: node.id, toPort: 'input' } : item)
+  edges.push({ id: `${node.id}-success`, fromNode: node.id, fromPort: 'success', toNode: targetId, toPort: edge.toPort })
+  const repair = graph.nodes.find(item => item.id === 'repair' && item.inputs.some(port => port.type === 'issue'))
+  const repairInput = repair?.inputs.find(port => port.type === 'issue')
+  if (repair !== undefined && repairInput !== undefined) edges.push({ id: `${node.id}-failure`, fromNode: node.id,
+    fromPort: 'failure', toNode: repair.id, toPort: repairInput.id })
+  return { graph: { ...graph, nodes: [...graph.nodes, node], edges }, node }
+}

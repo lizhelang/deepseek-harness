@@ -29,6 +29,8 @@ Use this package when the Web bundle should let users export a session log. It r
 
 When `ui-message-feedback` is mounted, the same menu also offers `Feedback`, which opens its existing Session feedback dialog. Opening or dismissing that form does not export the Session or submit feedback. The feedback row follows the feedback plugin's availability; export remains available independently.
 
+`Copy conversation reference` copies the displayed title, Session ID, working directory when available, and export filename, without appended instructions. HTTP(S) pages also include a `#session=<id>` address for the current Harness instance and its authenticated export URL. The confirmation dialog displays selectable text if clipboard access fails. Desktop file pages omit file URLs. This reference does not publish content or grant access: recipients need the same instance and its existing access, or the downloaded ZIP for use on another device or with another AI.
+
 ### When to choose it
 
 Choose it for a Web deployment that needs user-facing session export with a visible download dialog. Avoid it when a programmatic or Host-side export is needed: this package produces a browser download, not a Host path write. The logs are serialized from persistence read handles, so any mounted backend is supported.

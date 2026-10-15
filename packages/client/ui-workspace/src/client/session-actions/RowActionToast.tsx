@@ -71,6 +71,7 @@ function plainNoticeText(
   t: RowToastProps['t'],
 ): string {
   switch (toast.kind) {
+    case 'linkUnavailable': return t('toast.linkUnavailable')
     case 'pinFailed': return t('toast.pinFailed')
     case 'unpinFailed': return t('toast.unpinFailed')
     case 'defaultWorkspaceFailed': return t('defaultWorkspace.failed')

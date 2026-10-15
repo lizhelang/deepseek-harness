@@ -10,3 +10,20 @@
   width: 15px;
   height: 15px;
 }
+
+.reference {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 180px;
+  padding: 12px;
+  resize: none;
+  border: 1px solid var(--dsw-alias-border-l4);
+  border-radius: var(--dsw-radius-md);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  line-height: 1.5;
+}
+
+.referenceDialog { max-height: 100%; }
+.referenceContent { min-height: 0; overflow: auto; }

@@ -141,6 +141,37 @@ describe('one conversation, one production executor', () => {
     await expect(ctx.productionStudio.start(agent.id, { graphVersion: 1, objective: 'duplicate', input: null, goalContractAcknowledged: true })).rejects.toThrow('second run')
   })
 
+  it.each([
+    { stage: 'manufacturing', target: 'manufacturing', evidencePath: 'manufacturingVerified', inherited: ['geometry'] },
+    { stage: 'files', target: 'file-check', evidencePath: 'fileReadbackVerified', inherited: ['geometry', 'manufacturing'] },
+    { stage: 'goal', target: 'goal', evidencePath: 'goalSatisfied', inherited: ['files', 'geometry', 'manufacturing'] },
+  ] as const)('runs a supplementary $stage check without certifying it and retains the mandatory gate', async ({ stage, target, evidencePath, inherited }) => {
+    const h = await harness()
+    expect((await h.call(false)).isError).toBe(false)
+    const before = await h.snapshot(), graph = structuredClone(before.graph)
+    const required = graph.nodes.find(node => node.id === target)!
+    const extra = structuredClone(required)
+    extra.id = `extra-${stage}`; extra.label = `Supplementary ${stage} check`; extra.protected = false
+    delete extra.config.certification
+    extra.config.arguments = { stage }
+    extra.outputs = extra.outputs.map(port => port.outlet === 'success' ? { ...port, type: required.inputs[0]!.type } : port)
+    graph.nodes.push(extra)
+    const incoming = graph.edges.find(edge => edge.toNode === target && edge.fromPort === 'success')!
+    incoming.toNode = extra.id
+    graph.edges.push({ id: `extra-${stage}-required`, fromNode: extra.id, fromPort: 'success', toNode: target, toPort: 'input' })
+    await h.ctx.productionStudio.saveGraph(h.agent.id, { expectedVersion: before.graph.version, graph })
+    expect((await h.call(true)).isError).toBe(false)
+    expect((await h.call(true)).isError).toBe(false)
+    const completed = await h.run(), supplementary = completed.tasks.find(task => task.nodeId === extra.id)!
+    expect(completed.phase).toBe('complete')
+    expect(supplementary.phase).toBe('complete')
+    expect(supplementary.evidence.at(-1)).toMatchObject({ toolName: 'production_aea_evidence', data: { [evidencePath]: true } })
+    expect(supplementary.certificates.toSorted()).toEqual([...inherited])
+    expect(completed.tasks.find(task => task.nodeId === target)?.certificates).toContain(stage)
+    expect(completed.tasks.find(task => task.nodeId === 'delivery')?.certificates.toSorted()).toEqual(['files', 'geometry', 'goal', 'manufacturing'])
+    expect(h.count()).toBe(3)
+  })
+
   it('applies future prompt and routing edits while preserving an in-flight call and blocks the next call at a human node', async () => {
     const h = await harness(); h.defer()
     const inFlight = h.call(true); await h.dispatch

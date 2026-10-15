@@ -1111,3 +1111,45 @@ describe('UiWorkspaceService', () => {
     })
   })
 })
+
+
+describe('conversation URL navigation', () => {
+  function linkWindow(hash: string) {
+    const source = new EventTarget()
+    const location = { hash }
+    vi.stubGlobal('window', { location, addEventListener: source.addEventListener.bind(source), removeEventListener: source.removeEventListener.bind(source) })
+    return { location, source }
+  }
+
+  it('waits for catalogs then opens the exact linked session instead of restoring another', () => {
+    linkWindow('#session=target')
+    persistSelection({ sessionId: sid('saved') })
+    const b = bench()
+    b.sessions.list.set(sessionState([summary('saved'), summary('target')]))
+    expect(b.sessions.retain).not.toHaveBeenCalled()
+    b.workspaces.list.set(workspaceState())
+    expect(b.sessions.retain).toHaveBeenCalledExactlyOnceWith(sid('target'), { source: 'mainView' })
+    expect(b.sessions.create).not.toHaveBeenCalled()
+  })
+
+  it('reports an unavailable link without opening a different saved session', () => {
+    linkWindow('#session=missing')
+    persistSelection({ sessionId: sid('saved') })
+    const b = bench({ sessions: sessionState([summary('saved')]), workspaces: workspaceState() })
+    expect(b.notify).toHaveBeenCalledWith({ kind: 'linkUnavailable' })
+    expect(b.sessions.retain).not.toHaveBeenCalled()
+  })
+
+  it('refuses archived links and responds to hash navigation until disposal', async () => {
+    const w = linkWindow('#session=archived')
+    const b = bench({ sessions: sessionState([summary('archived'), summary('target')]), workspaces: workspaceState([], [sid('archived')]) })
+    expect(b.notify).toHaveBeenCalledWith({ kind: 'archivedNotOpenable' })
+    w.location.hash = '#session=target'
+    w.source.dispatchEvent(new Event('hashchange'))
+    expect(b.sessions.retain).toHaveBeenCalledExactlyOnceWith(sid('target'), { source: 'mainView' })
+    await b.ctx.fiber.dispose()
+    w.location.hash = '#session=missing'
+    w.source.dispatchEvent(new Event('hashchange'))
+    expect(b.notify).toHaveBeenCalledTimes(1)
+  })
+})

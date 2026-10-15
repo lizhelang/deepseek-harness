@@ -4,6 +4,7 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createSnapshotStore, type ObservableSnapshot, type SnapshotSelectorHook } from '@deepseek-ai/dsh-client-store'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
+import { createConversationGraph } from '@deepseek-ai/dsh-production-studio/src/domain.ts'
 import type { ProductionRun } from '@deepseek-ai/dsh-production-studio/types'
 import { en } from '../src/client/locales.ts'
 import type {} from '../src/client/index.ts'
@@ -115,6 +116,33 @@ describe('production surfaces', () => {
     expect(screen.getByRole('button', { name: en['dock.collapse'] }).getAttribute('aria-expanded')).toBe('true')
     expect(b.props.start).not.toHaveBeenCalled()
   })
+  it('keeps the collapsed empty monitor readable and explains what it tracks', () => {
+    const b = fixture([])
+    render(<ProductionDock {...b.props as StudioDockProps} />)
+    expect(screen.getByText(en['view.monitor'])).toBeTruthy()
+    expect(screen.getByText(en['dock.empty'])).toBeTruthy()
+    expect(screen.queryByText(/0 need attention/)).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: en['dock.expand'] }))
+    expect(screen.getByText(en['empty.detail'])).toBeTruthy()
+    expect(b.props.start).not.toHaveBeenCalled()
+  })
+  it('counts waiting and paused workflows alongside running and complete work', () => {
+    const paused = run('paused', 'paused'); paused.phase = 'paused'
+    const b = fixture([run('waiting', 'waiting'), paused])
+    render(<ProductionDock {...b.props as StudioDockProps} />)
+    expect(screen.getByText('0 need attention · 0 running · 1 waiting · 1 paused · 0 complete')).toBeTruthy()
+  })
+  it('shows connection failure instead of a zero-task summary and retains known tasks', () => {
+    const b = fixture()
+    b.read.set({ ...b.read.getSnapshot(), error: 'Stream unavailable' })
+    render(<ProductionDock {...b.props as StudioDockProps} />)
+    expect(screen.getByText(en['dock.disconnected'])).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: en['dock.expand'] }))
+    expect(screen.getByRole('alert').textContent).toContain('Stream unavailable')
+    expect(screen.getByText('Workpiece running')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: en['refresh'] }))
+    expect(b.props.refresh).toHaveBeenCalledOnce()
+  })
   it('edits real nodes, preserves start input and requires explicit saved-workflow start', async () => {
     const b = fixture([])
     const { container } = render(<ProductionWorkflowView {...b.props as StudioViewProps} />)
@@ -187,7 +215,7 @@ describe('production surfaces', () => {
     expect(b.props.start).not.toHaveBeenCalled()
     editor.unmount()
     render(<TaskMonitor {...b.props} read={b.read.getSnapshot()} />)
-    expect(screen.getByText(en['conversation.autoStart'])).toBeTruthy()
+    expect(screen.getByText(en['conversation.emptyDetail'])).toBeTruthy()
     expect(screen.queryByText(en['empty.detail'])).toBeNull()
   })
   it('displays authoritative conversation nodes and phases, locks consumed nodes, and edits only future nodes', async () => {
@@ -378,4 +406,37 @@ describe('production surfaces', () => {
     expect(screen.getAllByText('Current baseline').length).toBeGreaterThan(0)
     expect(b.drafts.getSnapshot().dirty).toBe(false)
   })
+})
+
+
+it('defaults the canonical AEA graph to lanes and inserts a connected future gate for the existing save', async () => {
+  const current = run('lanes', 'waiting')
+  current.mode = 'conversation'; current.graph = createConversationGraph(24, [])
+  current.tasks = []
+  const b = conversationFixture(current)
+  const view = render(<ProductionWorkflowView {...b.props} />)
+  expect(screen.getByText(en['responsibility.aea'])).toBeTruthy()
+  expect(view.container.querySelector('[data-production-canvas]')).toBeNull()
+  const before = screen.getAllByRole('button', { name: en['responsibility.addGate'] })
+  fireEvent.click(before[1]!)
+  const draft = b.drafts.getSnapshot().graph!
+  const gate = draft.nodes.find(node => node.id === 'gate-1')!
+  expect(gate.config.arguments).toEqual(current.graph.nodes.find(node => node.id === 'geometry')!.config.arguments)
+  expect(draft.edges.find(edge => edge.fromNode === 'baseline' && edge.fromPort === 'success')?.toNode).toBe(gate.id)
+  expect(draft.edges.find(edge => edge.fromNode === gate.id && edge.fromPort === 'success')?.toNode).toBe('geometry')
+  await act(async () => { fireEvent.click(screen.getByRole('button', { name: en['editor.save'] })) })
+  expect(b.props.saveGraph).toHaveBeenCalledWith(current.graph.version, draft)
+})
+
+it('moves detached additions to the connection editor and hides old scheduled phases on changed drafts', () => {
+  const current = run('scheduled', 'complete')
+  current.graph = createConversationGraph(24, []); current.mode = 'scheduled'
+  const b = fixture([current])
+  b.read.set({ snapshot: { ...snapshot([current]), graph: current.graph }, loading: false, error: null })
+  const view = render(<ProductionWorkflowView {...b.props} />)
+  expect(view.container.querySelector('[data-responsibility-node="baseline"] [data-phase="complete"]')).not.toBeNull()
+  fireEvent.click(screen.getByRole('button', { name: en['editor.addGate'] }))
+  expect(view.container.querySelector('[data-production-canvas]')).not.toBeNull()
+  fireEvent.click(screen.getByRole('button', { name: en['responsibility.view'] }))
+  expect(view.container.querySelector('[data-responsibility-node="baseline"] [data-phase="complete"]')).toBeNull()
 })

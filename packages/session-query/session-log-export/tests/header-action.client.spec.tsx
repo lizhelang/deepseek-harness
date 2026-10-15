@@ -7,7 +7,7 @@ import { createSnapshotStore, type ObservableSnapshot } from '@deepseek-ai/dsh-c
 import { SessionLogDownloadController } from '../src/client/controller.ts'
 import { SessionLogDownloadHeaderAction } from '../src/client/HeaderAction.tsx'
 import type { SessionLogDownloadHeaderProps } from '../src/client/HeaderAction.tsx'
-import { en } from '../src/client/locales.ts'
+import { en, zh } from '../src/client/locales.ts'
 
 const SID = 'session-export-header' as SessionId
 
@@ -20,7 +20,7 @@ function bindSnapshot<State>(store: ObservableSnapshot<State>) {
   }
 }
 
-function bench(feedbackAvailable = false) {
+function bench(feedbackAvailable = false, locale = en) {
   const controller = new SessionLogDownloadController(async () => new Response('zip'), vi.fn())
   const request = vi.fn((sessionId: SessionId) => controller.download(sessionId))
   const dismiss = vi.fn((sessionId: SessionId) => { controller.dismiss(sessionId) })
@@ -29,20 +29,50 @@ function bench(feedbackAvailable = false) {
   const useSessionLogDownload = bindSnapshot(controller.store)
   const props = {
     sessionId: SID,
+    useSessions: (selector: (state: object) => unknown) => selector({ byId: { [SID]: { displayTitle: 'Exact conversation', cwd: '/workspace/project' } } }),
     useSessionLogDownload,
     useFeedbackAvailable: bindSnapshot(feedback),
     openFeedback,
     request,
     dismiss,
-    t: (key: keyof typeof en): string => en[key],
+    t: (key: keyof typeof en): string => locale[key],
   } as unknown as SessionLogDownloadHeaderProps
   const view = render(<SessionLogDownloadHeaderAction {...props} />)
   return { controller, request, openFeedback, feedback, view }
 }
 
-afterEach(cleanup)
+afterEach(() => { cleanup(); vi.unstubAllGlobals() })
 
 describe('Session export Header action', () => {
+  it.each([en, zh])('copies only the Session location fields and reports clipboard success', async (locale) => {
+    const writeText = vi.fn(async (_text: string) => {})
+    vi.stubGlobal('navigator', { clipboard: { writeText } })
+    const b = bench(false, locale)
+    fireEvent.click(b.view.getByRole('button', { name: locale['header.more'] }))
+    fireEvent.click(b.view.getByRole('menuitem', { name: locale['menu.reference'] }))
+    expect(await b.view.findByRole('dialog', { name: locale['reference.copied'] })).toBeTruthy()
+    expect(writeText).toHaveBeenCalledWith(expect.stringContaining(`Session ID: ${SID}`))
+    const text = writeText.mock.calls[0]?.[0]
+    expect(text).toContain(`${locale['reference.title']}: Exact conversation`)
+    expect(text).toContain(`${locale['reference.workspace']}: /workspace/project`)
+    expect(text?.split('\n').at(-1)).toBe(`${locale['reference.archive']}: dsh-session-${SID}.zip`)
+    expect(text).not.toContain(locale['reference.scope'])
+    expect(text).toContain(`#session=${SID}`)
+    expect(text).toContain(`sessionId=${SID}&includeDescendants=true`)
+    expect(b.request).not.toHaveBeenCalled()
+  })
+
+  it('offers manual copying when the clipboard rejects the reference', async () => {
+    vi.stubGlobal('navigator', { clipboard: { writeText: vi.fn(async () => { throw new Error('denied') }) } })
+    const b = bench()
+    fireEvent.click(b.view.getByRole('button', { name: 'More actions' }))
+    fireEvent.click(b.view.getByRole('menuitem', { name: 'Copy conversation reference' }))
+    expect(await b.view.findByRole('dialog', { name: en['reference.failed'] })).toBeTruthy()
+    const text = (b.view.getByRole('textbox') as HTMLTextAreaElement).value
+    expect(text).toContain(`Session ID: ${SID}`)
+    expect(text).not.toContain(en['reference.scope'])
+  })
+
   it('opens Session feedback and closes the menu without starting a download', () => {
     const b = bench(true)
     fireEvent.click(b.view.getByRole('button', { name: 'More actions' }))
@@ -107,6 +137,7 @@ describe('Session export Header action', () => {
     const useSessionLogDownload = bindSnapshot(controller.store)
     b.view.rerender(<SessionLogDownloadHeaderAction {...({
       sessionId: SID,
+      useSessions: (selector: (state: object) => unknown) => selector({ byId: { [SID]: { displayTitle: 'Exact conversation', cwd: '/workspace/project' } } }),
       useSessionLogDownload,
       useFeedbackAvailable: bindSnapshot(b.feedback),
       openFeedback: b.openFeedback,

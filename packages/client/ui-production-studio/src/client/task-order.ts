@@ -23,14 +23,17 @@ export function branchGroup(task: ProductionTask): TaskGroup {
 }
 
 /**
- * Put a run at its most actionable branch while respecting explicit pause and completion.
+ * Put a run at its current intervention priority; active conversation recovery supersedes settled failures.
  * @param run - One workpiece/run and its branch roster.
  * @returns ordered section name.
  */
 export function runGroup(run: ProductionRun): TaskGroup {
   if (run.phase === 'complete') return 'complete'
+  if (run.phase === 'unknown' || run.tasks.some(task => task.phase === 'unknown')) return 'critical'
+  if (run.mode === 'conversation' && run.phase === 'active' && run.tasks.some(task => task.phase === 'running' || task.phase === 'ready')) {
+    return run.tasks.some(task => task.phase === 'human') ? 'human' : 'running'
+  }
   if (run.tasks.some(task => branchGroup(task) === 'critical')) return 'critical'
-  if (run.phase === 'unknown') return 'critical'
   if (run.tasks.some(task => task.phase === 'human')) return 'human'
   if (run.phase === 'paused') return 'paused'
   if (run.tasks.some(task => task.phase === 'running' || task.phase === 'ready')) return 'running'
@@ -46,6 +49,20 @@ export function runGroup(run: ProductionRun): TaskGroup {
  */
 export function orderedBranches(tasks: readonly ProductionTask[]): ProductionTask[] {
   return [...tasks].sort((left, right) => TASK_GROUPS.indexOf(branchGroup(left)) - TASK_GROUPS.indexOf(branchGroup(right)))
+}
+
+/**
+ * Select the current conversation action for the summary while retaining historical branch diagnostics.
+ * @param run - One workpiece/run and its branch roster.
+ * @returns the branch to preview, or undefined for fully completed branches.
+ */
+export function prominentBranch(run: ProductionRun): ProductionTask | undefined {
+  const branches = orderedBranches(run.tasks)
+  const group = runGroup(run)
+  if (run.mode === 'conversation' && run.phase === 'active' && (group === 'running' || group === 'human')) {
+    return branches.find(task => branchGroup(task) === group)
+  }
+  return branches.find(task => task.phase !== 'complete' && task.phase !== 'skipped')
 }
 
 /**

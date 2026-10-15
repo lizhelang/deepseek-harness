@@ -283,13 +283,26 @@ class UiWorkspaceService extends Service implements UiWorkspace {
 
   private watchNavigation(): () => void {
     let initial: 'waiting' | 'connecting' | 'done' = 'waiting'
+    let pendingLink = typeof window === 'undefined' ? null : new URLSearchParams(window.location.hash.slice(1)).get('session')
     const reconcile = (): void => {
       if (this.lifetime.signal.aborted) return
       if (this.clearArchivedCurrent()) return
-      if (initial !== 'waiting') return
       const workspace = this.workspaces.list.getSnapshot()
       const sessions = this.sessions.list.getSnapshot()
       if (workspace.phase !== 'ready' || sessions.phase !== 'ready') return
+      if (pendingLink !== null) {
+        const requested = pendingLink
+        pendingLink = null
+        initial = 'done'
+        this.ctx.layout.beginNavigation()
+        // Resolve the untrusted URL only through the current Host catalog.
+        const target = sessions.ids.find(id => String(id) === requested)
+        if (target === undefined) this.notify({ kind: 'linkUnavailable' })
+        else if (workspace.archivedSessionIds.includes(target)) this.notify({ kind: 'archivedNotOpenable' })
+        else this.openSession(target)
+        return
+      }
+      if (initial !== 'waiting') return
       if (this.mainReference !== undefined) {
         initial = 'done'
         return
@@ -305,6 +318,11 @@ class UiWorkspaceService extends Service implements UiWorkspace {
       )
     }
 
+    const onHashChange = (): void => {
+      pendingLink = new URLSearchParams(window.location.hash.slice(1)).get('session')
+      reconcile()
+    }
+    if (typeof window !== 'undefined') window.addEventListener('hashchange', onHashChange)
     const disposeWorkspaces = this.workspaces.list.subscribe(reconcile)
     const disposeSessions = this.sessions.list.subscribe(reconcile)
     reconcile()
@@ -312,6 +330,7 @@ class UiWorkspaceService extends Service implements UiWorkspace {
       this.lifetime.abort()
       disposeSessions()
       disposeWorkspaces()
+      if (typeof window !== 'undefined') window.removeEventListener('hashchange', onHashChange)
     }
   }
 

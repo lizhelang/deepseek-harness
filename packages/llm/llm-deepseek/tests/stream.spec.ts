@@ -105,6 +105,9 @@ describe('Leaked DSML tool calls', () => {
     await expect(chunks(translate(events(text(leaked)), MODEL))).rejects.toMatchObject({ code: 'EMPTY_RESPONSE' })
     await expect(chunks(translate(events(text('<｜DSML｜function_calls>\n<｜DSML｜invoke name="read">')), MODEL)))
       .rejects.toMatchObject({ code: 'EMPTY_RESPONSE' })
+    // Observed after a tool error: the opening tag alone already marks the leak.
+    await expect(chunks(translate(events(text('先对账该操作回执。\n\n<｜｜DSML｜｜tool_calls>')), MODEL)))
+      .rejects.toMatchObject({ code: 'EMPTY_RESPONSE' })
   })
 
   it('keeps quoted markup, plain mentions and real tool calls as ordinary output', async () => {

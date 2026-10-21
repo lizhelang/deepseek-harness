@@ -26,7 +26,7 @@ export function string(value: unknown): string {
 // tool_use blocks. Occasionally a malformed variant (e.g. doubled `｜｜` delimiters) is
 // returned verbatim as text, and a stop with no tool call would silently end the turn.
 // Fenced code is excluded so text that merely quotes the format stays ordinary output.
-const LEAKED_DSML_TOOL_CALL = /<\/?\s*[｜|]{1,4}\s*DSML\s*[｜|]{1,4}\s*(?:function_calls|calls|invoke)\b/i
+const LEAKED_DSML_TOOL_CALL = /<\/?\s*[｜|]{1,4}\s*DSML\s*[｜|]{1,4}\s*(?:tool_calls|function_calls|calls|invoke)\b/i
 
 /** Whether settled text carries leaked DSML tool-call markup outside fenced code.
  * @param text - concatenated assistant text blocks.

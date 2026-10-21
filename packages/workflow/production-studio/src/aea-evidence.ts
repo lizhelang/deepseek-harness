@@ -109,7 +109,7 @@ export async function readAeaEvidence(fs: FileSystem, value: JsonValue, signal: 
       same(cost.reportId, reportId, 'cost.reportId'); same(cost.candidateId, candidateId, 'cost.candidateId')
       same(cost.inputVersion, frozen.inputVersion, 'cost.inputVersion'); same(cost.runtimeParametersSha256, parameterHash, 'cost.runtimeParametersSha256')
       result.manufacturingVerified = geometry(data) && data.manufacturingCompleted === true && data.reviewReady === true
-        && check(data, 'fold_angle_layout_current', 'centered-on-bend-glyph-envelope-v3')
+        && check(data, 'fold_angle_layout_current', 'centered-on-bend-short-line-leader-v4')
         && check(data, 'face_material_preservation', 'face-material-preservation-v3')
         && cost.status === 'known' && typeof cost.threeComponentTotal === 'number' && Number.isFinite(cost.threeComponentTotal)
       result.selectedCandidateId = candidateId

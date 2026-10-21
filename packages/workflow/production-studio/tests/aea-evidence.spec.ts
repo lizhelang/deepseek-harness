@@ -26,7 +26,7 @@ async function fixture() {
   const binding = { candidateId: 'candidate', inputVersion: 'input', runtimeParametersSha256: parameters }
   const search = { ...binding, reportId: 'search', stage: 'search', checks }
   const manufacturing = { ...binding, reportId: 'manufacturing', stage: 'manufacturing', manufacturingCompleted: true, reviewReady: true,
-    checks: [...checks, { code: 'fold_angle_layout_current', status: 'pass', message: 'centered-on-bend-glyph-envelope-v3' }, { code: 'face_material_preservation', status: 'pass', message: 'face-material-preservation-v3' }],
+    checks: [...checks, { code: 'fold_angle_layout_current', status: 'pass', message: 'centered-on-bend-short-line-leader-v4' }, { code: 'face_material_preservation', status: 'pass', message: 'face-material-preservation-v3' }],
     costEvidence: { ...binding, reportId: 'manufacturing', status: 'known', threeComponentTotal: 24 },
     metrics: { manufacturing_piece_count: 1, weld_action_count: 3, bend_action_count: 4 },
     artifacts: { manufacturingModel, laserCutModel }, artifactSha256: { manufacturingModel: sha(model), laserCutModel: sha(model) } }
@@ -90,7 +90,7 @@ it('evaluates explicit goal thresholds against actual manufacturing metrics', as
 
 it('requires exact current drawing versions and retained report hashes', async () => {
   const f = await fixture()
-  f.manufacturing.checks[4]!.message = 'centered-on-bend-glyph-envelope-v30'
+  f.manufacturing.checks[4]!.message = 'centered-on-bend-glyph-envelope-v3'
   const bytes = JSON.stringify(f.manufacturing)
   await writeFile(join(f.dir, 'reports/manufacturing.json'), bytes)
   f.ledger.manufacturing[0]!.reportSha256 = sha(bytes)

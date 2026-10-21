@@ -26,7 +26,7 @@ export async function writeFixtureCase(root: string, failed = false): Promise<{
   const binding = { candidateId: 'candidate', inputVersion: 'input', runtimeParametersSha256: parameters }
   const search = JSON.stringify({ ...binding, reportId: 'search', stage: 'search', checks })
   const manufactured = JSON.stringify({ ...binding, reportId: 'manufacturing', stage: 'manufacturing', manufacturingCompleted: true, reviewReady: true,
-    checks: [...checks, { code: 'fold_angle_layout_current', status: 'pass', message: 'centered-on-bend-glyph-envelope-v3' }, { code: 'face_material_preservation', status: 'pass', message: 'face-material-preservation-v3' }],
+    checks: [...checks, { code: 'fold_angle_layout_current', status: 'pass', message: 'centered-on-bend-short-line-leader-v4' }, { code: 'face_material_preservation', status: 'pass', message: 'face-material-preservation-v3' }],
     costEvidence: { ...binding, reportId: 'manufacturing', status: 'known', threeComponentTotal: 24 }, metrics: { manufacturing_piece_count: 1, weld_action_count: 3, bend_action_count: 4 },
     artifacts: { manufacturingModel, laserCutModel }, artifactSha256: { manufacturingModel: sha(bytes), laserCutModel: sha(bytes) },
   })

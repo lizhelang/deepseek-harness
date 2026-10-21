@@ -115,15 +115,27 @@ Production Studio 让已绑定的 AEA 对话、任务监控、轨迹和流程编
 
 #### What the model sees
 
-提示词装配把活跃运行身份、流程版本、阶段和当前 agent 节点提示词添加到父对话。装配按该节点保存的允许列表过滤已注册工具，ToolRuntime 准入也会对直接调用执行相同限制。工作流检查点仅写入日志，不添加模型消息。符合条件的显式恢复或人工回答添加已记录的继续执行上下文，使用现有来源类型 `user-approval`，归属于显式 UI 批准，而非来源类型为 `user` 的普通人工消息。上下文标识同一次运行，要求保留源绑定、已消费接线与剩余执行预算。末尾指令为 `Never repeat a settled invocation or start a second run.`
+提示词装配把活跃运行身份、流程版本、阶段和当前 agent 节点提示词添加到父对话。装配按该节点保存的允许列表过滤已注册工具，ToolRuntime 准入也会对直接调用执行相同限制。工作流检查点仅写入日志，不添加模型消息。符合条件的显式恢复或人工回答添加已记录的继续执行上下文，使用现有来源类型 `user-approval`，归属于显式 UI 批准，而非来源类型为 `user` 的普通人工消息。上下文标识同一次运行，要求保留源绑定、已消费接线与剩余执行预算。末尾指令为 `Never repeat a settled invocation or start a second run.`。过滤后的列表为空时，工作流指令以下方的无工具指令结尾。若请求随后返回工具调用文本，且其路由报告 `TOOL_MARKUP_WITHOUT_TOOLS`，本包管理的对话会记录一次下方提示，作为来源类型为 `production-studio`、形式为 `notice` 的 user 消息放在最后一条 assistant 消息之后，并重试同一步；该步再次出现这种失败时，本轮以该代码结束。该提示不授予工具权限，也不重复任何调用。
+
+##### 无工具指令
+
+```markdown
+This step offers no tools. Do not write tool calls; reply in plain text.
+```
+
+##### 无工具提示
+
+```markdown
+No tools are available in this request, so the tool call that your previous reply wrote as text was not executed. Do not write tool calls or tool-call markup. Reply in plain text with the current state and the blocker that prevents further work.
+```
 
 #### Token effect
 
-父对话承担现有对话请求成本，以及当前工作流指令和已准入继续执行上下文的成本。显式控制可以唤醒空闲父对话发起另一次模型请求，但不重置运行已消耗的执行预算。未来提示词编辑改变后续准入请求，监控与检查点渲染不增加模型 token。流程预算限制准入的流程工作，而非模型 token 用量。
+父对话承担现有对话请求成本，以及当前工作流指令和已准入继续执行上下文的成本。显式控制可以唤醒空闲父对话发起另一次模型请求，但不重置运行已消耗的执行预算。未来提示词编辑改变后续准入请求，监控与检查点渲染不增加模型 token。流程预算限制准入的流程工作，而非模型 token 用量。没有工具的步骤返回工具调用文本时，最多再增加一次请求及该提示的成本。
 
 #### KV Cache effect
 
-正常父对话请求与系统提示词策略决定复用。继续执行上下文进入已记录的用户消息历史，不改写较早的对话消息；工作流提示词或工具列表变化可能影响下次请求的缓存复用。
+正常父对话请求与系统提示词策略决定复用。继续执行上下文进入已记录的用户消息历史，不改写较早的对话消息；工作流提示词或工具列表变化可能影响下次请求的缓存复用。该提示追加在失败请求的输入之后，因此重试请求以该输入为前缀。
 
 ### 调度式 agent 节点的子会话输入
 

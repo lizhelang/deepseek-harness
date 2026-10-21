@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
 import { SessionId } from '@deepseek-ai/dsh-session'
-import { ToolCallId, createUserMessage } from '@deepseek-ai/dsh-llm'
+import { LlmError, ToolCallId, createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deepseek-ai/dsh-agent-loop-testkit'
 import FsLocal from '@deepseek-ai/dsh-fs-local'
@@ -112,6 +112,55 @@ describe('one conversation, one production executor', () => {
     expect(run.tasks.find(item => item.nodeId === 'repair')?.attempts).toBe(0)
     expect((await h.saved()).runs[0]?.phase).toBe('blocked')
     expect((await h.call()).isError).toBe(true); expect(h.count()).toBe(1)
+  })
+
+  describe('tool-call text after every tool is withdrawn', () => {
+    const leak = () => { throw new LlmError('DeepSeek Messages returned tool-call markup as text while the request declared no tools', 'TOOL_MARKUP_WITHOUT_TOOLS') }
+    const blocked = async (script: ConstructorParameters<typeof MockAdapter>[0]) => {
+      const h = await harness([toolCallResponse('blocked-call', 'conversation_step', { finish: false }), ...script])
+      h.provider.observe = () => ({ outlet: 'failure', terminal: true, message: 'Native execution is quarantined by an unresolved operation' })
+      h.agent.followup(createUserMessage({ content: [{ type: 'text', text: 'Verify the supplied drawing' }], source: { kind: 'user' } }))
+      await h.agent.whenIdle()
+      const notices = h.events.filter(event => event.type === 'user/message' && event.data.source.kind === 'production-studio')
+      return { ...h, notices, end: h.events.at(-1) }
+    }
+
+    it('records one notice and retries so the same turn ends with a plain-text reply', async () => {
+      const h = await blocked([leak, textResponse('The run is blocked by an unresolved native operation.')])
+      expect(h.adapter.requests).toHaveLength(3)
+      const [, withdrawn, retried] = h.adapter.requests
+      expect(withdrawn?.tools ?? []).toEqual([])
+      expect(withdrawn?.messages.some(message => message.role === 'system' && message.content.some(block => block.type === 'text'
+        && block.text.includes('phase=blocked') && block.text.includes('This step offers no tools. Do not write tool calls; reply in plain text.')))).toBe(true)
+      expect(retried?.tools ?? []).toEqual([])
+      expect(retried?.messages.slice(0, -1)).toEqual(withdrawn?.messages)
+      expect(retried?.messages.at(-1)).toMatchObject({ role: 'user', source: { kind: 'production-studio', form: 'notice' },
+        content: [{ type: 'text', text: expect.stringContaining('No tools are available in this request') as string }] })
+      expect(h.notices).toHaveLength(1)
+      expect(h.end).toMatchObject({ type: 'turn/end', data: { reason: { kind: 'completed' } } })
+      expect(h.events.filter(event => event.type === 'assistant/attempt')).toHaveLength(1)
+      expect((await h.run()).phase).toBe('blocked'); expect(h.count()).toBe(1)
+    })
+
+    it('ends the turn on a second leak in the same step without another notice', async () => {
+      const h = await blocked([leak, leak])
+      expect(h.adapter.requests).toHaveLength(3)
+      expect(h.notices).toHaveLength(1)
+      expect(h.end).toMatchObject({ type: 'turn/end', data: { reason: { kind: 'error', error: { code: 'TOOL_MARKUP_WITHOUT_TOOLS' } } } })
+      expect(h.count()).toBe(1)
+    })
+
+    it('leaves other failures and conversations it does not govern to later recovery', async () => {
+      const retried = await blocked([() => { throw new LlmError('busy', 'EMPTY_RESPONSE') }])
+      expect(retried.notices).toHaveLength(0)
+      expect(retried.end).toMatchObject({ data: { reason: { kind: 'error', error: { code: 'EMPTY_RESPONSE' } } } })
+      const h = await harness([leak])
+      h.provider.appliesTo = () => false
+      h.agent.followup(createUserMessage({ content: [{ type: 'text', text: 'hello' }], source: { kind: 'user' } }))
+      await h.agent.whenIdle()
+      expect(h.events.some(event => event.type === 'user/message' && event.data.source.kind === 'production-studio')).toBe(false)
+      expect(h.events.at(-1)).toMatchObject({ data: { reason: { kind: 'error', error: { code: 'TOOL_MARKUP_WITHOUT_TOOLS' } } } })
+    })
   })
 
   it('explicit pause and resume reopen only the last settled failed node without resetting its receipt or budget', async () => {

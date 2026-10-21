@@ -34,7 +34,7 @@ async function fixture() {
   await writeFile(join(dir, 'reports/search.json'), searchJson); await writeFile(join(dir, 'reports/manufacturing.json'), manufacturingJson)
   const caseFilePath = join(dir, 'case.json')
   await writeFile(caseFilePath, JSON.stringify({ caseId: 'case', inputVersion: 'input', input: { runtimeParametersSha256: parameters } }))
-  const ledger = { caseId: 'case', inputVersion: 'input', revision: 8, pendingCandidateId: null,
+  const ledger = { caseId: 'case', inputVersion: 'input', revision: 8, pendingCandidateId: null, baselineCandidateId: 'candidate',
     attempts: [{ candidateId: 'candidate', status: 'verified', reportId: 'search', reportSha256: sha(searchJson) }],
     manufacturing: [{ candidateId: 'candidate', status: 'completed', reportId: 'manufacturing', reportSha256: sha(manufacturingJson) }] }
   const ledgerPath = join(dir, 'stage-workflow.json')
@@ -97,4 +97,21 @@ it('requires exact current drawing versions and retained report hashes', async (
   f.args.receipt.workflow.selectedDelivery.reportSha256 = sha(bytes)
   await writeFile(f.ledgerPath, JSON.stringify(f.ledger))
   expect(await f.read()).toMatchObject({ manufacturingVerified: false, goalSatisfied: false })
+})
+
+it('judges geometry on the Host baseline, not a later failed exploratory attempt', async () => {
+  const f = await fixture()
+  const failed = { candidateId: 'explored', inputVersion: 'input', runtimeParametersSha256: parameters, reportId: 'explored', stage: 'search',
+    checks: [...geometryCodes.map(code => ({ code, status: 'pass', message: '' })), { code: 'geometry_error', status: 'fail', message: 'skip_side_unresolved' }] }
+  const failedJson = JSON.stringify(failed)
+  await writeFile(join(f.dir, 'reports/explored.json'), failedJson)
+  const attempts = [...f.ledger.attempts, { candidateId: 'explored', status: 'verified', reportId: 'explored', reportSha256: sha(failedJson) }]
+  await writeFile(f.ledgerPath, JSON.stringify({ ...f.ledger, attempts }))
+  expect(await f.read({ ...f.args, stage: 'geometry' })).toMatchObject({ geometryVerified: true, geometryCandidateId: 'candidate' })
+  await writeFile(f.ledgerPath, JSON.stringify({ ...f.ledger, attempts, baselineCandidateId: 'explored' }))
+  expect(await f.read({ ...f.args, stage: 'geometry' })).toMatchObject({ geometryVerified: false, geometryCandidateId: 'explored' })
+  await writeFile(f.ledgerPath, JSON.stringify({ ...f.ledger, attempts, baselineCandidateId: 'missing' }))
+  expect(await f.read({ ...f.args, stage: 'geometry' })).toMatchObject({ geometryVerified: false, reasons: ['AEA baseline candidate has no unique verified search report'] })
+  await writeFile(f.ledgerPath, JSON.stringify({ ...f.ledger, attempts, baselineCandidateId: null }))
+  expect(await f.read({ ...f.args, stage: 'geometry' })).toMatchObject({ geometryVerified: false, reasons: ['Missing exact evidence identity'] })
 })

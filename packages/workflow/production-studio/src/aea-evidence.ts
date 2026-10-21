@@ -78,13 +78,16 @@ export async function readAeaEvidence(fs: FileSystem, value: JsonValue, signal: 
       same(data.stage, stage, 'report.stage')
       return data
     }
-    const attempts = list(ledger.attempts).map(record)
-    const verified = attempts.filter(item => item.status === 'verified')
-    if (!verified.length) throw new Error('No verified AEA candidate exists')
-    const latest = verified.at(-1)
-    if (!latest) throw new Error('No verified candidate receipt exists')
-    const search = await report(latest, 'search')
+    // Geometry judges the Host's current baseline: the latest verified baseline or repair
+    // candidate. Exploratory improvement attempts never replace it, so a later failed
+    // exploration cannot stand in for the plan the Host retained.
+    const baselineCandidateId = text(ledger.baselineCandidateId)
+    const [baseline, ...duplicates] = list(ledger.attempts).map(record)
+      .filter(item => item.candidateId === baselineCandidateId && item.status === 'verified')
+    if (!baseline || duplicates.length) throw new Error('AEA baseline candidate has no unique verified search report')
+    const search = await report(baseline, 'search')
     result.geometryVerified = geometry(search)
+    result.geometryCandidateId = baselineCandidateId
     result.caseId = caseId; result.caseFilePath = caseFilePath; result.inputVersion = text(frozen.inputVersion)
     result.runtimeParametersSha256 = parameterHash
     if (args.stage !== 'geometry') {

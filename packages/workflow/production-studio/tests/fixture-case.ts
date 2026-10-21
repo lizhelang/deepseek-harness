@@ -34,7 +34,7 @@ export async function writeFixtureCase(root: string, failed = false): Promise<{
   await writeFile(join(root, 'reports/manufacturing.json'), manufactured)
   const caseFilePath = join(root, 'case.json')
   await writeFile(caseFilePath, JSON.stringify({ caseId: 'case', inputVersion: 'input', input: { runtimeParametersSha256: parameters } }))
-  await writeFile(join(root, 'stage-workflow.json'), JSON.stringify({ caseId: 'case', inputVersion: 'input', revision: 8, pendingCandidateId: null,
+  await writeFile(join(root, 'stage-workflow.json'), JSON.stringify({ caseId: 'case', inputVersion: 'input', revision: 8, pendingCandidateId: null, baselineCandidateId: 'candidate',
     attempts: [{ candidateId: 'candidate', status: 'verified', reportId: 'search', reportSha256: sha(search) }],
     manufacturing: [{ candidateId: 'candidate', status: 'completed', reportId: 'manufacturing', reportSha256: sha(manufactured) }],
   }))

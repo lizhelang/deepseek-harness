@@ -22,6 +22,20 @@ export function string(value: unknown): string {
   return value
 }
 
+// DeepSeek models emit tool calls as DSML markup that the service normally converts into
+// tool_use blocks. Occasionally a malformed variant (e.g. doubled `｜｜` delimiters) is
+// returned verbatim as text, and a stop with no tool call would silently end the turn.
+// Fenced code is excluded so text that merely quotes the format stays ordinary output.
+const LEAKED_DSML_TOOL_CALL = /<\/?\s*[｜|]{1,4}\s*DSML\s*[｜|]{1,4}\s*(?:function_calls|calls|invoke)\b/i
+
+/** Whether settled text carries leaked DSML tool-call markup outside fenced code.
+ * @param text - concatenated assistant text blocks.
+ * @returns true when the text contains a DSML calls/invoke tag.
+ */
+export function hasLeakedToolCallMarkup(text: string): boolean {
+  return LEAKED_DSML_TOOL_CALL.test(text.replace(/```[\s\S]*?(?:```|$)/g, ''))
+}
+
 function malformed(detail: string): never {
   throw new LlmError(`DeepSeek Messages stream: ${detail}`, 'MALFORMED_RESPONSE')
 }
@@ -147,6 +161,11 @@ export async function* translate(events: AsyncIterable<Record<string, unknown>>,
     } else {
       if (reason === undefined || [...blocks.values()].some(block => !block.closed)) return malformed('message_stop without settled blocks and stop reason')
       if (blocks.size === 0 && reason.kind === 'stop') throw new LlmError('DeepSeek Messages returned no content', 'EMPTY_RESPONSE')
+      // A leaked tool call leaves nothing actionable, like an empty completion; retry the attempt.
+      const settled = [...blocks.values()].map(block => block.content)
+      if (reason.kind === 'stop' && !settled.some(content => content.type === 'tool-call')
+        && hasLeakedToolCallMarkup(settled.map(content => content.type === 'text' ? content.text : '').join('\n')))
+        throw new LlmError('DeepSeek Messages returned tool-call markup as text instead of a tool call', 'EMPTY_RESPONSE')
       // Truncated tool JSON is retained in the stream, then pruned by the shared assembler.
       if (reason.kind !== 'max-tokens') {
         for (const { content } of blocks.values()) {

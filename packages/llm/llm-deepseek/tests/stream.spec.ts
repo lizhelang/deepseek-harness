@@ -92,6 +92,36 @@ describe('Messages stream', () => {
   })
 })
 
+describe('Leaked DSML tool calls', () => {
+  // Verbatim shape from a deepseek-flash reply that the service returned as text.
+  const leaked = '先只恢复已落盘状态。\n\n<｜｜DSML｜｜ calls>\n<｜｜DSML｜｜ invoke name="begin_workflow">\n'
+    + '<｜｜DSML｜｜ parameter name="caseId" string="true">3a5a9d7d</｜｜DSML｜｜ parameter>\n</｜｜DSML｜｜ invoke>\n</｜｜DSML｜｜ calls>'
+  const text = (value: string, reason = 'end_turn') => [start,
+    { type: 'content_block_start', index: 0, content_block: { type: 'text', text: '' } },
+    { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: value } },
+    { type: 'content_block_stop', index: 0 }, ...end(reason)]
+
+  it('retries a stop whose only action is tool-call markup returned as text', async () => {
+    await expect(chunks(translate(events(text(leaked)), MODEL))).rejects.toMatchObject({ code: 'EMPTY_RESPONSE' })
+    await expect(chunks(translate(events(text('<｜DSML｜function_calls>\n<｜DSML｜invoke name="read">')), MODEL)))
+      .rejects.toMatchObject({ code: 'EMPTY_RESPONSE' })
+  })
+
+  it('keeps quoted markup, plain mentions and real tool calls as ordinary output', async () => {
+    for (const value of ['```\n' + leaked + '\n```', 'DSML is the DeepSeek tool-call markup.']) {
+      const result = await chunks(translate(events(text(value)), MODEL))
+      expect(result.at(-1)).toMatchObject({ type: 'finish', reason: { kind: 'stop' } })
+    }
+    const withTool = [start,
+      { type: 'content_block_start', index: 0, content_block: { type: 'text', text: leaked } },
+      { type: 'content_block_stop', index: 0 },
+      { type: 'content_block_start', index: 1, content_block: { type: 'tool_use', id: 'call_1', name: 'begin_workflow', input: {} } },
+      { type: 'content_block_delta', index: 1, delta: { type: 'input_json_delta', partial_json: '{}' } },
+      { type: 'content_block_stop', index: 1 }, ...end('tool_use')]
+    expect((await chunks(translate(events(withTool), MODEL))).at(-1)).toMatchObject({ reason: { kind: 'tool-calls' } })
+  })
+})
+
 describe('SSE framing and provider failures', () => {
   async function read(text: string, bytewise = false) {
     const bytes = new TextEncoder().encode(text)

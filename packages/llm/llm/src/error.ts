@@ -42,6 +42,16 @@ export const ACCOUNT_QUOTA_EXCEEDED_CODE = 'ACCOUNT_QUOTA'
 export const EMPTY_RESPONSE_CODE = 'EMPTY_RESPONSE'
 
 /**
+ * Canonical provider-neutral code for a completed response whose only action
+ * is tool-call markup written as text while the request declared no tools.
+ * The provider cannot turn that text into a call, and repeating the same
+ * request repeats the same input, so it is outside the default retryable set.
+ * Recovery changes the logged input first, for example with a notice that the
+ * step offers no tools, and then retries.
+ */
+export const TOOL_MARKUP_WITHOUT_TOOLS_CODE = 'TOOL_MARKUP_WITHOUT_TOOLS'
+
+/**
  * Canonical provider-neutral code for a credential that was supplied but
  * cannot be used — malformed rather than absent. Distinct from
  * `MISSING_CREDENTIAL` because the fix differs: correct the stored value

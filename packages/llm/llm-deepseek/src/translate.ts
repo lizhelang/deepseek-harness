@@ -1,6 +1,6 @@
 /** Translate Messages events while preserving block order and cumulative usage. */
 
-import { LlmError, ToolCallId } from '@deepseek-ai/dsh-llm'
+import { EMPTY_RESPONSE_CODE, LlmError, TOOL_MARKUP_WITHOUT_TOOLS_CODE, ToolCallId } from '@deepseek-ai/dsh-llm'
 import type { ContentBlock, FinishReason, StreamChunk, TokenUsage } from '@deepseek-ai/dsh-llm'
 import { object, replayState } from './replay.ts'
 import type { ReplayBlock } from './replay.ts'
@@ -25,6 +25,8 @@ export function string(value: unknown): string {
 // DeepSeek models emit tool calls as DSML markup that the service normally converts into
 // tool_use blocks. Occasionally a malformed variant (e.g. doubled `｜｜` delimiters) is
 // returned verbatim as text, and a stop with no tool call would silently end the turn.
+// A request that declares no tools receives every such call as text, including calls
+// the conversation history or system prompt still suggest.
 // Fenced code is excluded so text that merely quotes the format stays ordinary output.
 const LEAKED_DSML_TOOL_CALL = /<\/?\s*[｜|]{1,4}\s*DSML\s*[｜|]{1,4}\s*(?:tool_calls|function_calls|calls|invoke)\b/i
 
@@ -111,11 +113,17 @@ function stopReason(raw: unknown): FinishReason {
 }
 
 /** Translate decoded SSE data into the Harness stream protocol.
+ * A stop whose text carries leaked tool-call markup and no tool call fails with
+ * `EMPTY_RESPONSE` when the request declared tools, and with
+ * `TOOL_MARKUP_WITHOUT_TOOLS` when it declared none.
  * @param events - framed, decoded provider events in arrival order.
  * @param model - requested model id stored in durable replay state.
+ * @param toolsDeclared - whether the request body declared at least one tool.
  * @returns blocks, one final usage value, and exactly one terminal finish.
  */
-export async function* translate(events: AsyncIterable<Record<string, unknown>>, model: string): AsyncGenerator<StreamChunk> {
+export async function* translate(
+  events: AsyncIterable<Record<string, unknown>>, model: string, toolsDeclared: boolean,
+): AsyncGenerator<StreamChunk> {
   const blocks = new Map<number, Block>()
   const usage: TokenUsage = { inputTokens: 0, outputTokens: 0 }
   let started = false
@@ -160,12 +168,16 @@ export async function* translate(events: AsyncIterable<Record<string, unknown>>,
       if (event.usage !== undefined) updateUsage(usage, event.usage)
     } else {
       if (reason === undefined || [...blocks.values()].some(block => !block.closed)) return malformed('message_stop without settled blocks and stop reason')
-      if (blocks.size === 0 && reason.kind === 'stop') throw new LlmError('DeepSeek Messages returned no content', 'EMPTY_RESPONSE')
-      // A leaked tool call leaves nothing actionable, like an empty completion; retry the attempt.
+      if (blocks.size === 0 && reason.kind === 'stop') throw new LlmError('DeepSeek Messages returned no content', EMPTY_RESPONSE_CODE)
+      // A leaked tool call leaves nothing actionable, like an empty completion. With tools
+      // declared, the attempt is retried; without tools, the same request leaks again.
       const settled = [...blocks.values()].map(block => block.content)
       if (reason.kind === 'stop' && !settled.some(content => content.type === 'tool-call')
-        && hasLeakedToolCallMarkup(settled.map(content => content.type === 'text' ? content.text : '').join('\n')))
-        throw new LlmError('DeepSeek Messages returned tool-call markup as text instead of a tool call', 'EMPTY_RESPONSE')
+        && hasLeakedToolCallMarkup(settled.map(content => content.type === 'text' ? content.text : '').join('\n'))) {
+        throw toolsDeclared
+          ? new LlmError('DeepSeek Messages returned tool-call markup as text instead of a tool call', EMPTY_RESPONSE_CODE)
+          : new LlmError('DeepSeek Messages returned tool-call markup as text while the request declared no tools', TOOL_MARKUP_WITHOUT_TOOLS_CODE)
+      }
       // Truncated tool JSON is retained in the stream, then pruned by the shared assembler.
       if (reason.kind !== 'max-tokens') {
         for (const { content } of blocks.values()) {

@@ -1,0 +1,25 @@
+# Bilingual-pair consistency record for 2026-10-22-fixed-production-conversation-graph.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-10-22-fixed-production-conversation-graph.md
+/agent-note-fixed-production-conversation-graph:
+  en: 0019416b4fc0741b
+  zh: cc7dde0d202a204e
+/agent-note-fixed-production-conversation-graph/problem:
+  en: d4c5778af1652bce
+  zh: f1b70455767aad07
+/agent-note-fixed-production-conversation-graph/decision:
+  en: 49df9297e4a6d611
+  zh: af7662bd81a7d952
+/agent-note-fixed-production-conversation-graph/alternatives-considered:
+  en: e813b848ccc5334b
+  zh: 431c60ec57417c17
+/agent-note-fixed-production-conversation-graph/consequences:
+  en: d3e74c46f0be057a
+  zh: 36cc6fd457e387bc
+/agent-note-fixed-production-conversation-graph/testing:
+  en: 75addfb9a9fd0338
+  zh: 6dfb7a61ca909c06
+/agent-note-fixed-production-conversation-graph/related:
+  en: b880cd6a2ced3781
+  zh: bd4c518122e532a1

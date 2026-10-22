@@ -55,7 +55,7 @@ export interface ProductionNode {
 }
 /** A typed dependency or explicit repair-loop route. */
 export interface ProductionEdge { id: string; fromNode: string; fromPort: string; toNode: string; toPort: string }
-/** Editable graph draft; each started run stores a detached copy. */
+/** Fixed conversation graph; each run stores a detached copy. */
 export interface ProductionGraph {
   version: number
   name: string
@@ -177,17 +177,12 @@ export interface ProductionSnapshot {
   revision: number
   graph: ProductionGraph
   runs: ProductionRun[]
-  capabilities: { subagent: boolean; tools: string[]; filesystem: boolean; conversation?: { provider: string } }
+  capabilities: { tools: string[]; filesystem: boolean; conversation?: { provider: string } }
   error?: string
 }
 /** Compare-and-set reference prevents stale UI mutations. */
 export interface ProductionRef { runId: ProductionRunId; revision: number; nodeId?: string }
-/** Save a draft without rewriting active run graphs. */
-export interface SaveProductionGraphRequest { expectedVersion: number; graph: ProductionGraph }
-/** User-authorized start of a new run, never automatic replay of old work. */
-export interface StartProductionRunRequest { graphVersion: number; objective: string; input: JsonValue; goalContractAcknowledged: boolean }
 /** Explicit additional human decision. */
-export interface AnswerProductionRequest extends ProductionRef { nodeId: string; answer: string; accepted: boolean }
 /** Persisted domain state; capabilities are process-local and recomputed. */
 export interface ProductionState {
   format: 1

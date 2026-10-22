@@ -1,4 +1,4 @@
-/** Session task monitor, compact composer dock and editable production graph. */
+/** Session task monitor, compact composer dock and run policy form. */
 import type { Context } from '@deepseek-ai/cordis'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { RemoteResult } from '@deepseek-ai/dsh-api-remotes/client'
@@ -21,7 +21,7 @@ import { ProductionCheckpointView } from './ProductionCheckpoint.tsx'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {
-    /** Production monitoring and node editing copy. */
+    /** Production monitoring and run policy copy. */
     productionStudio: ProductionStudioKey
   }
 }
@@ -84,11 +84,8 @@ export function apply(ctx: Context): void {
     }
     return {
       hooks: { production: source },
-      saveGraph: (expectedVersion, graph) => settle(() => remote.saveGraph(sessionId, { expectedVersion, graph })),
-      start: request => settle(() => remote.start(sessionId, request)),
       pause: request => settle(() => remote.pause(sessionId, request)),
       resume: request => settle(() => remote.resume(sessionId, request)),
-      answer: request => settle(() => remote.answer(sessionId, request)),
       reconcile: request => settle(() => remote.reconcile(sessionId, request)),
       async send(text) {
         const scope = ctx.sessions.scope(sessionId)
@@ -108,7 +105,7 @@ export function apply(ctx: Context): void {
       locale: namespace, label: () => t('view.monitor'), store, inject: injected,
     }, ProductionMonitorView)
     yield ctx.slots.register({ name: 'conversation.view', id: 'production-workflow', order: 30,
-      locale: namespace, label: () => t('view.editor'), store, inject: injected,
+      locale: namespace, label: () => t('view.policy'), store, inject: injected,
     }, ProductionPolicyView)
   })
 }

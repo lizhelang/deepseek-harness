@@ -10,9 +10,9 @@ Service Definition：[dsh-workflow](../../packages/workflow/workflow)（`ctx.wor
 
 ## 对话持有的生产工作流
 
-[Production Studio](../../packages/workflow/production-studio/README.zh.md)独立负责 `ctx.productionStudio`、带版本的生产流程和图纸交付检查。可信提供方可以把直接的 AEA 对话绑定到一次运行：父对话执行 agent 步骤，服务执行流程准入限制和只读证据检查。这不会通过 `ctx.workflowEngine` 再启动一次脚本执行。未绑定的生产运行保留显式调度器与子 agent。
+[Production Studio](../../packages/workflow/production-studio/README.zh.md)独立负责 `ctx.productionStudio`、固定的对话流程和图纸交付检查。可信提供方可以把直接的 AEA 对话绑定到一次运行：父对话执行 agent 步骤，服务执行流程准入限制和只读证据检查。这不会通过 `ctx.workflowEngine` 再启动一次脚本执行。
 
-监控和编辑器追踪当前已提交的生产状态，对话和轨迹按 Session 顺序渲染同一次运行的可选仅日志检查点。受支持的未来节点编辑保留已准入操作、已消费接线、必需检查和原预算。[包参考](../../packages/workflow/production-studio/README.zh.md)负责控制方式与限制，[架构决策](../../.agents/notes/implemented/architecture/2026-10-08-conversation-owned-production-workflow.zh.md)负责单执行器的理由。
+案件面板和运行策略追踪当前已提交的生产状态，对话和轨迹按 Session 顺序渲染同一次运行的可选仅日志检查点。早期的调度式运行和改过流程的运行仍可读取，但不能暂停或恢复。[包参考](../../packages/workflow/production-studio/README.zh.md)负责控制方式与限制，[架构决策](../../.agents/notes/implemented/architecture/2026-10-08-conversation-owned-production-workflow.zh.md)负责单执行器的理由。
 
 `NativeReconciliationProvider` 将原生调用的原始身份绑定到只读 Host 证据。其 `NativeReconciliationRequest` 包含 DSH 持有的 Session 事件、参数、运行、任务与租约；`NativeReconciliationResult` 返回匹配的身份、执行结果和证据。[Production Studio 参考](../../packages/workflow/production-studio/README.zh.md#evidence-and-recovery)定义注册方式、持久化结清与恢复控制。
 
@@ -182,22 +182,6 @@ registerConversationWorkflow(provider: ConversationWorkflowProvider): () => void
 @Remote async get(sessionId: SessionId): Promise<ProductionSnapshot>
 
 /**
- * Save only the draft; active runs retain their captured graph version.
- * @param sessionId - owning conversation.
- * @param request - expected version and edited draft.
- * @returns committed state.
- */
-@Remote async saveGraph(sessionId: SessionId, request: SaveProductionGraphRequest): Promise<ProductionSnapshot>
-
-/**
- * Start new explicitly authorized work with a frozen graph version.
- * @param sessionId - owning conversation.
- * @param request - graph version, objective and source input.
- * @returns initial persisted run.
- */
-@Remote async start(sessionId: SessionId, request: StartProductionRunRequest): Promise<ProductionSnapshot>
-
-/**
  * Pause a branch or whole run; in-flight outcomes remain unknown until reconciled.
  * @param sessionId - owning conversation.
  * @param ref - expected run revision and optional node.
@@ -213,14 +197,6 @@ registerConversationWorkflow(provider: ConversationWorkflowProvider): () => void
  * @returns committed state with the admitted continuation identity; uncertain delivery is never resent.
  */
 @Remote async resume(sessionId: SessionId, ref: ProductionRef, continuation?: ProductionContinuation): Promise<ProductionSnapshot>
-
-/**
- * Supply a human decision without certifying objective evidence.
- * @param sessionId - owning conversation.
- * @param request - exact waiting branch and decision.
- * @returns committed dependent state.
- */
-@Remote async answer(sessionId: SessionId, request: AnswerProductionRequest): Promise<ProductionSnapshot>
 
 /**
  * Register a read-only Host resolver for original native invocations.

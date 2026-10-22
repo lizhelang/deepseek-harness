@@ -1,0 +1,16 @@
+# Bilingual-pair consistency record for guide.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/upgrade-guide/v0.2.1-alpha.4/production-studio-fixed-graph/guide.md
+/:
+  en: 19e74e71098b4c5d
+  zh: da1dd11445fe3c65
+/production-studio-runs-only-the-fixed-conversation-graph:
+  en: 1a0e35853eb91040
+  zh: b2964fde29311c67
+/production-studio-runs-only-the-fixed-conversation-graph/change:
+  en: 087dbef709cd98ac
+  zh: 34632887ccc53706
+/production-studio-runs-only-the-fixed-conversation-graph/migration:
+  en: 4a88b1ba9c44fa58
+  zh: e9e60587dbff3d1c

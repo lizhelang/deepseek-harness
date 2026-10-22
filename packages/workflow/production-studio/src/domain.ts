@@ -1,4 +1,4 @@
-/** Validated editor input and deterministic production graph rules. */
+/** Persisted production state decoding and the fixed AEA conversation graph. */
 import { z } from 'zod'
 import type { ProductionGraph, ProductionNode, ProductionState } from './types.ts'
 
@@ -66,102 +66,51 @@ const stateSchema = z.object({
 export function decodeProductionState(value: unknown): ProductionState { return stateSchema.parse(value) as ProductionState }
 
 /**
- * Reject invalid ports and paths that bypass objective delivery gates.
- * @param value - submitted draft.
- * @returns detached validated graph.
+ * Whether a persisted run graph has the fixed conversation nodes, settings and edges.
+ * Graphs edited before graph editing was removed may carry human checks, breakpoints,
+ * custom gates or rerouted edges that this executor no longer runs.
+ * @param graph - a run's stored graph.
+ * @returns true when only labels, positions, agent prompts, tool lists and budgets differ from the fixed graph.
  */
-export function validateProductionGraph(value: unknown): ProductionGraph {
-  const graph = graphSchema.parse(value) as ProductionGraph
-  const nodes = new Map(graph.nodes.map(item => [item.id, item]))
-  if (nodes.size !== graph.nodes.length) throw new Error('Production node IDs must be unique')
-  if (new Set(graph.edges.map(edge => edge.id)).size !== graph.edges.length) throw new Error('Production edge IDs must be unique')
-  for (const item of graph.nodes) {
-    for (const ports of [item.inputs, item.outputs]) if (new Set(ports.map(p => p.id)).size !== ports.length) throw new Error(`Duplicate port on ${item.id}`)
-    if (item.kind === 'human' && item.config.certification !== undefined) throw new Error('Human confirmation cannot certify objective geometry or files')
-    if (item.config.certification !== undefined && item.kind !== 'gate') throw new Error('Only an objective gate may certify delivery evidence')
-    if (item.kind === 'gate' && item.config.certification !== undefined && !item.config.evidencePath && !item.config.filePaths?.length) throw new Error(`Gate ${item.id} requires an objective evidence field or file readback`)
-    if (item.kind === 'gate' && item.config.certification !== undefined && item.config.evidencePath && !item.config.evidenceToolName) throw new Error(`Gate ${item.id} requires the exact trusted tool receipt producer`)
-    if (item.config.filePaths?.length && item.config.fileHashes?.length !== item.config.filePaths.length) throw new Error(`File readback on ${item.id} requires a paired SHA-256 for every file`)
+export function isFixedConversationGraph(graph: ProductionGraph): boolean {
+  // Decoding fixes key order, so stored and freshly built graphs compare equal.
+  const structure = (value: ProductionGraph): string => {
+    const decoded = graphSchema.parse(value) as ProductionGraph
+    return JSON.stringify({
+      nodes: decoded.nodes.map(({ x, y, label, config: { prompt, tools, ...config }, ...node }) => {
+        void x; void y; void label; void prompt; void tools
+        return { ...node, config }
+      }),
+      edges: decoded.edges,
+    })
   }
-  for (const edge of graph.edges) {
-    const from = nodes.get(edge.fromNode)?.outputs.find(p => p.id === edge.fromPort)
-    const to = nodes.get(edge.toNode)?.inputs.find(p => p.id === edge.toPort)
-    if (!from || !to) throw new Error(`Missing endpoint on edge ${edge.id}`)
-    if (from.type !== to.type) throw new Error(`Incompatible port types on edge ${edge.id}`)
-    if (from.outlet === 'unknown') {
-      const target = nodes.get(edge.toNode)
-      if (target?.kind !== 'human') throw new Error('Unknown operations may only route to human inspection; the interrupted operation cannot be replayed')
-    }
-  }
-  const deliveries = graph.nodes.filter(item => item.kind === 'delivery')
-  if (!deliveries.length) throw new Error('Production graph requires a delivery node')
-  const starts = graph.nodes.filter(item => !graph.edges.some(edge => edge.toNode === item.id))
-  if (!starts.length) throw new Error('Production graph requires an entry node')
-  const requiredGateIds = { geometry: 'geometry', manufacturing: 'manufacturing', files: 'file-check', goal: 'goal' }
-  for (const required of ['geometry', 'manufacturing', 'files', 'goal'] as const) {
-    const certifications = graph.nodes.filter(item => item.id === requiredGateIds[required] && item.protected === true && item.config.certification === required && item.config.toolName === 'production_aea_evidence' && item.config.evidenceToolName === 'production_aea_evidence')
-    if (!certifications.length) throw new Error(`Missing mandatory ${required} gate`)
-    const seen = new Set(starts.map(item => item.id))
-    const queue = [...seen]
-    while (queue.length) {
-      const id = queue.shift()
-      if (!id) break
-      for (const edge of graph.edges.filter(item => item.fromNode === id)) {
-        const from = nodes.get(id)
-        if (certifications.some(gate => gate.id === from?.id) && from?.outputs.find(p => p.id === edge.fromPort)?.outlet === 'success') continue
-        if (!seen.has(edge.toNode)) { seen.add(edge.toNode); queue.push(edge.toNode) }
-      }
-    }
-    if (deliveries.some(item => seen.has(item.id))) throw new Error(`Delivery bypasses mandatory ${required} gate`)
-  }
-  return graph
+  return structure(graph) === structure(createConversationGraph(graph.maxExecutions, []))
 }
 
 /**
- * Construct the safe default production chain; its real tool bindings remain explicit.
- * @param maxExecutions - whole-run cap.
- * @param maxConcurrent - independent branch cap.
- * @returns editable default graph.
+ * Construct the fixed AEA conversation graph. Agent nodes run in the parent conversation;
+ * protected gates read the AEA ledger before delivery.
+ * @param maxExecutions - whole-run execution cap, never expanded by the adapter.
+ * @param toolNames - actual profile tools visible to the parent conversation.
+ * @returns the linear graph with its repair route.
  */
-export function createProductionGraph(maxExecutions: number, maxConcurrent: number): ProductionGraph {
+export function createConversationGraph(maxExecutions: number, toolNames: readonly string[]): ProductionGraph {
   const outputs = (type: ProductionNode['inputs'][number]['type']): ProductionNode['outputs'] => [{ id: 'success', type, outlet: 'success' }, { id: 'failure', type: 'issue', outlet: 'failure' }, { id: 'unknown', type: 'unknown', outlet: 'unknown' }]
-  const agent = (id: string, label: string, x: number, y: number, input: ProductionNode['inputs'][number]['type'], output: ProductionNode['inputs'][number]['type'], prompt: string): ProductionNode => ({ id, label, kind: 'agent', x, y, inputs: [{ id: 'input', type: input }], outputs: outputs(output), maxAttempts: 3, resource: 'Rhino', config: { prompt } })
+  const agent = (id: 'baseline' | 'manufacture' | 'repair', label: string, x: number, y: number, input: ProductionNode['inputs'][number]['type'], output: ProductionNode['inputs'][number]['type'], prompt: string): ProductionNode => ({ id, label, kind: 'agent', x, y, inputs: [{ id: 'input', type: input }], outputs: outputs(output), maxAttempts: 3, resource: 'Rhino', config: { prompt, tools: [...toolNames] } })
   const gate = (id: string, label: string, x: number, y: number, input: ProductionNode['inputs'][number]['type'], output: ProductionNode['inputs'][number]['type'], certification: NonNullable<ProductionNode['config']['certification']>, evidencePath: string): ProductionNode => ({ id, label, kind: 'gate', x, y, inputs: [{ id: 'input', type: input }], outputs: outputs(output), maxAttempts: 8, protected: true, config: { certification, evidencePath, expected: true, toolName: 'production_aea_evidence', evidenceToolName: 'production_aea_evidence', arguments: { caseId: '$input.caseId', caseFilePath: '$input.caseFilePath', stage: certification, deliveryGoal: '$input.deliveryGoal' } } })
-  const baseline = agent('baseline', '基础方案', 40, 40, 'input', 'candidate', 'The confirmed verified-drawings contract explicitly limits this initial stage to the baseline. Create or restore the supplied case, consult its real geometry, and submit one complete baseline using only frozen engineering and actual IDs. After that baseline is actually verified, record the already-confirmed limited trial scope with finish_search(reason="user_requested") using the current Host revision when legal. Do not run suggest_candidates, try_suggestion, submit_revision, resume_search, manufacturing or extra cost optimization in this node. If the baseline fails or is unknown, preserve its exact receipt and return it to the scheduler; do not invent a pass, increase budgets, or replay it. Preserve source models and user documents.')
-  baseline.config.tools = ['create_case', 'begin_workflow', 'get_case_context', 'get_workpiece_configuration', 'inspect_geometry', 'inspect_candidate', 'submit_baseline', 'finish_search']
   const nodes: ProductionNode[] = [
-    baseline,
+    agent('baseline', '基础方案', 40, 40, 'input', 'candidate', '在原输入和冻结预算内提出、验证、比较并优化方案。按当前 Host nextActions 完成有界搜索与制造反馈；不要自行提前 user_requested 停止，不把理论分数当制造成本。'),
     gate('geometry', '几何检查', 330, 40, 'candidate', 'geometry', 'geometry', 'geometryVerified'),
-    agent('manufacture', '制造补偿与出图', 620, 40, 'geometry', 'manufacturing', 'Finalize the verified AEA candidate through the existing manufacturing workflow. This run has an explicitly confirmed verified-drawings goal contract: try the baseline first and deliver it if the declared conditions pass; optimize only when failure or an unmet declared condition makes it necessary. This is a limited trial scope, not an exhaustive or globally optimal search claim. Restore the actual baseline workflow state and, when Host nextActions permit, record that already-confirmed limited scope with finish_search(reason="user_requested") before real finalize_candidate and comparison. If manufacturing or a declared goal fails, follow legal Host nextActions to resume_search and repair within the original budget. Do not invent further user authorization, weaken gates, change frozen parameters, increase budgets, or replay unknown operations. Return actual Host receipts.'),
+    agent('manufacture', '制造补偿与出图', 620, 40, 'geometry', 'manufacturing', '按当前 Host nextActions 完成所有必需候选的真实制造、当前图纸与制造成本比较。保留最佳合法方案，明确失败再走修复，未知只对账不重放。'),
     gate('manufacturing', '制造检查', 40, 280, 'manufacturing', 'manufacturing', 'manufacturing', 'manufacturingVerified'),
     gate('file-check', '保存文件检查', 330, 280, 'manufacturing', 'files', 'files', 'fileReadbackVerified'),
     gate('goal', '交付目标判定', 620, 280, 'files', 'delivery', 'goal', 'goalSatisfied'),
     { id: 'delivery', label: '交付', kind: 'delivery', x: 620, y: 530, inputs: [{ id: 'input', type: 'delivery' }], outputs: [], maxAttempts: 1, protected: true, config: {} },
-    agent('repair', '修复或必要优化', 40, 530, 'issue', 'candidate', 'Inspect the exact failed objective report. Make a distinct bounded repair through the existing AEA workflow and unchanged budget. Preserve the last legal candidate. Never fabricate native evidence or repeat unknown operations.'),
+    agent('repair', '修复或必要优化', 40, 530, 'issue', 'candidate', '读取精确失败证据，在原冻结预算内提出真正不同的修复。继续实际验证、搜索、制造与比较，不修改参数、预算、原模型或用文字声称通过。'),
   ]
   const chain = ['baseline', 'geometry', 'manufacture', 'manufacturing', 'file-check', 'goal', 'delivery']
   const edges = chain.slice(1).map((id, index) => ({ id: `main-${index}`, fromNode: chain[index] ?? '', fromPort: 'success', toNode: id, toPort: 'input' }))
   for (const item of nodes.filter(item => item.kind !== 'delivery' && item.id !== 'repair')) edges.push({ id: `repair-${item.id}`, fromNode: item.id, fromPort: 'failure', toNode: 'repair', toPort: 'input' })
   edges.push({ id: 'repair-return', fromNode: 'repair', fromPort: 'success', toNode: 'geometry', toPort: 'input' })
-  return validateProductionGraph({ version: 1, name: 'AEA 生产流程', nodes, edges, maxExecutions, maxConcurrent })
-}
-
-/**
- * Direct conversation owns agent nodes; read-only gates use the same persisted graph.
- * @param maxExecutions - Existing bounded execution budget, never expanded by the adapter.
- * @param toolNames - Actual profile tools visible to this parent conversation.
- * @returns protected linear graph owned by the current conversation.
- */
-export function createConversationGraph(maxExecutions: number, toolNames: readonly string[]): ProductionGraph {
-  const graph = createProductionGraph(maxExecutions, 1)
-  graph.name = 'AEA 对话执行流程'
-  for (const node of graph.nodes.filter(item => item.kind === 'agent')) {
-    node.config.tools = [...toolNames]
-    node.config.prompt = node.id === 'baseline'
-      ? '在原输入和冻结预算内提出、验证、比较并优化方案。按当前 Host nextActions 完成有界搜索与制造反馈；不要自行提前 user_requested 停止，不把理论分数当制造成本。'
-      : node.id === 'manufacture'
-        ? '按当前 Host nextActions 完成所有必需候选的真实制造、当前图纸与制造成本比较。保留最佳合法方案，明确失败再走修复，未知只对账不重放。'
-        : '读取精确失败证据，在原冻结预算内提出真正不同的修复。继续实际验证、搜索、制造与比较，不修改参数、预算、原模型或用文字声称通过。'
-  }
-  return validateProductionGraph(graph)
+  return { version: 1, name: 'AEA 对话执行流程', nodes, edges, maxExecutions, maxConcurrent: 1 }
 }

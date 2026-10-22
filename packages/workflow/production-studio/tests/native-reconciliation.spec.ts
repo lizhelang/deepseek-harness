@@ -12,8 +12,6 @@ import Storage from '@deepseek-ai/dsh-storage'
 import type { KvUnit } from '@deepseek-ai/dsh-storage'
 import * as StorageJson from '@deepseek-ai/dsh-storage-json'
 import * as StorageDomain from '@deepseek-ai/dsh-storage-domain'
-import Subagent from '@deepseek-ai/dsh-subagent'
-import * as Fork from '@deepseek-ai/dsh-subagent-fork-in-process'
 import * as JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { MockAdapter, textResponse, toolCallResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
@@ -33,7 +31,7 @@ async function harness(maxEvidenceBytes = 262144) {
   await ctx.plugin(FsLocal, { cwd: root })
   await mountAgentLoopTestDependencies(ctx, { workingDirectory: true })
   await ctx.plugin(Storage); await ctx.plugin(StorageJson, { root: join(root, 'state') })
-  await ctx.plugin(StorageDomain, { backend: 'json' }); await ctx.plugin(Subagent); await ctx.plugin(Fork)
+  await ctx.plugin(StorageDomain, { backend: 'json' })
   await ctx.plugin(JsonlSessionPersistence, { root: join(root, 'sessions'), compression: 'none' })
   const kv = ctx.storage.backend.get('json').kv!
   const open = kv.open.bind(kv)

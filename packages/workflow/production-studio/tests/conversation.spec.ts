@@ -12,14 +12,12 @@ import Storage from '@deepseek-ai/dsh-storage'
 import type { KvUnit } from '@deepseek-ai/dsh-storage'
 import * as StorageJson from '@deepseek-ai/dsh-storage-json'
 import * as StorageDomain from '@deepseek-ai/dsh-storage-domain'
-import Subagent from '@deepseek-ai/dsh-subagent'
-import * as Fork from '@deepseek-ai/dsh-subagent-fork-in-process'
 import * as JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { MockAdapter, textResponse, toolCallResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
 import ProductionStudio, { decodeProductionState } from '../src/index.ts'
 import type { Config } from '../src/index.ts'
-import type { ConversationWorkflowProvider, ProductionCaseView, ProductionState } from '../src/types.ts'
+import type { ConversationWorkflowProvider, ProductionCaseView, ProductionRun, ProductionState } from '../src/types.ts'
 import { writeFixtureCase } from './fixture-case.ts'
 
 const contexts: Context[] = [], roots: string[] = [], releases: (() => void)[] = []
@@ -35,7 +33,7 @@ async function harness(script?: ConstructorParameters<typeof MockAdapter>[0], co
   const ctx = new Context(); contexts.push(ctx)
   await ctx.plugin(FsLocal, { cwd: root })
   await mountAgentLoopTestDependencies(ctx, { workingDirectory: true })
-  await ctx.plugin(Storage); await ctx.plugin(StorageJson, { root: join(root, 'state') }); await ctx.plugin(StorageDomain, { backend: 'json' }); await ctx.plugin(Subagent); await ctx.plugin(Fork)
+  await ctx.plugin(Storage); await ctx.plugin(StorageJson, { root: join(root, 'state') }); await ctx.plugin(StorageDomain, { backend: 'json' })
   await ctx.plugin(JsonlSessionPersistence, { root: join(root, 'sessions'), compression: 'none' })
   const kv = ctx.storage.backend.get('json').kv
   if (!kv) throw new Error('Expected the real JSON storage backend')
@@ -93,15 +91,11 @@ async function harness(script?: ConstructorParameters<typeof MockAdapter>[0], co
 }
 
 describe('one conversation, one production executor', () => {
-  it.each([false, true])('retains a known terminal failure without scheduling repair or a human breakpoint (breakAfter=%s)', async (breakAfter) => {
+  it('retains a known terminal failure without scheduling repair', async () => {
     const h = await harness()
     h.receipt['workflow'] = { control: { status: 'capability_blocked', terminal: true,
       reasonCode: 'no_executable_next_action', nextActions: [] } }
     h.provider.observe = () => ({ outlet: 'failure', terminal: true, message: 'Development capability blocked: no_executable_next_action' })
-    const before = await h.snapshot(), graph = structuredClone(before.graph)
-    const baseline = graph.nodes.find(node => node.id === 'baseline')!
-    baseline.config.breakAfter = breakAfter
-    await h.ctx.productionStudio.saveGraph(h.agent.id, { expectedVersion: before.graph.version, graph })
     expect((await h.call()).isError).toBe(false)
     const run = await h.run(), task = run.tasks.find(item => item.nodeId === 'baseline')!
     expect(run.phase).toBe('blocked')
@@ -233,18 +227,6 @@ describe('one conversation, one production executor', () => {
     expect((await h.run()).case?.revision).toBe(4)
   })
 
-  it('preserves a genuine human breakpoint on a nonterminal failure', async () => {
-    const h = await harness()
-    const before = await h.snapshot(), graph = structuredClone(before.graph)
-    graph.nodes.find(node => node.id === 'baseline')!.config.breakAfter = true
-    await h.ctx.productionStudio.saveGraph(h.agent.id, { expectedVersion: before.graph.version, graph })
-    h.provider.observe = () => ({ outlet: 'failure', message: 'Review the configured decision' })
-    expect((await h.call()).isError).toBe(false)
-    const task = (await h.run()).tasks.find(item => item.nodeId === 'baseline')!
-    expect(task.phase).toBe('human'); expect(task.pendingOutlet).toBe('failure')
-    expect((await h.call()).isError).toBe(true); expect(h.count()).toBe(1)
-  })
-
   it('keeps an unresolved receipt unknown even if its provider claims a terminal failure', async () => {
     const h = await harness(); h.unknown()
     h.provider.observe = () => ({ outlet: 'failure', terminal: true, message: 'Claimed capability terminal' })
@@ -287,7 +269,7 @@ describe('one conversation, one production executor', () => {
   })
 
   it('auto-starts from a real parent chat call, crosses actual file gates and emits replayable same-run checkpoints', async () => {
-    const { ctx, agent, adapter, run, events, count, errors } = await harness()
+    const { agent, adapter, run, events, count, errors } = await harness()
     agent.followup(createUserMessage({ content: [{ type: 'text', text: 'Verify the supplied drawing' }], source: { kind: 'user' } }))
     await vi.waitFor(async () => {
       expect((await run()).phase, errors.mock.calls.map(args => args.map(String).join(' ')).join('\n')).toBe('complete')
@@ -302,65 +284,6 @@ describe('one conversation, one production executor', () => {
     const checkpoints = events.filter(event => event.type === 'production/checkpoint')
     expect(checkpoints.length).toBeGreaterThan(5)
     expect(checkpoints.every(event => event.ignorable === true && event.type === 'production/checkpoint' && event.data.run.id === value.id)).toBe(true)
-    await expect(ctx.productionStudio.start(agent.id, { graphVersion: 1, objective: 'duplicate', input: null, goalContractAcknowledged: true })).rejects.toThrow('second run')
-  })
-
-  it.each([
-    { stage: 'manufacturing', target: 'manufacturing', evidencePath: 'manufacturingVerified', inherited: ['geometry'] },
-    { stage: 'files', target: 'file-check', evidencePath: 'fileReadbackVerified', inherited: ['geometry', 'manufacturing'] },
-    { stage: 'goal', target: 'goal', evidencePath: 'goalSatisfied', inherited: ['files', 'geometry', 'manufacturing'] },
-  ] as const)('runs a supplementary $stage check without certifying it and retains the mandatory gate', async ({ stage, target, evidencePath, inherited }) => {
-    const h = await harness()
-    expect((await h.call(false)).isError).toBe(false)
-    const before = await h.snapshot(), graph = structuredClone(before.graph)
-    const required = graph.nodes.find(node => node.id === target)!
-    const extra = structuredClone(required)
-    extra.id = `extra-${stage}`; extra.label = `Supplementary ${stage} check`; extra.protected = false
-    delete extra.config.certification
-    extra.config.arguments = { stage }
-    extra.outputs = extra.outputs.map(port => port.outlet === 'success' ? { ...port, type: required.inputs[0]!.type } : port)
-    graph.nodes.push(extra)
-    const incoming = graph.edges.find(edge => edge.toNode === target && edge.fromPort === 'success')!
-    incoming.toNode = extra.id
-    graph.edges.push({ id: `extra-${stage}-required`, fromNode: extra.id, fromPort: 'success', toNode: target, toPort: 'input' })
-    await h.ctx.productionStudio.saveGraph(h.agent.id, { expectedVersion: before.graph.version, graph })
-    expect((await h.call(true)).isError).toBe(false)
-    expect((await h.call(true)).isError).toBe(false)
-    const completed = await h.run(), supplementary = completed.tasks.find(task => task.nodeId === extra.id)!
-    expect(completed.phase).toBe('complete')
-    expect(supplementary.phase).toBe('complete')
-    expect(supplementary.evidence.at(-1)).toMatchObject({ toolName: 'production_aea_evidence', data: { [evidencePath]: true } })
-    expect(supplementary.certificates.toSorted()).toEqual([...inherited])
-    expect(completed.tasks.find(task => task.nodeId === target)?.certificates).toContain(stage)
-    expect(completed.tasks.find(task => task.nodeId === 'delivery')?.certificates.toSorted()).toEqual(['files', 'geometry', 'goal', 'manufacturing'])
-    expect(h.count()).toBe(3)
-  })
-
-  it('applies future prompt and routing edits while preserving an in-flight call and blocks the next call at a human node', async () => {
-    const h = await harness(); h.defer()
-    // This fixture drives the next operation directly; continuation has separate real-loop coverage.
-    vi.spyOn(h.agent, 'steer').mockImplementation(() => {})
-    const inFlight = h.call(true); await h.dispatch
-    const before = await h.snapshot(), active = await h.run()
-    const graph = structuredClone(before.graph)
-    const manufacture = graph.nodes.find(node => node.id === 'manufacture')!
-    manufacture.config.prompt = 'Use this updated future instruction'
-    graph.nodes.push({ id: 'decision', label: 'Review before manufacture', kind: 'human', x: 0, y: 0, inputs: [{ id: 'input', type: 'geometry' }], outputs: [{ id: 'success', type: 'geometry', outlet: 'success' }], maxAttempts: 1, config: { question: 'Proceed?' } })
-    graph.edges.find(edge => edge.fromNode === 'geometry' && edge.fromPort === 'success')!.toNode = 'decision'
-    graph.edges.push({ id: 'decision-manufacture', fromNode: 'decision', fromPort: 'success', toNode: 'manufacture', toPort: 'input' })
-    const saved = await h.ctx.productionStudio.saveGraph(h.agent.id, { expectedVersion: before.graph.version, graph })
-    expect(saved.runs[0]?.id).toBe(active.id)
-    const forbidden = structuredClone(saved.graph); forbidden.nodes.find(node => node.id === 'baseline')!.config.prompt = 'Rewrite the admitted call'
-    await expect(h.ctx.productionStudio.saveGraph(h.agent.id, { expectedVersion: saved.graph.version, graph: forbidden })).rejects.toThrow('immutable')
-    h.release(); expect((await inFlight).isError).toBe(false)
-    expect((await h.run()).tasks.find(task => task.nodeId === 'decision')?.phase).toBe('human')
-    expect((await h.call()).isError).toBe(true); expect(h.count()).toBe(1)
-    const waiting = await h.run()
-    await h.ctx.productionStudio.answer(h.agent.id, { runId: waiting.id, revision: waiting.revision, nodeId: 'decision', accepted: true, answer: 'Proceed' })
-    const prompt = await h.ctx.systemPrompt.assemble({ agent: h.agent })
-    expect(prompt.sections.some(section => section.text.includes('Use this updated future instruction'))).toBe(true)
-    expect((await h.call(true)).isError).toBe(false)
-    expect((await h.run()).phase).toBe('complete'); expect(h.count()).toBe(2)
   })
 
   it('pauses admission without discarding the known in-flight result or replaying it on resume', async () => {
@@ -373,16 +296,6 @@ describe('one conversation, one production executor', () => {
     const paused = await h.run(); await h.ctx.productionStudio.resume(h.agent.id, { runId: paused.id, revision: paused.revision })
     expect(h.count()).toBe(1)
     expect((await h.call(true)).isError).toBe(false); expect(h.count()).toBe(2)
-  })
-
-  it('filters and rejects tools denied by the edited future node, even when called directly', async () => {
-    const h = await harness(); await h.call(false)
-    const before = await h.snapshot(), graph = structuredClone(before.graph)
-    graph.nodes.find(node => node.id === 'manufacture')!.config.tools = []
-    await h.ctx.productionStudio.saveGraph(h.agent.id, { expectedVersion: before.graph.version, graph })
-    await h.call(true)
-    expect((await h.ctx.systemPrompt.assemble({ agent: h.agent })).tools).toHaveLength(0)
-    expect((await h.call(true)).isError).toBe(true); expect(h.count()).toBe(2)
   })
 
   it('retains a known receipt and retries only a failed historical checkpoint append', async () => {
@@ -514,60 +427,6 @@ describe('one conversation, one production executor', () => {
     await replacement.dispose()
   })
 
-  it('keeps a zero-attempt approved human node and its consumed route immutable', async () => {
-    const h = await harness(['hang-slow']); h.defer()
-    const pending = h.call(true); await h.dispatch
-    const before = await h.snapshot(), graph = structuredClone(before.graph)
-    graph.nodes.push({ id: 'decision', label: 'Review before manufacture', kind: 'human', x: 0, y: 0, inputs: [{ id: 'input', type: 'geometry' }], outputs: [{ id: 'success', type: 'geometry', outlet: 'success' }], maxAttempts: 1, config: { question: 'Proceed?' } })
-    const edge = graph.edges.find(item => item.fromNode === 'geometry' && item.fromPort === 'success')
-    if (!edge) throw new Error('Expected the geometry route')
-    edge.toNode = 'decision'
-    graph.edges.push({ id: 'decision-manufacture', fromNode: 'decision', fromPort: 'success', toNode: 'manufacture', toPort: 'input' })
-    await h.ctx.productionStudio.saveGraph(h.agent.id, { expectedVersion: before.graph.version, graph })
-    h.release(); await pending
-    const waiting = await h.run()
-    await h.ctx.productionStudio.answer(h.agent.id, { runId: waiting.id, revision: waiting.revision, nodeId: 'decision', accepted: true, answer: 'Proceed' })
-    const approved = await h.run(), decision = approved.tasks.find(item => item.nodeId === 'decision')
-    expect(decision?.phase).toBe('complete'); expect(decision?.attempts).toBe(0); expect(decision?.admitted).toBe(true)
-    const current = await h.snapshot(), changed = structuredClone(current.graph)
-    const node = changed.nodes.find(item => item.id === 'decision')
-    if (!node) throw new Error('Expected the approved human node')
-    node.config.question = 'Replace the approved decision'
-    await expect(h.ctx.productionStudio.saveGraph(h.agent.id, { expectedVersion: current.graph.version, graph: changed })).rejects.toThrow('immutable')
-    const route = structuredClone(current.graph), consumed = route.edges.find(item => item.id === 'decision-manufacture')
-    if (!consumed) throw new Error('Expected the consumed decision route')
-    const manufacture = route.nodes.find(item => item.id === 'manufacture')
-    if (!manufacture) throw new Error('Expected the future manufacture node')
-    manufacture.inputs.push({ id: 'replacement', type: 'geometry' })
-    consumed.toPort = 'replacement'
-    await expect(h.ctx.productionStudio.saveGraph(h.agent.id, { expectedVersion: current.graph.version, graph: route })).rejects.toThrow('immutable')
-    expect((await h.saved()).runs[0]?.tasks.find(item => item.nodeId === 'decision')?.admitted).toBe(true)
-    expect(h.count()).toBe(1)
-    h.agent.cancel({ kind: 'user' }); await h.agent.whenIdle()
-  })
-
-  it('keeps a released break-before node immutable while it is ready with zero attempts', async () => {
-    const h = await harness(['hang-slow']); h.defer()
-    const pending = h.call(true); await h.dispatch
-    const before = await h.snapshot(), graph = structuredClone(before.graph)
-    const node = graph.nodes.find(item => item.id === 'manufacture')
-    if (!node) throw new Error('Expected the future manufacture node')
-    node.config.breakBefore = true
-    await h.ctx.productionStudio.saveGraph(h.agent.id, { expectedVersion: before.graph.version, graph })
-    h.release(); await pending
-    const waiting = await h.run()
-    expect(waiting.tasks.find(item => item.nodeId === 'manufacture')?.phase).toBe('human')
-    await h.ctx.productionStudio.answer(h.agent.id, { runId: waiting.id, revision: waiting.revision, nodeId: 'manufacture', accepted: true, answer: 'Run the admitted manufacture node' })
-    const released = await h.run(), task = released.tasks.find(item => item.nodeId === 'manufacture')
-    expect(task?.phase).toBe('ready'); expect(task?.attempts).toBe(0); expect(task?.admitted).toBe(true)
-    const current = await h.snapshot(), changed = structuredClone(current.graph), admitted = changed.nodes.find(item => item.id === 'manufacture')
-    if (!admitted) throw new Error('Expected the admitted manufacture node')
-    admitted.config.prompt = 'Replace a released zero-attempt instruction'
-    await expect(h.ctx.productionStudio.saveGraph(h.agent.id, { expectedVersion: current.graph.version, graph: changed })).rejects.toThrow('immutable')
-    expect(h.count()).toBe(1)
-    h.agent.cancel({ kind: 'user' }); await h.agent.whenIdle()
-  })
-
   it('steers a resume during the cancellation tail into the same parent and run', async () => {
     const h = await harness(['hang-slow', toolCallResponse('cancel-tail-manufacture', 'conversation_step', { finish: true }), textResponse('Same run resumed after cancellation')])
     await h.call(true)
@@ -635,7 +494,7 @@ describe('one conversation, one production executor', () => {
     expect((await h.snapshot()).error).toBeUndefined()
   })
 
-  it('serializes recovery publication with a concurrent graph save and retains the checkpoint whose flush returns false', async () => {
+  it('serializes recovery publication with a concurrent pause and retains the checkpoint whose flush returns false', async () => {
     const h = await harness()
     await h.call(false); await h.fiber.dispose()
     const state = await h.saved(), run = state.runs[0]
@@ -659,22 +518,20 @@ describe('one conversation, one production executor', () => {
       } finally { concurrent-- }
     })
     const recovering = h.snapshot(); await started
-    const graph = structuredClone(state.graph); graph.name = 'Concurrent future draft'
-    const saving = h.ctx.productionStudio.saveGraph(h.agent.id, { expectedVersion: state.graph.version, graph })
-    const saveOutcome = saving.then(() => null, (error: unknown) => error)
+    const pausing = h.ctx.productionStudio.pause(h.agent.id, { runId: run.id, revision: run.revision })
+    const pauseOutcome = pausing.then(() => null, (error: unknown) => error)
     const during = await h.snapshot()
     expect(during.runs[0]?.id).toBe(run.id)
     await new Promise(resolve => setTimeout(resolve, 30))
     const callsBeforeRelease = calls
     releaseFourth(); await recovering
-    const failure = await saveOutcome
+    const failure = await pauseOutcome
     expect(failure).toBeInstanceOf(Error)
     expect(String(failure)).toContain('checkpoint publication is pending')
     expect(callsBeforeRelease).toBe(1); expect(maximum).toBe(1)
     const saved = await h.saved()
     expect(saved.pendingCheckpoints?.map(checkpoint => checkpoint.revision)).toEqual([5])
     expect(saved.runs[0]?.tasks.find(task => task.nodeId === 'baseline')?.output).toEqual(h.receipt)
-    expect(saved.graph.name).toBe(state.graph.name)
     expect(h.count()).toBe(1)
     spy.mockRestore()
     await h.ctx.systemPrompt.assemble({ agent: h.agent })
@@ -685,32 +542,34 @@ describe('one conversation, one production executor', () => {
     await replacement.dispose()
   })
 
-  it('locks a restored zero-attempt human breakpoint without a legacy admitted flag after approval makes it ready', async () => {
-    const h = await harness(); h.defer()
-    const pending = h.call(true); await h.dispatch
-    const before = await h.snapshot(), graph = structuredClone(before.graph)
-    const node = graph.nodes.find(item => item.id === 'manufacture')
-    if (!node) throw new Error('Expected the future manufacture node')
-    node.config.breakBefore = true
-    await h.ctx.productionStudio.saveGraph(h.agent.id, { expectedVersion: before.graph.version, graph })
-    h.release(); await pending; await h.fiber.dispose()
-    const state = await h.saved(), run = state.runs[0], legacy = run?.tasks.find(task => task.nodeId === 'manufacture')
-    if (!run || !legacy) throw new Error('Expected the saved human breakpoint')
-    expect(legacy.phase).toBe('human'); expect(legacy.attempts).toBe(0)
-    delete legacy.admitted
+  it('blocks a gate whose AEA evidence fails and routes the run to repair', async () => {
+    const h = await harness()
+    await writeFixtureCase(h.root, true)
+    expect((await h.call(true)).isError).toBe(false)
+    const run = await h.run(), gate = run.tasks.find(task => task.nodeId === 'geometry')!
+    expect(gate.phase).toBe('blocked')
+    expect(gate.certificates).toEqual([])
+    expect(gate.output).toMatchObject({ issue: 'Objective check failed: geometryVerified' })
+    expect(run.tasks.find(task => task.nodeId === 'repair')?.phase).toBe('ready')
+    expect(run.tasks.find(task => task.nodeId === 'manufacture')?.phase).toBe('waiting')
+  })
+
+  it.each([
+    { label: 'an edited graph', edit: (run: ProductionRun) => { run.graph.nodes.find(node => node.id === 'manufacture')!.config.breakBefore = true }, error: 'edited workflow graph' },
+    { label: 'an independently scheduled run', edit: (run: ProductionRun) => { run.mode = 'scheduled' }, error: 'scheduled runs are retired' },
+  ])('keeps $label readable but refuses control changes and new admissions', async ({ edit, error }) => {
+    const h = await harness()
+    expect((await h.call(false)).isError).toBe(false)
+    await h.fiber.dispose()
+    const state = await h.saved(), run = state.runs[0]!
+    edit(run)
     await h.seedSaved(state)
     const replacement = await h.ctx.plugin(ProductionStudio); h.registerProvider()
     const restored = await h.run()
-    expect(restored.tasks.find(task => task.nodeId === 'manufacture')?.admitted).toBeUndefined()
-    await h.ctx.productionStudio.answer(h.agent.id, { runId: restored.id, revision: restored.revision,
-      nodeId: 'manufacture', accepted: true, answer: 'Release the restored breakpoint' })
-    const approved = await h.run(), task = approved.tasks.find(item => item.nodeId === 'manufacture')
-    expect(task?.phase).toBe('ready'); expect(task?.attempts).toBe(0); expect(task?.admitted).toBe(true)
-    const current = await h.snapshot(), changed = structuredClone(current.graph), admitted = changed.nodes.find(item => item.id === 'manufacture')
-    if (!admitted) throw new Error('Expected the released manufacture node')
-    admitted.config.prompt = 'Rewrite an already approved legacy node'
-    await expect(h.ctx.productionStudio.saveGraph(h.agent.id, { expectedVersion: current.graph.version, graph: changed })).rejects.toThrow('immutable')
-    expect((await h.saved()).runs[0]?.tasks.find(item => item.nodeId === 'manufacture')?.admitted).toBe(true)
+    expect(restored.tasks.find(task => task.nodeId === 'baseline')?.output).toEqual(h.receipt)
+    const ref = { runId: restored.id, revision: restored.revision }
+    await expect(h.ctx.productionStudio.pause(h.agent.id, ref)).rejects.toThrow(error)
+    await expect(h.ctx.productionStudio.resume(h.agent.id, ref)).rejects.toThrow(error)
     expect(h.count()).toBe(1)
     await replacement.dispose()
   })

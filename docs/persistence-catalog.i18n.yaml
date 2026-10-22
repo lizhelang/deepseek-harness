@@ -159,8 +159,8 @@
   en: d76aa783e77f263d
   zh: d76aa783e77f263d
 /session-persistence-event-catalog/events/production/production-checkpoint-log-only:
-  en: 38c4f7921b3ea258
-  zh: c504ac77fcd5a144
+  en: 606b527f4e9ce846
+  zh: f078b3fac3059ae1
 /session-persistence-event-catalog/events/request:
   en: a8df82440ebdf5f8
   zh: a8df82440ebdf5f8
@@ -2106,8 +2106,8 @@
   en: 7275ddb692b9f60b
   zh: 6489d1827c6bf985
 /session-persistence-event-catalog/resolved-persistence-types/run:
-  en: 4f1f5a2554369978
-  zh: a1ebd174f87bc4cc
+  en: 3970d06f479cca9a
+  zh: a7d52b6146953cf5
 /session-persistence-event-catalog/resolved-persistence-types/sessionformatversion-sessionid-throughseq:
   en: 8aaa02b06896492d
   zh: 4dd0e1ee40d8f22d

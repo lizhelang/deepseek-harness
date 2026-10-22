@@ -29,7 +29,7 @@ export function run(id: string, taskPhase: ProductionNodePhase): ProductionRun {
 }
 
 export function snapshot(runs: ProductionRun[] = []): ProductionSnapshot {
-  return { sessionId: SID, revision: 2, graph: graph(), runs, capabilities: { subagent: true, tools: ['native-test'], filesystem: true } }
+  return { sessionId: SID, revision: 2, graph: graph(), runs, capabilities: { tools: ['native-test'], filesystem: true } }
 }
 
 export function deliveredRun(): ProductionRun {

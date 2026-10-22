@@ -22,11 +22,10 @@ describe('production Studio through the shipped Loader profile', () => {
       },
     })
     expect(result.stderr).toBe('')
-    expect(result.stdout).toContain('CLI tool round trip complete')
     expect(result.stdout).toContain('"type":"production_result"')
     const run = saved?.runs.at(-1)
     expect(run?.phase).toBe('complete')
-    expect(run?.graph.version).toBe(2)
+    expect(run?.mode).toBe('conversation')
     expect(run?.tasks.find(task => task.nodeId === 'delivery')?.certificates.sort()).toEqual(['files', 'geometry', 'goal', 'manufacturing'])
     expect(run?.tasks.find(task => task.nodeId === 'file-check')?.evidence.some(item => item.toolName === 'production_aea_evidence')).toBe(true)
     if (!run) throw new Error('Loader did not persist its completed production run')
@@ -62,7 +61,7 @@ describe('production Studio through the shipped Loader profile', () => {
           {
             "name": "基础方案",
             "phase": "complete",
-            "stage": "program",
+            "stage": "agent",
           },
           {
             "name": "几何检查",
@@ -72,7 +71,7 @@ describe('production Studio through the shipped Loader profile', () => {
           {
             "name": "制造补偿与出图",
             "phase": "complete",
-            "stage": "program",
+            "stage": "agent",
           },
           {
             "name": "制造检查",
@@ -97,7 +96,7 @@ describe('production Studio through the shipped Loader profile', () => {
           {
             "name": "修复或必要优化",
             "phase": "waiting",
-            "stage": "program",
+            "stage": "agent",
           },
         ],
         "verifiedEvidence": {

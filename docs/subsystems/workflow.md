@@ -10,9 +10,9 @@ Sources: browser-safe vocabulary in [`packages/workflow/workflow/src/types.ts`](
 
 ## Conversation-owned production workflows
 
-[Production Studio](../../packages/workflow/production-studio/README.md) separately owns `ctx.productionStudio`, versioned production graphs and drawing-delivery checks. A trusted provider can bind a direct AEA conversation to one run: the parent chat executes agent steps, while the service enforces graph admission and performs read-only evidence checks. This does not use `ctx.workflowEngine` to spawn another script execution. Unbound production runs retain the explicit scheduler and child agents.
+[Production Studio](../../packages/workflow/production-studio/README.md) separately owns `ctx.productionStudio`, its fixed conversation graph and drawing-delivery checks. A trusted provider can bind a direct AEA conversation to one run: the parent chat executes agent steps, while the service enforces graph admission and performs read-only evidence checks. This does not use `ctx.workflowEngine` to spawn another script execution.
 
-The monitor and editor follow current committed production state; Chat and Trajectory render optional, log-only checkpoints of that same run in Session order. Supported future-node edits preserve admitted operations, consumed routes, required checks and original budgets. The [package reference](../../packages/workflow/production-studio/README.md) owns controls and limitations; the [architecture decision](../../.agents/notes/implemented/architecture/2026-10-08-conversation-owned-production-workflow.md) owns the single-executor rationale.
+The case panel and run policy follow current committed production state; Chat and Trajectory render optional, log-only checkpoints of that same run in Session order. Earlier scheduled runs and edited-graph runs remain readable but cannot be paused or resumed. The [package reference](../../packages/workflow/production-studio/README.md) owns controls and limitations; the [architecture decision](../../.agents/notes/implemented/architecture/2026-10-08-conversation-owned-production-workflow.md) owns the single-executor rationale.
 
 `NativeReconciliationProvider` binds original native call identities to read-only Host evidence. Its `NativeReconciliationRequest` contains DSH-owned Session events, arguments, run, task and lease; `NativeReconciliationResult` returns the matching identity, execution outcome and evidence. The [Production Studio reference](../../packages/workflow/production-studio/README.md#evidence-and-recovery) defines registration, durable settlement and recovery controls.
 
@@ -182,22 +182,6 @@ registerConversationWorkflow(provider: ConversationWorkflowProvider): () => void
 @Remote async get(sessionId: SessionId): Promise<ProductionSnapshot>
 
 /**
- * Save only the draft; active runs retain their captured graph version.
- * @param sessionId - owning conversation.
- * @param request - expected version and edited draft.
- * @returns committed state.
- */
-@Remote async saveGraph(sessionId: SessionId, request: SaveProductionGraphRequest): Promise<ProductionSnapshot>
-
-/**
- * Start new explicitly authorized work with a frozen graph version.
- * @param sessionId - owning conversation.
- * @param request - graph version, objective and source input.
- * @returns initial persisted run.
- */
-@Remote async start(sessionId: SessionId, request: StartProductionRunRequest): Promise<ProductionSnapshot>
-
-/**
  * Pause a branch or whole run; in-flight outcomes remain unknown until reconciled.
  * @param sessionId - owning conversation.
  * @param ref - expected run revision and optional node.
@@ -213,14 +197,6 @@ registerConversationWorkflow(provider: ConversationWorkflowProvider): () => void
  * @returns committed state with the admitted continuation identity; uncertain delivery is never resent.
  */
 @Remote async resume(sessionId: SessionId, ref: ProductionRef, continuation?: ProductionContinuation): Promise<ProductionSnapshot>
-
-/**
- * Supply a human decision without certifying objective evidence.
- * @param sessionId - owning conversation.
- * @param request - exact waiting branch and decision.
- * @returns committed dependent state.
- */
-@Remote async answer(sessionId: SessionId, request: AnswerProductionRequest): Promise<ProductionSnapshot>
 
 /**
  * Register a read-only Host resolver for original native invocations.

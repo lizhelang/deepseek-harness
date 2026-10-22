@@ -2503,18 +2503,14 @@ export interface Config {
 
 ## `@deepseek-ai/dsh-production-studio`
 
-- `inject`: `agents` · `tools` · `subagents` · `fs` · `storageDomain` · `sessions` · `sessionProjections`
-- `source`: [`packages/workflow/production-studio/src/index.ts:30`](../packages/workflow/production-studio/src/index.ts)
+- `inject`: `agents` · `tools` · `fs` · `storageDomain` · `sessions` · `sessionProjections`
+- `source`: [`packages/workflow/production-studio/src/index.ts:27`](../packages/workflow/production-studio/src/index.ts)
 
 ```ts config-catalog
 /** Deployment limits; per-run budgets are stored in each immutable graph. */
 export interface Config {
   /** Default whole-run node execution cap, 80; copied into each new draft and never raised during a run. */
   defaultMaxExecutions?: number
-  /** Default independent-task concurrency, three; native AEA calls still serialize under the global lease. */
-  defaultMaxConcurrent?: number
-  /** Real child provider name, `fork` by default; unavailable providers cannot simulate agent completion. */
-  subagentProvider?: string
   /** Maximum retained objective evidence in bytes per node, 262144; exceeding it prevents certification. */
   maxEvidenceBytes?: number
   /** Maximum binary bytes read for each selected file, 4194304; larger files fail readback until deployment config changes. */

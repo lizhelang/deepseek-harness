@@ -3,41 +3,41 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/client/ui-production-studio/README.md
 /:
-  en: bf19227be60f3150
-  zh: 91c00272dc0e7a71
+  en: 84554bddc60324c0
+  zh: 02bd87863fa6bfe0
 /deepseek-ai-dsh-client-ui-production-studio:
   en: d7dd5f595d9dbb0a
   zh: 95248d5fb9ef090a
 /deepseek-ai-dsh-client-ui-production-studio/summary:
-  en: ae57e0553f65e0e6
-  zh: 5b048fdef571cce4
+  en: 08fe598204e99dea
+  zh: 7bb5b02d5afc9b43
 /deepseek-ai-dsh-client-ui-production-studio/table-of-contents:
   en: 122f0d41696980b1
   zh: 3a2c027b0ba8d7a7
 /deepseek-ai-dsh-client-ui-production-studio/use-this-package:
-  en: 6ae135f11d75fef6
-  zh: b6d0ab0e14ee68b9
+  en: 6f1f7df3abd4e021
+  zh: 767973a200305437
 /deepseek-ai-dsh-client-ui-production-studio/understand-the-implementation:
-  en: bef597e3ed95f105
-  zh: 87dd975dd5aacb17
+  en: a3565d5db1620aa3
+  zh: 57fa732687602106
 /deepseek-ai-dsh-client-ui-production-studio/model-experience:
   en: 215e7ba838619b7b
   zh: a311da3843709f90
-/deepseek-ai-dsh-client-ui-production-studio/model-experience/conversation-workflow-edits-and-human-answers:
-  en: 7ec8ce67df7869df
-  zh: a3d0c019317499d5
-/deepseek-ai-dsh-client-ui-production-studio/model-experience/conversation-workflow-edits-and-human-answers/what-the-model-sees:
-  en: 6745cead88debf21
-  zh: 4ee9db0427ca9280
-/deepseek-ai-dsh-client-ui-production-studio/model-experience/conversation-workflow-edits-and-human-answers/token-effect:
-  en: 3666f204a9687243
-  zh: 501e83b8a7e1c1f9
-/deepseek-ai-dsh-client-ui-production-studio/model-experience/conversation-workflow-edits-and-human-answers/kv-cache-effect:
-  en: 9401967989f6d814
-  zh: 199799e610a06f05
+/deepseek-ai-dsh-client-ui-production-studio/model-experience/case-actions-and-run-policy:
+  en: be0446df0f59eb36
+  zh: dc84e5791ee2f5a0
+/deepseek-ai-dsh-client-ui-production-studio/model-experience/case-actions-and-run-policy/what-the-model-sees:
+  en: 4d242026a70839d0
+  zh: 31c4b1316205718d
+/deepseek-ai-dsh-client-ui-production-studio/model-experience/case-actions-and-run-policy/token-effect:
+  en: 0991b4d22b900894
+  zh: 22c391ffad3b1f39
+/deepseek-ai-dsh-client-ui-production-studio/model-experience/case-actions-and-run-policy/kv-cache-effect:
+  en: 9dc07540088e46d9
+  zh: cfa724d3b7e27f80
 /deepseek-ai-dsh-client-ui-production-studio/known-limitations-and-deferred-work:
-  en: d90669dd0bfb81e5
-  zh: b3256cd648670707
+  en: ef329584eb845cf0
+  zh: e0ec3495d88251ee
 /deepseek-ai-dsh-client-ui-production-studio/known-limitations-and-deferred-work/dev-note:
-  en: caf82a9aa2183786
+  en: c769655d2c2e9703
   zh: 9f56528562c7c914

@@ -31,10 +31,8 @@ function Branch({ run, task, pending, perform, ...props }: StudioSurfaceProps & 
   pending: boolean
   perform: (operation: () => Promise<string | null>) => Promise<void>
 }) {
-  const { t, useStore, actions, pause, resume, answer, reconcile } = props
+  const { t, pause, resume, reconcile } = props
   const node = run.graph.nodes.find(candidate => candidate.id === task.nodeId)
-  const key = `${run.id}:${task.nodeId}`
-  const draft = useStore(state => state.answers[key] ?? '')
   const ref = { runId: run.id, revision: run.revision, nodeId: task.nodeId }
   const waiting = run.graph.edges.filter(edge => edge.toNode === task.nodeId)
     .filter(edge => run.tasks.find(candidate => candidate.nodeId === edge.fromNode)?.phase !== 'complete')
@@ -62,18 +60,6 @@ function Branch({ run, task, pending, perform, ...props }: StudioSurfaceProps & 
     {task.certificates.length > 0 && <p className={css.muted}>{t('branch.certificates', {
       certificates: task.certificates.map(certificate => t(`certificate.${certificate}`)).join(', '),
     })}</p>}
-    {task.phase === 'human' && <div className={css.answer}>
-      <label className={css.field}>{t('human.answer')}
-        <textarea aria-label={t('human.answer')} placeholder={t('human.placeholder')} rows={3} value={draft}
-          onChange={(event) => { actions.answer(key, event.target.value) }} />
-      </label>
-      <div className={css.rowActions}>
-        <Button size="sm" variant="primary" disabled={pending || draft.trim() === ''}
-          onClick={() => { void perform(() => answer({ ...ref, answer: draft.trim(), accepted: true })) }}>{t('human.accept')}</Button>
-        <Button size="sm" variant="outline" disabled={pending || draft.trim() === ''}
-          onClick={() => { void perform(() => answer({ ...ref, answer: draft.trim(), accepted: false })) }}>{t('human.reject')}</Button>
-      </div>
-    </div>}
     {(history.length > 0 || task.evidence.length > 0 || task.output !== undefined) && <details className={css.history}>
       <summary>{t('branch.history')}</summary>
       <ol>{history.map((entry, index) => <li key={`${entry.time}:${index}`}>

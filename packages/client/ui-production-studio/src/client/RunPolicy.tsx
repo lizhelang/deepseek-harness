@@ -1,9 +1,8 @@
-/** Run policy form for conversation-mode Sessions, replacing graph editing as the user-facing workflow view. */
+/** Run policy form for conversation-mode Sessions. */
 import { useState, type ReactNode } from 'react'
 import { Button, Checkbox, Input } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type { StudioViewProps } from './slots.ts'
-import { ProductionWorkflowView } from './WorkflowEditor.tsx'
 import { caseRuns } from './CasePanel.tsx'
 import { CANDIDATE_RANGE, clampCount, MANUFACTURE_TOP_MAX, PRESETS, policyMessage, type RunPolicy } from './run-policy.ts'
 import css from './RunPolicy.module.css'
@@ -98,20 +97,18 @@ export function RunPolicyForm({ policy, caseLimit, t, onChange, send }: {
 }
 
 /**
- * Conversation Sessions get the run policy form with node diagnostics folded below;
- * Sessions without a conversation adapter keep the explicit graph editor.
+ * Show the run policy form for Sessions with a conversation adapter.
  * @param props - Studio view props.
- * @returns the workflow view for this Session.
+ * @returns the form, or the loading, unavailable or no-adapter state.
  */
 export function ProductionPolicyView(props: StudioViewProps) {
-  const { useProduction, useStore, actions, t, send } = props
-  const snapshot = useProduction(value => value.snapshot)
+  const { useProduction, useStore, actions, t, send, refresh } = props
+  const read = useProduction(value => value)
   const policy = useStore(value => value.policy)
-  if (snapshot?.capabilities.conversation === undefined) return <ProductionWorkflowView {...props} />
-  const latest = caseRuns(snapshot.runs)[0]
-  return <>
-    <RunPolicyForm policy={policy} caseLimit={latest?.case.candidates.limit} t={t} onChange={actions.policy} send={send} />
-    <details className={css.legacy} data-production-legacy><summary>{t('case.legacy')}</summary>
-      <ProductionWorkflowView {...props} /></details>
-  </>
+  const snapshot = read.snapshot
+  if (snapshot === null) return <div className={css.policy}><p className={css.muted}>{read.loading ? t('loading') : read.error ?? t('unavailable')}</p>
+    {!read.loading && <Button size="sm" onClick={refresh}>{t('refresh')}</Button>}</div>
+  if (snapshot.capabilities.conversation === undefined) return <div className={css.policy}><p className={css.muted}>{t('policy.noAdapter')}</p></div>
+  const caseLimit = caseRuns(snapshot.runs)[0]?.case.candidates.limit
+  return <RunPolicyForm policy={policy} caseLimit={caseLimit} t={t} onChange={actions.policy} send={send} />
 }

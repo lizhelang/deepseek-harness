@@ -1,42 +1,51 @@
-/** Test-only native-provider fixture over the real Loader-mounted production service. */
+/** Test-only native-provider and model fixtures over the real Loader-mounted production service. */
 import type { Context } from '@deepseek-ai/cordis'
+import { LlmAdapter, ToolCallId } from '@deepseek-ai/dsh-llm'
+import type { GenerateOptions, LlmResolvedModelInfo, StreamChunk } from '@deepseek-ai/dsh-llm'
 import { defineContentToolFixture } from '@deepseek-ai/dsh-tools'
-import { createProductionGraph } from '@deepseek-ai/dsh-production-studio'
+import type {} from '@deepseek-ai/dsh-production-studio'
 import { writeFixtureCase } from '../fixture-case.ts'
+
+/** Calls the native fixture once for the baseline and once for manufacturing, then answers. */
+class ProductionAdapter extends LlmAdapter {
+  override async resolveModel(provider: string, id: string): Promise<LlmResolvedModelInfo> { return { provider, id, name: id } }
+  async *stream(options: GenerateOptions): AsyncIterable<StreamChunk> {
+    const count = options.messages.filter(item => item.role === 'tool').length
+    if (count < 2) {
+      const id = ToolCallId(`production-call-${count}`), name = 'finalize_candidate', argumentsText = '{}'
+      yield { type: 'block-start', index: 0, blockType: 'tool-call' }
+      yield { type: 'tool-call-delta', index: 0, id, name, argumentsDelta: argumentsText }
+      yield { type: 'block-end', index: 0, block: { type: 'tool-call', id, name, arguments: argumentsText } }
+      yield { type: 'finish', reason: { kind: 'tool-calls' } }
+    } else {
+      yield { type: 'block-start', index: 0, blockType: 'text' }
+      yield { type: 'block-end', index: 0, block: { type: 'text', text: 'Delivered the Loader fixture drawings' } }
+      yield { type: 'finish', reason: { kind: 'stop' } }
+    }
+  }
+}
 
 /** Test plugin identity. */
 export const name = 'seed-production'
 /** Required composed services. */
-export const inject = ['productionStudio', 'tools']
+export const inject = ['productionStudio', 'llm', 'tools']
 
 /**
- * Run one real workflow with an isolated external-provider fixture.
+ * Run one real conversation workflow with isolated external-provider and model fixtures.
  * @param ctx - actual Loader-composed Host.
- * @returns after installing the fixture hook.
+ * @returns after installing the fixtures.
  */
 export async function apply(ctx: Context): Promise<void> {
   const { input, receipt } = await writeFixtureCase(process.cwd())
+  const objective = 'Deliver the Loader fixture drawings'
+  ctx.llm.registerAdapter(['production-fixture'], new ProductionAdapter())
   ctx.tools.register(defineContentToolFixture({ name: 'finalize_candidate', description: 'External native provider fixture', parameters: {}, execute: async (_args, exec) => { await ctx.productionStudio.noteNativeDispatch(exec.callId); return [{ type: 'text', text: JSON.stringify(receipt) }] } }))
   ctx.effect(() => ctx.productionStudio.registerNativeBoundaryProvider(['finalize_candidate']))
-  const started = new Set<string>()
-  ctx.on('agent/pre-step', async ({ agent }, next) => {
-    if (started.has(agent.id)) return next()
-    started.add(agent.id)
-    const graph = createProductionGraph(30, 2)
-    for (const node of graph.nodes) if (node.kind === 'agent') { node.kind = 'program'; node.config = { toolName: 'finalize_candidate', arguments: {} }; delete node.resource }
-    const initial = await ctx.productionStudio.get(agent.id)
-    const saved = await ctx.productionStudio.saveGraph(agent.id, { expectedVersion: initial.graph.version, graph })
-    const objective = 'Deliver the Loader fixture drawings'
-    await ctx.productionStudio.start(agent.id, { graphVersion: saved.graph.version, objective, goalContractAcknowledged: true, input: { ...input, deliveryGoal: { kind: 'verified-drawings', objectiveText: objective } } })
-    const controller = new AbortController()
-    try {
-      for await (const state of ctx.productionStudio.follow(agent.id, controller.signal)) {
-        const run = state.runs.at(-1)
-        if (!run) throw new Error('Loader fixture did not start a production run')
-        if (run.phase === 'complete') { process.stdout.write(`${JSON.stringify({ type: 'production_result', run })}\n`); break }
-        if (run.phase === 'blocked' || run.phase === 'unknown') throw new Error(`Loader production did not deliver: ${JSON.stringify(run.tasks)}`)
-      }
-    } finally { controller.abort() }
-    return next()
+  ctx.effect(() => ctx.productionStudio.registerConversationWorkflow({ id: 'loader-production', toolNames: ['finalize_candidate'], appliesTo: () => true,
+    start: () => ({ key: input.caseId, objective, input: { ...input, deliveryGoal: { kind: 'verified-drawings', objectiveText: objective } } }),
+    observe: () => ({ outlet: 'success' }) }))
+  ctx.on('agent/turn-stopping', async ({ agent }) => {
+    const run = (await ctx.productionStudio.get(agent.id)).runs.at(-1)
+    if (run?.phase === 'complete') process.stdout.write(`${JSON.stringify({ type: 'production_result', run })}\n`)
   })
 }

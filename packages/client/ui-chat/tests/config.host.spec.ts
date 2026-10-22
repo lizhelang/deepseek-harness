@@ -6,6 +6,7 @@ import { plainConfig } from '../../../settings/settings/src/schema.ts'
 import {
   Config, apply,
 } from '../src/index.ts'
+import { DEFAULT_MODEL_PRICES } from '../src/chat-settings.ts'
 
 
 describe('ui-chat Host settings', () => {
@@ -14,9 +15,12 @@ describe('ui-chat Host settings', () => {
     const configuration = await liveConfig(ctx, { Config, apply })
     const { fiber } = configuration
 
-    expect(plainConfig(configuration.fiber.config)).toEqual({ performanceUsage: 'detailed', linkOpening: 'sidebar' })
+    const defaults = {
+      performanceUsage: 'detailed', linkOpening: 'sidebar', costCurrency: 'CNY', cnyPerUsd: 7.1, modelPrices: DEFAULT_MODEL_PRICES,
+    }
+    expect(plainConfig(configuration.fiber.config)).toEqual(defaults)
     await configuration.update({ transcriptView: 'normal' })
-    expect(plainConfig(configuration.fiber.config)).toEqual({ transcriptView: 'normal', performanceUsage: 'detailed', linkOpening: 'sidebar' })
+    expect(plainConfig(configuration.fiber.config)).toEqual({ transcriptView: 'normal', ...defaults })
     for (const mode of ['expanded', 'compact', 'standard', 'detailed', 'verbose']) {
       await configuration.update({ transcriptView: mode })
       expect(plainConfig(configuration.fiber.config)).toMatchObject({ transcriptView: mode })
@@ -31,6 +35,12 @@ describe('ui-chat Host settings', () => {
     await configuration.update({ linkOpening: 'new-tab' })
     expect(plainConfig(configuration.fiber.config)).toMatchObject({ linkOpening: 'new-tab' })
     await expect(configuration.update({ linkOpening: 'popup' })).rejects.toThrow()
+    const prices = [{ model: 'deepseek-chat', cacheHit: 0.5, input: 2, output: 8 }]
+    await configuration.update({ costCurrency: 'USD', cnyPerUsd: 7.2, modelPrices: prices })
+    expect(plainConfig(configuration.fiber.config)).toMatchObject({ costCurrency: 'USD', cnyPerUsd: 7.2, modelPrices: prices })
+    await expect(configuration.update({ costCurrency: 'EUR' })).rejects.toThrow()
+    await expect(configuration.update({ cnyPerUsd: -1 })).rejects.toThrow()
+    await expect(configuration.update({ modelPrices: [{ model: 'x', cacheHit: -1, input: 0, output: 0 }] })).rejects.toThrow()
 
     await fiber.dispose()
   })

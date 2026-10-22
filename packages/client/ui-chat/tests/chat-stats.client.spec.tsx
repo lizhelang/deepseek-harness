@@ -13,6 +13,7 @@ import { ActivityPill, UsagePill, deriveStats, formatDuration, type StatPillProp
 import { formatTokens } from '../src/client/chat/token-format.ts'
 import { en, zh } from '../src/client/locale.ts'
 import { chatSnapshotFixture } from './chat-snapshot-fixture.client.ts'
+import { DEFAULT_TOKEN_PRICING } from '../src/client/token-pricing.ts'
 
 const t: StatPillProps['t'] = makeTranslate(zh, commonZh)
 const tEn: StatPillProps['t'] = makeTranslate(en, commonEn)
@@ -158,7 +159,7 @@ describe('composer stats pills', () => {
     source: { getSnapshot(): ChatSnapshot; subscribe(fn: () => void): () => void },
     values: Record<string, unknown> = { tokenUsage: USAGE },
   ): StatPillProps {
-    return { usePerformanceUsage: selector => selector('detailed'), useChat: bindSnapshotSelector(source), useProjection: projections(values), t: tEn }
+    return { usePerformanceUsage: selector => selector('detailed'), useTokenPricing: selector => selector(DEFAULT_TOKEN_PRICING), useChat: bindSnapshotSelector(source), useProjection: projections(values), t: tEn }
   }
 
   function tokenUsage(cacheReadTokens: number, uncachedInputTokens: number) {
@@ -302,6 +303,38 @@ describe('composer stats pills', () => {
     expect(tokens.textContent).toContain('Output5 tok')
     // The time split lives on the counts pill's own dialog, not here.
     expect(dialog.textContent).not.toContain('LLM time')
+  })
+
+  it('adds the estimated cost to the usage pill, its bucket rows, and Compact', () => {
+    const { source } = makeSource({ nodes: [timedStep()] })
+    const byRoute = { routes: [{ provider: 'deepseek', model: 'deepseek-v4-pro', ...USAGE, cacheWriteTokens: 0 }] }
+    const values = { tokenUsage: USAGE, tokenUsageByRoute: byRoute }
+    const view = render(<StatsPills {...props(source, values)} />)
+    const usagePill = view.getAllByRole('button')[1]!
+    // 10 uncached × ¥9 + 90 cached × ¥0.3 + 5 output × ¥27 per million tokens.
+    expect(usagePill.textContent).toBe('105 tok·¥0.00025·Cache hit 90%')
+    expect(usagePill.getAttribute('aria-label')).toBe('105 tok · ¥0.00025 · Cache hit 90%')
+    fireEvent.click(usagePill)
+    const tokens = view.getByRole('dialog').querySelector('[data-session-stats-usage]') as HTMLElement
+    expect(tokens.textContent).toContain('Uncached input10 tok · ¥0.00009')
+    expect(tokens.textContent).toContain('Cached input90 tok · ¥0.000027')
+    expect(tokens.textContent).toContain('Output5 tok · ¥0.00014')
+    expect(tokens.textContent).toContain('Estimated cost¥0.00025')
+
+    view.rerender(<StatsPills {...props(source, values)} usePerformanceUsage={selector => selector('compact')} />)
+    expect(view.container.textContent).toBe('20 tok/s¥0.00025·Cache hit 90%')
+  })
+
+  it('names unpriced models instead of showing a partial cost', () => {
+    const { source } = makeSource({ nodes: [timedStep()] })
+    const byRoute = { routes: [{ provider: 'other', model: 'mystery', ...USAGE, cacheWriteTokens: 2 }] }
+    const view = render(<StatsPills {...props(source, { tokenUsage: { ...USAGE, cacheWriteTokens: 2 }, tokenUsageByRoute: byRoute })} />)
+    const usagePill = view.getAllByRole('button')[1]!
+    expect(usagePill.textContent).toBe('107 tok·Cache hit 88%')
+    fireEvent.click(usagePill)
+    const tokens = view.getByRole('dialog').querySelector('[data-session-stats-usage]') as HTMLElement
+    expect(tokens.textContent).toContain('Cache write2 tok')
+    expect(tokens.textContent).toContain('Estimated costNo price set: mystery')
   })
 
   it('closes the dialog on Escape or an outside pointerdown', () => {

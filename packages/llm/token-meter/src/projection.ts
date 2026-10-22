@@ -17,6 +17,23 @@ export interface TokenUsageProjection {
   cacheWriteTokens: number
 }
 
+/** Provider-reported usage billed to one provider/model route. */
+export interface TokenRouteUsage extends TokenUsageProjection {
+  /** Registered provider route; empty when the attempt carried no attribution. */
+  provider: string
+  /** Provider-owned model id; empty when the attempt carried no attribution. */
+  model: string
+}
+
+/**
+ * Durable cumulative provider usage split by billing route. The routes' buckets
+ * sum to {@link TokenUsageProjection}.
+ */
+export interface TokenRouteUsageProjection {
+  /** One entry per route that billed a sample, in first-billed order. */
+  routes: TokenRouteUsage[]
+}
+
 /**
  * Approximate context occupancy for a status display.
  *
@@ -69,6 +86,8 @@ declare module '@deepseek-ai/dsh-session-projection/types' {
   interface SessionProjectionMap {
     /** Provider-reported usage accumulated across the complete durable log. */
     tokenUsage: TokenUsageProjection
+    /** Provider-reported usage accumulated per provider/model route. */
+    tokenUsageByRoute: TokenRouteUsageProjection
     /** Newest request pressure paired with the newest known route capacity. */
     contextPressure: ContextPressureProjection
     /** Heuristic system/tools/message composition of the next request. */

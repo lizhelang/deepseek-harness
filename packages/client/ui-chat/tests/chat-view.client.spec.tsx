@@ -53,6 +53,7 @@ import type { TurnProcessSpec } from '../src/client/contract/turn-process.ts'
 import { chatSnapshotFixture } from './chat-snapshot-fixture.client.ts'
 import { installTurnNavigatorObserver } from './turn-navigator-fixture.ts'
 import { ConversationGroupStore } from '../../ui-conversation/src/client/conversation/group-store.ts'
+import { DEFAULT_TOKEN_PRICING } from '../src/client/token-pricing.ts'
 
 function installGroupedSnapshot(
   builder: ChatSnapshotBuilder, state: ProcessState, groups: ConversationGroupStore<ProcessGroupData>, source: ChatSnapshot,
@@ -370,6 +371,7 @@ function makeHarness(
         return (
           <TurnTailNodeView
             usePerformanceUsage={bindSnapshotSelector(performanceUsage)}
+            useTokenPricing={selector => selector(DEFAULT_TOKEN_PRICING)}
             {...nodeProps}
             node={nodeOwner.node}
             renderSlot={renderTurnTailSlot}

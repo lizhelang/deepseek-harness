@@ -9,9 +9,11 @@ import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { bindSnapshotSelector, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { TranscriptViewRow, type TranscriptViewRowProps } from '../src/client/settings/TranscriptViewRow.tsx'
 import { PerformanceUsageRow } from '../src/client/settings/PerformanceUsageRow.tsx'
-import type { LinkOpening, PerformanceUsageMode, TranscriptViewMode } from '../src/chat-settings.ts'
+import { DEFAULT_MODEL_PRICES, type LinkOpening, type PerformanceUsageMode, type TranscriptViewMode } from '../src/chat-settings.ts'
 import { LinkOpeningRow } from '../src/client/settings/LinkOpeningRow.tsx'
 import { en, zh } from '../src/client/locale.ts'
+import { DEFAULT_TOKEN_PRICING, type TokenPricing } from '../src/client/token-pricing.ts'
+import { TokenPricingRow, type TokenPricingRowProps } from '../src/client/settings/TokenPricingRow.tsx'
 
 afterEach(cleanup)
 
@@ -173,6 +175,7 @@ describe('PerformanceUsageRow', () => {
     render(<PerformanceUsageRow
       {...b.props}
       usePerformanceUsage={bindSnapshotSelector(source)}
+      useTokenPricing={selector => selector(DEFAULT_TOKEN_PRICING)}
       setPerformanceUsage={setPerformanceUsage}
     />)
     expect(screen.getByText('Performance & usage')).toBeDefined()
@@ -181,5 +184,88 @@ describe('PerformanceUsageRow', () => {
     expect(setPerformanceUsage).toHaveBeenCalledWith('compact')
     expect(screen.getAllByRole('button', { name: 'Compact' })).toHaveLength(1)
     expect(b.setTranscriptView).not.toHaveBeenCalled()
+  })
+})
+
+describe('TokenPricingRow', () => {
+  function mount(initial: TokenPricing = DEFAULT_TOKEN_PRICING) {
+    const source = createSnapshotStore<TokenPricing>(initial)
+    const setTokenPricing = vi.fn(<K extends keyof TokenPricing>(field: K, value: TokenPricing[K]) => {
+      source.set({ ...source.getSnapshot(), [field]: value })
+    })
+    const props: TokenPricingRowProps = {
+      usePanelInfo: selector => selector({ activePanelId: null }),
+      useSessions: emptySessions(),
+      useSessionStatus: noPendingInteraction(),
+      useWorkspaces: emptyWorkspaces(),
+      useSessionRetainInfo: () => undefined,
+      useResource,
+      useTokenPricing: bindSnapshotSelector(source),
+      setTokenPricing,
+      t: makeTranslate(zh),
+    }
+    render(<TokenPricingRow {...props} />)
+    return { source, setTokenPricing }
+  }
+
+  it('lists the default model prices and commits a valid edit on blur', () => {
+    const { source, setTokenPricing } = mount()
+    expect(screen.getByText('费用估算')).toBeDefined()
+    const output = screen.getByLabelText('deepseek-flash 输出') as HTMLInputElement
+    expect(output.value).toBe('9')
+    fireEvent.change(output, { target: { value: '4.5' } })
+    fireEvent.blur(output)
+    expect(setTokenPricing).toHaveBeenCalledWith('modelPrices', [
+      { ...DEFAULT_MODEL_PRICES[0], output: 4.5 }, DEFAULT_MODEL_PRICES[1],
+    ])
+    expect(source.getSnapshot().modelPrices[0]?.output).toBe(4.5)
+  })
+
+  it('reverts rejected or unchanged drafts and commits on Enter', () => {
+    const { setTokenPricing } = mount()
+    const input = screen.getByLabelText('deepseek-v4-pro 未缓存输入') as HTMLInputElement
+    fireEvent.change(input, { target: { value: '-1' } })
+    fireEvent.blur(input)
+    expect(input.value).toBe('9')
+    fireEvent.change(input, { target: { value: ' 9 ' } })
+    fireEvent.blur(input)
+    expect(input.value).toBe('9')
+    const model = screen.getAllByLabelText('模型 ID')[0] as HTMLInputElement
+    fireEvent.change(model, { target: { value: '' } })
+    fireEvent.blur(model)
+    expect(model.value).toBe('deepseek-flash')
+    expect(setTokenPricing).not.toHaveBeenCalled()
+    model.focus()
+    fireEvent.change(model, { target: { value: 'deepseek-chat' } })
+    fireEvent.keyDown(model, { key: 'a' })
+    fireEvent.keyDown(model, { key: 'Enter' })
+    expect(setTokenPricing).toHaveBeenCalledWith('modelPrices', [
+      { ...DEFAULT_MODEL_PRICES[0], model: 'deepseek-chat' }, DEFAULT_MODEL_PRICES[1],
+    ])
+  })
+
+  it('adds, removes, and restores model prices', () => {
+    const { source } = mount()
+    fireEvent.click(screen.getByText('添加模型'))
+    expect(source.getSnapshot().modelPrices).toHaveLength(3)
+    fireEvent.click(screen.getByLabelText('删除 deepseek-flash 的单价'))
+    expect(source.getSnapshot().modelPrices.map(price => price.model)).toEqual(['deepseek-v4-pro', 'model-id'])
+    fireEvent.click(screen.getByText('恢复默认单价'))
+    expect(source.getSnapshot().modelPrices).toBe(DEFAULT_MODEL_PRICES)
+  })
+
+  it('shows the exchange rate only for US dollars and rejects a zero rate', () => {
+    const { source } = mount()
+    expect(screen.queryByLabelText('汇率（元 / 美元）')).toBeNull()
+    fireEvent.click(screen.getByText('人民币'))
+    fireEvent.click(screen.getByText('美元'))
+    expect(source.getSnapshot().costCurrency).toBe('USD')
+    const rate = screen.getByLabelText('汇率（元 / 美元）') as HTMLInputElement
+    fireEvent.change(rate, { target: { value: '0' } })
+    fireEvent.blur(rate)
+    expect(rate.value).toBe('7.1')
+    fireEvent.change(rate, { target: { value: '7.25' } })
+    fireEvent.blur(rate)
+    expect(source.getSnapshot().cnyPerUsd).toBe(7.25)
   })
 })

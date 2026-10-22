@@ -13,7 +13,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-chat/client'
 import { createProductionSource, type ProductionSource } from './production-source.ts'
 import { createStudioDraftStore } from './stores.ts'
 import { ProductionMonitorView, ProductionDock } from './TaskMonitor.tsx'
-import { ProductionWorkflowView } from './WorkflowEditor.tsx'
+import { ProductionPolicyView } from './RunPolicy.tsx'
 import { en, zh, type ProductionStudioKey } from './locales.ts'
 import type { StudioInjected } from './slots.ts'
 import { productionChatDefinition, productionTrajectoryDefinition } from './checkpoint.ts'
@@ -109,6 +109,6 @@ export function apply(ctx: Context): void {
     }, ProductionMonitorView)
     yield ctx.slots.register({ name: 'conversation.view', id: 'production-workflow', order: 30,
       locale: namespace, label: () => t('view.editor'), store, inject: injected,
-    }, ProductionWorkflowView)
+    }, ProductionPolicyView)
   })
 }

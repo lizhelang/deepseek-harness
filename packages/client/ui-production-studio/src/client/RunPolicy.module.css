@@ -1,0 +1,21 @@
+.policy { max-width: 760px; padding: 4px 0 16px; color: var(--dsw-alias-label-primary); font-size: 13px; line-height: 20px; }
+.policy h2 { margin: 0; font-size: 15px; line-height: 22px; font-weight: 600; }
+.muted { margin: 4px 0; color: var(--dsw-alias-label-tertiary); font-size: 12px; line-height: 18px; overflow-wrap: anywhere; }
+.presets { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 12px 0; }
+.preset { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border: 0.5px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-sm); background: var(--dsw-alias-bg-base); color: inherit; text-align: left; font: inherit; cursor: pointer; }
+.preset[aria-pressed="true"] { border-color: var(--dsw-alias-state-business-primary); background: var(--dsw-alias-interactive-bg-hover); }
+.preset:focus-visible { outline: 1px solid var(--dsw-focus-ring-color); outline-offset: 2px; }
+.preset strong { font-weight: 600; }
+.group { margin: 14px 0 0; padding: 0; border: 0; }
+.group legend { padding: 0; margin-bottom: 6px; color: var(--dsw-alias-label-secondary); font-weight: 500; }
+.choices { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.count { display: inline-flex; align-items: center; gap: 6px; color: var(--dsw-alias-label-secondary); }
+.count input { width: 72px; }
+.preview { margin: 14px 0 8px; }
+.preview summary { cursor: pointer; color: var(--dsw-alias-label-secondary); }
+.preview pre { margin: 6px 0 0; padding: 8px 10px; border-radius: var(--dsw-radius-sm); background: var(--dsw-alias-bg-layer-1); color: var(--dsw-alias-label-secondary); font-size: 12px; line-height: 18px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.apply { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 12px; }
+.error { color: var(--dsw-alias-state-error-primary); }
+.legacy { margin-top: 20px; color: var(--dsw-alias-label-tertiary); }
+.legacy summary { cursor: pointer; padding: 4px 0; }
+@media (max-width: 560px) { .presets { grid-template-columns: minmax(0, 1fr); } }

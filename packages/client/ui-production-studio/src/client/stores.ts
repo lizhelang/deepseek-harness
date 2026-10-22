@@ -1,6 +1,7 @@
 /** Session-owned unsent text and graph edits, independent of live task updates. */
 import { defineStore, type EngineStoreHandle } from '@deepseek-ai/dsh-client-store'
 import type { ProductionGraph } from '@deepseek-ai/dsh-production-studio/types'
+import { PRESETS, type RunPolicy } from './run-policy.ts'
 
 /** Drafts survive view switches and are never replaced by a streaming snapshot. */
 export interface StudioDraftState {
@@ -14,6 +15,8 @@ export interface StudioDraftState {
   dockExpanded: boolean
   goal: StudioGoalDraft
   goalAcknowledged: boolean
+  /** Run policy draft, applied only by an explicit chat request. */
+  policy: RunPolicy
 }
 
 /** User-entered objective thresholds; empty values mean no numeric restriction. */
@@ -35,6 +38,7 @@ export type StudioDraftActions = {
   expanded: (state: StudioDraftState, value: boolean) => void
   goal: (state: StudioDraftState, field: keyof StudioGoalDraft, value: string) => void
   goalAcknowledged: (state: StudioDraftState, value: boolean) => void
+  policy: (state: StudioDraftState, value: RunPolicy) => void
 }
 
 /**
@@ -44,7 +48,7 @@ export type StudioDraftActions = {
 export function createStudioDraftStore(): EngineStoreHandle<StudioDraftState, StudioDraftActions> {
   return defineStore({
     init: (): StudioDraftState => ({ objective: '', input: '{}', answers: {}, jsonFields: {}, graph: null, baseVersion: null, dirty: false, dockExpanded: false,
-      goal: { maxPieces: '', maxWeldActions: '', maxBendActions: '', maxManufacturingScore: '' }, goalAcknowledged: false }),
+      goal: { maxPieces: '', maxWeldActions: '', maxBendActions: '', maxManufacturingScore: '' }, goalAcknowledged: false, policy: { ...PRESETS.standard } }),
     actions: {
       objective: (state, value: string) => { state.objective = value; state.goalAcknowledged = false },
       input: (state, value: string) => { state.input = value; state.goalAcknowledged = false },
@@ -59,6 +63,7 @@ export function createStudioDraftStore(): EngineStoreHandle<StudioDraftState, St
       expanded: (state, value: boolean) => { state.dockExpanded = value },
       goal: (state, field: keyof StudioGoalDraft, value: string) => { state.goal[field] = value; state.goalAcknowledged = false },
       goalAcknowledged: (state, value: boolean) => { state.goalAcknowledged = value },
+      policy: (state, value: RunPolicy) => { state.policy = value },
     },
   })
 }

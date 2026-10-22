@@ -14,6 +14,8 @@ import { createStudioDraftStore } from '../src/client/stores.ts'
 import { TaskMonitor, ProductionDock } from '../src/client/TaskMonitor.tsx'
 import { CasePanel, caseSummary } from '../src/client/CasePanel.tsx'
 import { ProductionWorkflowView } from '../src/client/WorkflowEditor.tsx'
+import { ProductionPolicyView } from '../src/client/RunPolicy.tsx'
+import { clampCount, policyMessage, PRESETS } from '../src/client/run-policy.ts'
 import type { StudioReadState, StudioSurfaceProps, StudioViewProps, StudioDockProps } from '../src/client/slots.ts'
 import { caseView, deliveredRun, run, snapshot } from './fixtures.ts'
 
@@ -598,4 +600,70 @@ it('moves detached additions to the connection editor and hides old scheduled ph
   expect(view.container.querySelector('[data-production-canvas]')).not.toBeNull()
   fireEvent.click(screen.getByRole('button', { name: en['responsibility.view'] }))
   expect(view.container.querySelector('[data-responsibility-node="baseline"] [data-phase="complete"]')).toBeNull()
+})
+
+describe('run policy', () => {
+  function policyFixture(caseRun = true) {
+    const current = run('case-run', 'running')
+    current.mode = 'conversation'
+    if (caseRun) current.case = caseView({ candidates: { used: 1, limit: 6 } })
+    return conversationFixture(current)
+  }
+  it('composes one line per dimension, omitting sources when only the baseline is delivered', () => {
+    const quick = policyMessage(PRESETS.quick, t).split('\n')
+    expect(quick[0]).toBe(en['policy.msg.intro'])
+    expect(quick.join('\n')).not.toContain('Candidate sources')
+    expect(quick.at(-1)).toBe(en['policy.msg.limits'])
+    const deep = policyMessage(PRESETS.deep, t)
+    expect(deep).toContain('top 3 legal')
+    expect(deep).toContain(en['policy.msg.confirm'])
+    expect(deep).toContain(en['policy.msg.sources.both'])
+  })
+  it('clamps counts into the accepted integer range', () => {
+    expect(clampCount(Number.NaN, 2, 64)).toBe(2)
+    expect(clampCount(100, 2, 64)).toBe(64)
+    expect(clampCount(3.6, 2, 64)).toBe(4)
+  })
+  it('keeps the graph editor for Sessions without a conversation adapter', () => {
+    const b = fixture()
+    const { container } = render(<ProductionPolicyView {...b.viewProps} />)
+    expect(container.querySelector('[data-production-policy]')).toBeNull()
+    expect(container.querySelector('[data-production-editor]')).not.toBeNull()
+  })
+  it('edits a preset into a custom policy and sends it as one chat request', async () => {
+    const b = policyFixture()
+    const { container } = render(<ProductionPolicyView {...b.viewProps} />)
+    expect(container.querySelector('[data-production-policy="standard"]')).not.toBeNull()
+    expect(screen.getByText(t('policy.caseLimit', { limit: 6 }))).toBeTruthy()
+    expect(container.querySelector('[data-production-legacy] [data-production-editor]')).not.toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: en['policy.mfg.top'] }))
+    expect(container.querySelector('[data-production-policy="custom"]')).not.toBeNull()
+    expect(screen.getByText(en['policy.custom'])).toBeTruthy()
+    fireEvent.change(screen.getByLabelText(en['policy.manufactureTop']), { target: { value: '20' } })
+    fireEvent.click(screen.getByRole('button', { name: en['policy.sources.host'] }))
+    fireEvent.change(screen.getByLabelText(en['policy.candidates']), { target: { value: '5' } })
+    fireEvent.click(screen.getByLabelText(en['policy.confirmDelivery']))
+    expect(b.drafts.getSnapshot().policy).toEqual({ preset: 'custom', depth: 'limited', candidates: 5, sources: 'host',
+      manufacturing: 'top', manufactureTop: 8, confirmDelivery: true })
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: en['policy.apply'] })) })
+    expect(b.props.send).toHaveBeenCalledWith(policyMessage(b.drafts.getSnapshot().policy, t))
+    expect(screen.getByRole('status').textContent).toBe(en['policy.applied'])
+    fireEvent.click(screen.getByRole('button', { name: new RegExp(en['policy.preset.quick']) }))
+    expect(b.drafts.getSnapshot().policy).toEqual(PRESETS.quick)
+    expect(screen.queryByRole('status')).toBeNull()
+    expect(screen.queryByText(en['policy.sources'])).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: en['policy.depth.exhaustive'] }))
+    expect(screen.queryByLabelText(en['policy.candidates'])).toBeNull()
+  })
+  it('reports a failed send and omits the case limit before a case exists', async () => {
+    const b = policyFixture(false)
+    let settle: (error: string | null) => void = () => {}
+    vi.mocked(b.props.send).mockReturnValueOnce(new Promise((resolve) => { settle = resolve }))
+    render(<ProductionPolicyView {...b.viewProps} />)
+    expect(screen.queryByText(/Host limit/)).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: en['policy.apply'] }))
+    expect(screen.getByRole('button', { name: en['action.pending'] }).hasAttribute('disabled')).toBe(true)
+    await act(async () => { settle('closed') })
+    expect(screen.getByRole('status').textContent).toBe(`${en['action.failed']}: closed`)
+  })
 })

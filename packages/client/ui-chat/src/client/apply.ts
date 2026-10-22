@@ -41,6 +41,8 @@ import { CHAT_SETTINGS_NAMESPACE, DEFAULT_LINK_OPENING, DEFAULT_TRANSCRIPT_VIEW_
 import { LinkOpeningRow, type LinkOpeningRowInjected } from './settings/LinkOpeningRow.tsx'
 import { PerformanceUsageRow, type PerformanceUsageRowInjected } from './settings/PerformanceUsageRow.tsx'
 import { PerformanceUsagePolicy } from './performance-usage.ts'
+import { TokenPricingRow, type TokenPricingRowInjected } from './settings/TokenPricingRow.tsx'
+import { TokenPricingPolicy } from './token-pricing.ts'
 import { useTurnDataValue } from './chat/use-turn-data.ts'
 import { bindDisclosure } from './chat/use-disclosure.ts'
 
@@ -149,9 +151,11 @@ export function apply(ctx: Context): void {
   const transcriptView = new TranscriptViewPolicy(chatSettings, 'dshDesktop' in globalThis ? 'standard' : DEFAULT_TRANSCRIPT_VIEW_MODE)
   const presentation = derivePresentationPolicy(transcriptView.mode)
   const performancePolicy = new PerformanceUsagePolicy(chatSettings)
-  ctx.effect(() => () => { transcriptView.dispose(); performancePolicy.dispose() })
+  const pricingPolicy = new TokenPricingPolicy(chatSettings)
+  ctx.effect(() => () => { transcriptView.dispose(); performancePolicy.dispose(); pricingPolicy.dispose() })
   const performanceUsage = performancePolicy.mode
-  registerChatNodeRenderers(ctx, performanceUsage, presentation)
+  const tokenPricing = pricingPolicy.pricing
+  registerChatNodeRenderers(ctx, performanceUsage, tokenPricing, presentation)
 
   ctx.slots.inject('settings.general.item', () => ctx.slots.register({
     name: 'settings.general.item',
@@ -159,10 +163,21 @@ export function apply(ctx: Context): void {
     order: 30,
     locale: NS,
     inject: (): PerformanceUsageRowInjected => ({
-      hooks: { performanceUsage },
+      hooks: { performanceUsage, tokenPricing },
       setPerformanceUsage: (mode) => { performancePolicy.setMode(mode) },
     }),
   }, PerformanceUsageRow))
+
+  ctx.slots.inject('settings.general.item', () => ctx.slots.register({
+    name: 'settings.general.item',
+    id: 'token-pricing',
+    order: 31,
+    locale: NS,
+    inject: (): TokenPricingRowInjected => ({
+      hooks: { tokenPricing },
+      setTokenPricing: (field, value) => { pricingPolicy.set(field, value) },
+    }),
+  }, TokenPricingRow))
 
   ctx.slots.inject('settings.general.item', () => ctx.slots.register({
     name: 'settings.general.item',
@@ -282,7 +297,7 @@ export function apply(ctx: Context): void {
   }, QuotaNoticeHost))
 
   // One dock entry per pill, so a plugin replaces or adds a single pill by id.
-  const statPillInject = () => ({ hooks: { performanceUsage } })
+  const statPillInject = () => ({ hooks: { performanceUsage, tokenPricing } })
   ctx.slots.inject('conversation.composer.dock', function* () {
     yield ctx.slots.register({
       name: 'conversation.composer.dock', id: 'activity', order: 0, locale: NS, inject: statPillInject,

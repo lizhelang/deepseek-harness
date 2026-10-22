@@ -25,6 +25,7 @@ import type {
 } from '@deepseek-ai/dsh-client-ui-chat/client'
 import type { QuotaNoticeInjected } from '@deepseek-ai/dsh-client-ui-chat/client'
 import type { PerformanceUsageRowInjected } from '../src/client/settings/PerformanceUsageRow.tsx'
+import type { TokenPricingRowInjected } from '../src/client/settings/TokenPricingRow.tsx'
 import { CHAT_SETTINGS_NAMESPACE, type ChatSettings } from '../src/chat-settings.ts'
 import { ActivityPill, UsagePill } from '../src/client/chat/StatsPills.tsx'
 
@@ -130,7 +131,7 @@ describe('Chat apply wiring', () => {
     expect(b.runtime.slots.entries('conversation.composer.dock').map(row => row.options.id))
       .toEqual(['activity', 'usage'])
     expect(b.runtime.slots.entries('settings.general.item').map(row => row.options.id))
-      .toEqual(['transcript-view', 'link-opening', 'composer-enter', 'performance-usage'])
+      .toEqual(['transcript-view', 'link-opening', 'composer-enter', 'performance-usage', 'token-pricing'])
     await b.runtime.dispose()
   })
 
@@ -170,7 +171,7 @@ describe('Chat apply wiring', () => {
     expect(b.chatSettings.set).toHaveBeenCalledWith('transcriptView', choice)
 
     b.chatSettings.publish({
-      status: 'ready', value: { linkOpening: 'sidebar', transcriptView: 'compact', performanceUsage: 'detailed' }, revision: 1, writable: true,
+      status: 'ready', value: { linkOpening: 'sidebar', transcriptView: 'compact', performanceUsage: 'detailed', costCurrency: 'CNY', cnyPerUsd: 7.1, modelPrices: [] }, revision: 1, writable: true,
     })
     expect(face.hooks.transcriptView.getSnapshot()).toBe('compact')
   })
@@ -182,7 +183,7 @@ describe('Chat apply wiring', () => {
     expect(face.hooks.performanceUsage.getSnapshot()).toBe('detailed')
     face.setPerformanceUsage('compact')
     expect(b.chatSettings.set).toHaveBeenCalledWith('performanceUsage', 'compact')
-    b.chatSettings.publish({ value: { linkOpening: 'sidebar', transcriptView: 'compact', performanceUsage: 'compact' } })
+    b.chatSettings.publish({ value: { linkOpening: 'sidebar', transcriptView: 'compact', performanceUsage: 'compact', costCurrency: 'CNY', cnyPerUsd: 7.1, modelPrices: [] } })
     expect(face.hooks.performanceUsage.getSnapshot()).toBe('compact')
     for (const entry of [
       ...b.runtime.slots.entries('conversation.composer.dock'),
@@ -190,6 +191,28 @@ describe('Chat apply wiring', () => {
     ]) {
       const injected = (entry.inject as () => Pick<PerformanceUsageRowInjected, 'hooks'>)()
       expect(injected.hooks.performanceUsage).toBe(face.hooks.performanceUsage)
+    }
+    await b.runtime.dispose()
+  })
+
+  const isTokenPricingFace = (face: Record<string, unknown> | undefined): face is Record<string, unknown> & TokenPricingRowInjected =>
+    typeof face?.setTokenPricing === 'function'
+
+  it('shares the accepted token pricing with settings, composer, and turn tails', async () => {
+    const b = await bench()
+    const row = b.runtime.slots.entries('settings.general.item').find(entry => entry.options.id === 'token-pricing')!
+    const face = row.inject?.()
+    if (!isTokenPricingFace(face)) throw new Error('token-pricing row has no pricing face')
+    expect(face.hooks.tokenPricing.getSnapshot().costCurrency).toBe('CNY')
+    face.setTokenPricing('costCurrency', 'USD')
+    expect(face.hooks.tokenPricing.getSnapshot().costCurrency).toBe('USD')
+    expect(b.chatSettings.set).toHaveBeenCalledWith('costCurrency', 'USD')
+    for (const entry of [
+      ...b.runtime.slots.entries('conversation.composer.dock'),
+      b.runtime.slots.entries('conversation.chat.node').find(entry => entry.options.key === 'turn-tail')!,
+    ]) {
+      const injected = (entry.inject as () => Pick<TokenPricingRowInjected, 'hooks'>)()
+      expect(injected.hooks.tokenPricing).toBe(face.hooks.tokenPricing)
     }
     await b.runtime.dispose()
   })

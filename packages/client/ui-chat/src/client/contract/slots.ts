@@ -22,6 +22,7 @@ import type {
 } from './snapshot.ts'
 import type { TurnProcessSpec } from './turn-process.ts'
 import type { PerformanceUsageMode } from '../../chat-settings.ts'
+import type { TokenPricing } from '../token-pricing.ts'
 
 /** Selector hook over the current Conversation binding's Chat target. */
 export type UseChat = SnapshotSelectorHook<ChatSnapshot>
@@ -225,6 +226,8 @@ export interface PerformanceUsageInjected {
   hooks: {
     /** Accepted performance and usage detail preference. */
     performanceUsage: ObservableSnapshot<PerformanceUsageMode>
+    /** Accepted token prices and display currency for cost estimates. */
+    tokenPricing: ObservableSnapshot<TokenPricing>
   }
 }
 

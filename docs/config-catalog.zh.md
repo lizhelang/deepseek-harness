@@ -2506,7 +2506,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-production-studio`
 
 - `inject`: `agents` · `tools` · `fs` · `storageDomain` · `sessions` · `sessionProjections`
-- `source`: [`packages/workflow/production-studio/src/index.ts:27`](../packages/workflow/production-studio/src/index.ts)
+- `source`: [`packages/workflow/production-studio/src/index.ts:38`](../packages/workflow/production-studio/src/index.ts)
 
 ```ts config-catalog
 /** Deployment limits; per-run budgets are stored in each immutable graph. */

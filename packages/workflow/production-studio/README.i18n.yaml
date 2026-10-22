@@ -39,14 +39,20 @@
   en: 0cacabb032aec9b2
   zh: e91e2acee8f619cd
 /deepseek-ai-dsh-production-studio/model-experience/bound-conversation-steps/what-the-model-sees:
-  en: e599f322f5213cd0
-  zh: 755863d76d8f0471
+  en: a35d0647ed074396
+  zh: f9a8458eedbde756
+/deepseek-ai-dsh-production-studio/model-experience/bound-conversation-steps/what-the-model-sees/no-tools-instruction:
+  en: 44be01d5fceea533
+  zh: 430e9363fe6656f3
+/deepseek-ai-dsh-production-studio/model-experience/bound-conversation-steps/what-the-model-sees/no-tools-notice:
+  en: dbc0e1bc24c5a97f
+  zh: 053299f9446fc19e
 /deepseek-ai-dsh-production-studio/model-experience/bound-conversation-steps/token-effect:
   en: 63def3ebd514d6a8
   zh: 42c410c5c28a288f
 /deepseek-ai-dsh-production-studio/model-experience/bound-conversation-steps/kv-cache-effect:
-  en: 291b8df78ba32f2f
-  zh: c1835ce2b993dedd
+  en: f65af187b8b1239a
+  zh: 08d2d78368553e13
 /deepseek-ai-dsh-production-studio/known-limitations-and-deferred-work:
   en: 885a6a96740ac54c
   zh: 5c3be16bda12a1cf

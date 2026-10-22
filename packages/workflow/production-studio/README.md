@@ -107,7 +107,19 @@ On stop, the service waits for admitted parent calls to settle before closing it
 
 #### What the model sees
 
-Prompt assembly adds the active run identity, graph version, phase and current agent-node prompt to the parent conversation. It filters registered tools by that node's allowlist; ToolRuntime admission enforces the same restriction for direct calls. Workflow checkpoints are log-only and add no model message. An eligible explicit resume adds recorded continuation context with the existing source kind `user-approval`, attributing the explicit UI approval rather than an ordinary human message with source kind `user`. The context identifies the same run and requires preservation of its source binding, consumed routes and remaining execution budget. Its trailing instruction is `Never repeat a settled invocation or start a second run.`
+Prompt assembly adds the active run identity, graph version, phase and current agent-node prompt to the parent conversation. It filters registered tools by that node's allowlist; ToolRuntime admission enforces the same restriction for direct calls. Workflow checkpoints are log-only and add no model message. An eligible explicit resume adds recorded continuation context with the existing source kind `user-approval`, attributing the explicit UI approval rather than an ordinary human message with source kind `user`. The context identifies the same run and requires preservation of its source binding, consumed routes and remaining execution budget. Its trailing instruction is `Never repeat a settled invocation or start a second run.` When the filtered list is empty, the workflow instruction ends with the no-tools instruction below. If a request then returns tool-call text and its route reports `TOOL_MARKUP_WITHOUT_TOOLS`, a conversation this package governs records the notice below once, as a user message with source kind `production-studio` and form `notice` after the last assistant message, and retries the same step; a second such failure in that step ends the turn with that code. The notice grants no tool permission and repeats no invocation.
+
+##### No-tools instruction
+
+```markdown
+This step offers no tools. Do not write tool calls; reply in plain text.
+```
+
+##### No-tools notice
+
+```markdown
+No tools are available in this request, so the tool call that your previous reply wrote as text was not executed. Do not write tool calls or tool-call markup. Reply in plain text with the current state and the blocker that prevents further work.
+```
 
 #### Token effect
 
@@ -115,7 +127,7 @@ The parent incurs its existing chat request costs plus the current workflow inst
 
 #### KV Cache effect
 
-The normal parent request and system-prompt policy govern reuse. Continuation context enters the logged user-message history without rewriting earlier chat messages; a node change alters the workflow prompt and tool list, which can affect cache reuse on the next request.
+The normal parent request and system-prompt policy govern reuse. Continuation context enters the logged user-message history without rewriting earlier chat messages; a node change alters the workflow prompt and tool list, which can affect cache reuse on the next request. The notice is appended after the failed request's input, so the retried request keeps that input as its prefix.
 
 ## Known Limitations and Deferred Work
 

@@ -7,7 +7,7 @@ import { assemble, chunks, end, events, MODEL, sse, start, textEvents } from './
 
 describe('Messages stream', () => {
   it('streams text already present in the starting block', async () => {
-    const result = await chunks(translate(events([start, { ...textEvents[1], content_block: { type: 'text', text: 'initial' } }, textEvents[3]!, ...end()]), MODEL))
+    const result = await chunks(translate(events([start, { ...textEvents[1], content_block: { type: 'text', text: 'initial' } }, textEvents[3]!, ...end()]), MODEL, true))
     expect(result).toContainEqual({ type: 'text-delta', index: 0, text: 'initial' })
     expect(providerError({ error: { code: 'insufficient_balance' } }, 400)).toMatchObject({ code: 'QUOTA' })
   })
@@ -27,7 +27,7 @@ describe('Messages stream', () => {
       { type: 'message_delta', delta: {}, usage: { output_tokens: 3 } },
       ...end('tool_use'),
     ]
-    const result = await assemble(translate(events(values), MODEL))
+    const result = await assemble(translate(events(values), MODEL, true))
     expect(result.message.content).toEqual([{ type: 'reasoning', text: 'first thought' }, { type: 'tool-call', id: 'call_1', name: 'read', arguments: '{"path": "a"}' }])
     expect(result.output.at(-2)).toEqual({ type: 'usage', usage: { inputTokens: 12, outputTokens: 5, cacheReadTokens: 30, cacheWriteTokens: 7, totalTokens: 54 } })
     expect(result.output.at(-1)).toMatchObject({ type: 'finish', reason: { kind: 'tool-calls' }, replayState: { blocks: [{ type: 'reasoning', signature: 'signature' }, { type: 'tool-call' }] } })
@@ -35,14 +35,14 @@ describe('Messages stream', () => {
   })
 
   it.each(['end_turn', 'stop_sequence'])('maps %s and ignores forward-compatible envelope events', async (reason) => {
-    const result = await chunks(translate(events([start, { type: 'future_event' }, ...textEvents.slice(1, 4), ...end(reason)]), MODEL))
+    const result = await chunks(translate(events([start, { type: 'future_event' }, ...textEvents.slice(1, 4), ...end(reason)]), MODEL, true))
     expect(result.at(-1)).toMatchObject({ reason: { kind: 'stop' } })
   })
 
   it.each([{}, { key: 'initial' }])('preserves initial tool input %j without JSON deltas', async (input) => {
     const result = await assemble(translate(events([start,
       { type: 'content_block_start', index: 0, content_block: { type: 'tool_use', id: 'a', name: 'read', input } },
-      { type: 'content_block_stop', index: 0 }, ...end('tool_use')]), MODEL))
+      { type: 'content_block_stop', index: 0 }, ...end('tool_use')]), MODEL, true))
     expect(result.message.content[0]).toMatchObject({ arguments: JSON.stringify(input) })
   })
 
@@ -53,7 +53,7 @@ describe('Messages stream', () => {
       { type: 'content_block_stop', index: 0 },
       { type: 'content_block_start', index: 1, content_block: { type: 'tool_use', id: 'a', name: 'read', input: {} } },
       { type: 'content_block_delta', index: 1, delta: { type: 'input_json_delta', partial_json: '{' } },
-      { type: 'content_block_stop', index: 1 }, ...end('max_tokens')]), MODEL))
+      { type: 'content_block_stop', index: 1 }, ...end('max_tokens')]), MODEL, true))
     expect(result.message.content).toEqual([{ type: 'reasoning', text: '' }])
     expect(result.message.source.replayState).toMatchObject({ blocks: [{ type: 'reasoning', signature: 'opaque' }] })
   })
@@ -75,20 +75,71 @@ describe('Messages stream', () => {
     [start, { type: 'content_block_start', index: 0, content_block: { type: 'tool_use', id: '', name: 'read', input: {} } }],
     [start, { type: 'content_block_start', index: 0, content_block: { type: 'tool_use', id: 'x', name: 'read', input: [] } }],
   ])('rejects malformed event ordering or fields %#', async (...values) => {
-    await expect(chunks(translate(events(values as Record<string, unknown>[]), MODEL))).rejects.toMatchObject({ code: 'MALFORMED_RESPONSE' })
+    await expect(chunks(translate(events(values as Record<string, unknown>[]), MODEL, true))).rejects.toMatchObject({ code: 'MALFORMED_RESPONSE' })
   })
 
   it.each(['{', '[]'])('refuses completed non-object tool JSON %s without repairing it', async (partial_json) => {
     await expect(chunks(translate(events([start,
       { type: 'content_block_start', index: 0, content_block: { type: 'tool_use', id: 'a', name: 'read', input: {} } },
       { type: 'content_block_delta', index: 0, delta: { type: 'input_json_delta', partial_json } },
-      { type: 'content_block_stop', index: 0 }, ...end('tool_use')]), MODEL))).rejects.toMatchObject({ code: 'MALFORMED_RESPONSE' })
+      { type: 'content_block_stop', index: 0 }, ...end('tool_use')]), MODEL, true))).rejects.toMatchObject({ code: 'MALFORMED_RESPONSE' })
   })
 
   it('refuses unsupported response content, empty responses and premature EOF', async () => {
-    await expect(chunks(translate(events([start, { type: 'content_block_start', index: 0, content_block: { type: 'redacted_thinking', data: 'x' } }]), MODEL))).rejects.toMatchObject({ code: 'UNSUPPORTED_CONTENT' })
-    await expect(chunks(translate(events([start, ...end()]), MODEL))).rejects.toMatchObject({ code: 'EMPTY_RESPONSE' })
-    await expect(chunks(translate(events(textEvents.slice(0, -1)), MODEL))).rejects.toMatchObject({ code: 'STREAM_CLOSED' })
+    await expect(chunks(translate(events([start, { type: 'content_block_start', index: 0, content_block: { type: 'redacted_thinking', data: 'x' } }]), MODEL, true))).rejects.toMatchObject({ code: 'UNSUPPORTED_CONTENT' })
+    await expect(chunks(translate(events([start, ...end()]), MODEL, true))).rejects.toMatchObject({ code: 'EMPTY_RESPONSE' })
+    await expect(chunks(translate(events(textEvents.slice(0, -1)), MODEL, true))).rejects.toMatchObject({ code: 'STREAM_CLOSED' })
+  })
+})
+
+describe('Leaked DSML tool calls', () => {
+  // Verbatim shape from a deepseek-flash reply that the service returned as text.
+  const leaked = '先只恢复已落盘状态。\n\n<｜｜DSML｜｜ calls>\n<｜｜DSML｜｜ invoke name="begin_workflow">\n'
+    + '<｜｜DSML｜｜ parameter name="caseId" string="true">3a5a9d7d</｜｜DSML｜｜ parameter>\n</｜｜DSML｜｜ invoke>\n</｜｜DSML｜｜ calls>'
+  const text = (value: string, reason = 'end_turn') => [start,
+    { type: 'content_block_start', index: 0, content_block: { type: 'text', text: '' } },
+    { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: value } },
+    { type: 'content_block_stop', index: 0 }, ...end(reason)]
+
+  it('retries a stop whose only action is tool-call markup returned as text', async () => {
+    await expect(chunks(translate(events(text(leaked)), MODEL, true))).rejects.toMatchObject({ code: 'EMPTY_RESPONSE' })
+    await expect(chunks(translate(events(text('<｜DSML｜function_calls>\n<｜DSML｜invoke name="read">')), MODEL, true)))
+      .rejects.toMatchObject({ code: 'EMPTY_RESPONSE' })
+    // Observed after a tool error: the opening tag alone already marks the leak.
+    await expect(chunks(translate(events(text('先对账该操作回执。\n\n<｜｜DSML｜｜tool_calls>')), MODEL, true)))
+      .rejects.toMatchObject({ code: 'EMPTY_RESPONSE' })
+  })
+
+  it('keeps quoted markup, plain mentions and real tool calls as ordinary output', async () => {
+    for (const value of ['```\n' + leaked + '\n```', 'DSML is the DeepSeek tool-call markup.']) {
+      const result = await chunks(translate(events(text(value)), MODEL, true))
+      expect(result.at(-1)).toMatchObject({ type: 'finish', reason: { kind: 'stop' } })
+    }
+    const withTool = [start,
+      { type: 'content_block_start', index: 0, content_block: { type: 'text', text: leaked } },
+      { type: 'content_block_stop', index: 0 },
+      { type: 'content_block_start', index: 1, content_block: { type: 'tool_use', id: 'call_1', name: 'begin_workflow', input: {} } },
+      { type: 'content_block_delta', index: 1, delta: { type: 'input_json_delta', partial_json: '{}' } },
+      { type: 'content_block_stop', index: 1 }, ...end('tool_use')]
+    expect((await chunks(translate(events(withTool), MODEL, true))).at(-1)).toMatchObject({ reason: { kind: 'tool-calls' } })
+  })
+
+  it('reports markup from a request without tools as a distinct non-retried failure', async () => {
+    // Verbatim reply after a native quarantine removed every tool from the request.
+    const withoutTools = '<｜｜DSML｜｜ calls>\n<｜｜DSML｜｜ invoke name="glob">\n'
+      + '<｜｜DSML｜｜ parameter name="pattern" string="true">**/*hFUHSlTJ0zHQku78JvVl9237*</｜｜DSML｜｜ parameter>\n'
+      + '</｜｜DSML｜｜ invoke>\n</｜｜DSML｜｜ calls>'
+    const reasoned = [start,
+      { type: 'content_block_start', index: 0, content_block: { type: 'thinking', thinking: 'Inspect the receipt first.' } },
+      { type: 'content_block_stop', index: 0 },
+      { type: 'content_block_start', index: 1, content_block: { type: 'text', text: withoutTools } },
+      { type: 'content_block_stop', index: 1 }, ...end()]
+    await expect(chunks(translate(events(reasoned), MODEL, false))).rejects.toMatchObject({
+      code: 'TOOL_MARKUP_WITHOUT_TOOLS', message: 'DeepSeek Messages returned tool-call markup as text while the request declared no tools',
+    })
+    await expect(chunks(translate(events(text(withoutTools)), MODEL, true))).rejects.toMatchObject({ code: 'EMPTY_RESPONSE' })
+    const plain = await chunks(translate(events(text('The run is blocked by an unresolved native operation.')), MODEL, false))
+    expect(plain.at(-1)).toMatchObject({ type: 'finish', reason: { kind: 'stop' } })
   })
 })
 
@@ -102,7 +153,7 @@ describe('SSE framing and provider failures', () => {
       controller.enqueue(bytes.slice(offset, end)); offset = end
     } })
     let activity = 0
-    const result = await chunks(translate(parseSse(body, () => { activity++ }), MODEL))
+    const result = await chunks(translate(parseSse(body, () => { activity++ }), MODEL, true))
     return { result, activity }
   }
   it('frames UTF-8 split at every byte and counts comments and ping as transport activity', async () => {

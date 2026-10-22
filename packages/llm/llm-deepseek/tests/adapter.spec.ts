@@ -125,6 +125,19 @@ describe('direct Messages HTTP', () => {
     expect(http.requests[1]?.headers).not.toHaveProperty('anthropic-beta')
   })
 
+  it('separates leaked tool-call text by whether the request body declared tools', async () => {
+    const leaked = '<｜｜DSML｜｜ calls>\n<｜｜DSML｜｜ invoke name="glob">\n</｜｜DSML｜｜ invoke>\n</｜｜DSML｜｜ calls>'
+    const http = await endpoint(response => response.end(sse([textEvents[0],
+      { type: 'content_block_start', index: 0, content_block: { type: 'text', text: leaked } },
+      { type: 'content_block_stop', index: 0 }, ...textEvents.slice(-2)])))
+    const llm = adapter({ baseURL: http.url })
+    const tools = [{ name: 'glob', description: 'Find files', parameters: {} }]
+    await expect(chunks(llm.stream(options()))).rejects.toMatchObject({ code: 'TOOL_MARKUP_WITHOUT_TOOLS' })
+    await expect(chunks(llm.stream(options({ tools: [] })))).rejects.toMatchObject({ code: 'TOOL_MARKUP_WITHOUT_TOOLS' })
+    await expect(chunks(llm.stream(options({ tools })))).rejects.toMatchObject({ code: 'EMPTY_RESPONSE' })
+    expect(http.requests.map(request => request.body.tools)).toEqual([undefined, [], [{ name: 'glob', description: 'Find files', input_schema: {} }]])
+  })
+
   it('uses the Messages endpoint, authentication, attribution and final usage', async () => {
     const http = await endpoint()
     const llm = adapter({ baseURL: http.url })

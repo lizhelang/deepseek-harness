@@ -4,9 +4,9 @@ import { Context, Service } from '@deepseek-ai/cordis'
 import schema from '@deepseek-ai/schemastery'
 import { z } from 'zod'
 import { Remote, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
-import { createUserMessage } from '@deepseek-ai/dsh-llm'
-import type { Agent } from '@deepseek-ai/dsh-agent'
-import type { ToolCallId as ToolCallIdentity, UserMessage } from '@deepseek-ai/dsh-llm'
+import { TOOL_MARKUP_WITHOUT_TOOLS_CODE, createUserMessage } from '@deepseek-ai/dsh-llm'
+import type { Agent, RequestErrorAction } from '@deepseek-ai/dsh-agent'
+import type { ContextFormed, ToolCallId as ToolCallIdentity, UserMessage } from '@deepseek-ai/dsh-llm'
 import type { SessionEvent, SessionId } from '@deepseek-ai/dsh-session'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import type {} from '@deepseek-ai/dsh-tools'
@@ -22,6 +22,17 @@ export type * from './types.ts'
 export { createConversationGraph, decodeProductionState, isFixedConversationGraph } from './domain.ts'
 
 declare module '@deepseek-ai/cordis' { interface Context { productionStudio: ProductionStudio } }
+declare module '@deepseek-ai/dsh-llm' {
+  interface MessageSourceMap {
+    /** Notices Production Studio records into a conversation whose workflow it governs. */
+    'production-studio': { kind: 'production-studio' } & ContextFormed
+  }
+}
+
+/** Section text for a conversation step to which Production Studio offers no tools. */
+const NO_TOOLS_INSTRUCTION = 'This step offers no tools. Do not write tool calls; reply in plain text.'
+/** Notice recorded before the one retry after a request without tools returned tool-call text. */
+const NO_TOOLS_NOTICE = 'No tools are available in this request, so the tool call that your previous reply wrote as text was not executed. Do not write tool calls or tool-call markup. Reply in plain text with the current state and the blocker that prevents further work.'
 
 /** Deployment limits; per-run budgets are stored in each immutable graph. */
 export interface Config {
@@ -179,7 +190,19 @@ export class ProductionStudio extends TypertRemoteService {
       const task = run.tasks.find(item => this.node(run, item.nodeId).kind === 'agent' && ['ready', 'running'].includes(item.phase))
       const allowed = run.phase === 'active' && !runtime.pausedRun.has(run.id) && task && !task.operationId ? this.node(run, task.nodeId).config.tools ?? [] : []
       const instruction = task ? this.node(run, task.nodeId).config.prompt ?? '' : 'No executable graph node is available. Preserve the run and explain its current blocker.'
-      return { ...assembled, tools: assembled.tools.filter(tool => allowed.includes(tool.name)), sections: [...assembled.sections, { name: 'production:execution', text: `Production workflow ${run.id}, graph=${run.graph.version}, phase=${run.phase}:\n${instruction}`, interpolate: false }] }
+      const tools = assembled.tools.filter(tool => allowed.includes(tool.name))
+      return { ...assembled, tools, sections: [...assembled.sections, { name: 'production:execution', text: `Production workflow ${run.id}, graph=${run.graph.version}, phase=${run.phase}:\n${instruction}${tools.length === 0 ? `\n${NO_TOOLS_INSTRUCTION}` : ''}`, interpolate: false }] }
+    })
+    // A request without tools cannot turn tool-call text into a call, and the same request
+    // repeats it. One logged notice per step precedes the retry; a second leak ends the turn.
+    ctx.on('agent/request-error', ({ agent, failure, signal }, next): Promise<RequestErrorAction> => {
+      if (failure.code !== TOOL_MARKUP_WITHOUT_TOOLS_CODE || signal.aborted || !this.provider(agent)) return next()
+      const messages = agent.session.deriveMessages()
+      const stepStart = messages.findLastIndex(message => message.role === 'assistant') + 1
+      if (messages.slice(stepStart).some(message => message.source.kind === 'production-studio')) return next()
+      agent.session.append('user/message', createUserMessage({ content: [{ type: 'text', text: NO_TOOLS_NOTICE }],
+        source: { kind: 'production-studio', form: 'notice', summary: 'Asked for a plain-text reply: this request offers no tools' } }), { surfaceOp: 'append' })
+      return Promise.resolve<RequestErrorAction>({ kind: 'retry' })
     })
     // The conversation is the sole executor of agent nodes. This middleware
     // admits and settles that same call; it never invokes its native tool twice.

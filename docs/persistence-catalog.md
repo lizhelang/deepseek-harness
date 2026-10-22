@@ -51,7 +51,7 @@ The [format references](persistence-changes/historical-formats/README.md) cover 
 | `event:model/selection` | event | `35203ba7ad5ef6f97d556b85df20ae98f04f09c65748cecdf8eefdb8b6405ffc` | [`{ type: "model/selection" }`](#persistence-type-sha256-35203ba7ad5ef6f97d556b85df20ae98f04f09c65748cecdf8eefdb8b6405ffc) |
 | `event:permission/preset` | event | `5c45bf4c544a7211dcd8ba6ba7e5f1bc39b49e7a9df9d5cbdc8e87c22771b37b` | [`{ type: "permission/preset" }`](#persistence-type-sha256-5c45bf4c544a7211dcd8ba6ba7e5f1bc39b49e7a9df9d5cbdc8e87c22771b37b) |
 | `event:plan/mode` | event | `a7cf43ce7c2a4c038feed1885cd7a00d5c6ee2d90a7e0d56b46f78a3e1ca327f` | [`{ type: "plan/mode" }`](#persistence-type-sha256-a7cf43ce7c2a4c038feed1885cd7a00d5c6ee2d90a7e0d56b46f78a3e1ca327f) |
-| `event:production/checkpoint` | event | `1585eed5425771c8549b274afdfe1f2d224cc06dce695f1471a90a0faf4bb535` | [`{ type: "production/checkpoint" }`](#persistence-type-sha256-1585eed5425771c8549b274afdfe1f2d224cc06dce695f1471a90a0faf4bb535) |
+| `event:production/checkpoint` | event | `39e76ac94d1a78a83f36a97995b2d33e26a2c0679b628e73efa53a3aa659434b` | [`{ type: "production/checkpoint" }`](#persistence-type-sha256-39e76ac94d1a78a83f36a97995b2d33e26a2c0679b628e73efa53a3aa659434b) |
 | `event:request/context` | event | `37cbc9cf06d494cfe5c67f078af1605eacb8e4c2c853e9e26455b73de0ee7ccf` | [`{ type: "request/context" }`](#persistence-type-sha256-37cbc9cf06d494cfe5c67f078af1605eacb8e4c2c853e9e26455b73de0ee7ccf) |
 | `event:request/header` | event | `4208123b50df5006b181481ab45fcf1cde807b88d3fd4d340090bc2e202fac41` | [`{ type: "request/header" }`](#persistence-type-sha256-4208123b50df5006b181481ab45fcf1cde807b88d3fd4d340090bc2e202fac41) |
 | `event:sandbox/mode` | event | `516da4cdd6d2f1e5ce488e648578ca51f40e458f707b803e5b24de870e799415` | [`{ type: "sandbox/mode" }`](#persistence-type-sha256-516da4cdd6d2f1e5ce488e648578ca51f40e458f707b803e5b24de870e799415) |
@@ -752,7 +752,7 @@ Source: [`packages/plan/plan-mode/src/index.ts:52`](../packages/plan/plan-mode/s
 'production/checkpoint': { run: ProductionRun }
 ```
 
-Source: [`packages/workflow/production-studio/src/types.ts:177`](../packages/workflow/production-studio/src/types.ts)
+Source: [`packages/workflow/production-studio/src/types.ts:241`](../packages/workflow/production-studio/src/types.ts)
 
 ### `request/*`
 
@@ -1524,6 +1524,14 @@ SHA-256: `17aae616ef020b8b9f011ec398ec935450fb06d3e2a0722c456f63aeaf5ff728`
 
 `"at"`
 
+<a id="persistence-type-sha256-d640089cf7cccf39aa1b4632eef7b3555ea8214a64be16c43f911533e68fb87e"></a>
+
+### `"baseline"`
+
+SHA-256: `d640089cf7cccf39aa1b4632eef7b3555ea8214a64be16c43f911533e68fb87e`
+
+`"baseline"`
+
 <a id="persistence-type-sha256-2e575a8f9b6b39b4977692fbe58abdf3a3432d2e71b416a5583095e7eb49b2d3"></a>
 
 ### `"before"`
@@ -1563,6 +1571,14 @@ SHA-256: `cbca49bde16b656d5b8fbe4a8a507769f7b594c6287782b809c03814941bc5e3`
 SHA-256: `254dce209e735f9cb6f6b7aec0354712b1611759ec02af4d35a96f2081e666f6`
 
 `"blocked"`
+
+<a id="persistence-type-sha256-81fe32fd66b1fc598661232624ef22a83a466bb2ec1972ccab166f22bf65e86e"></a>
+
+### `"budget"`
+
+SHA-256: `81fe32fd66b1fc598661232624ef22a83a466bb2ec1972ccab166f22bf65e86e`
+
+`"budget"`
 
 <a id="persistence-type-sha256-d4e4d575abeb4b72d616dc65c17ac0eaa943cc135609395044c38d5afcb10e31"></a>
 
@@ -1692,6 +1708,14 @@ SHA-256: `ef4f00923b9edbae15c7ef05320280bf61147ca17146cf59690359bfd5e5da45`
 
 `"compaction/summary"`
 
+<a id="persistence-type-sha256-d1b6830ab4ac10ac4d4569e8e7b737de101b876a24ae07cdd5cdea2dac723b87"></a>
+
+### `"compare"`
+
+SHA-256: `d1b6830ab4ac10ac4d4569e8e7b737de101b876a24ae07cdd5cdea2dac723b87`
+
+`"compare"`
+
 <a id="persistence-type-sha256-d9196086e41e4dd5c2ce87f5c25529c8112a1731d258cf0728747d41a9ee3241"></a>
 
 ### `"complete"`
@@ -1779,6 +1803,14 @@ SHA-256: `e7e8f1318170b8284f16ab45a557afd4675c96071c0f2a456636481dab20b427`
 SHA-256: `1a2718b00937b236a0d0910ef5dab2f9f8b65e4bde410cc21f15fbbf29f584d3`
 
 `"deliverables/presented"`
+
+<a id="persistence-type-sha256-21aa821a9a7281115ea356b4c5b6cd86c40e3d748aec03a18364daf4c65ed1fd"></a>
+
+### `"delivered"`
+
+SHA-256: `21aa821a9a7281115ea356b4c5b6cd86c40e3d748aec03a18364daf4c65ed1fd`
+
+`"delivered"`
 
 <a id="persistence-type-sha256-2e2f82cf30a82b0342349ca29f6a5854cf712f290e225b1a77528fe7f00b27bd"></a>
 
@@ -2084,6 +2116,14 @@ SHA-256: `ebb768d85ec87fb68e42fc14fd7d8535b5ac11791b14d04c6770180f0a719bf8`
 
 `"image/webp"`
 
+<a id="persistence-type-sha256-13f3955555abcd859fe714a8507c186026da0d4abf04e261ce7168aa054abba7"></a>
+
+### `"improve"`
+
+SHA-256: `13f3955555abcd859fe714a8507c186026da0d4abf04e261ce7168aa054abba7`
+
+`"improve"`
+
 <a id="persistence-type-sha256-f311671e07bc7fa645a0b6597de9966b97147956565296ba76a36543801b66c5"></a>
 
 <a id="persistence-type-packagesllmllmsrctypestssystempromptupdate"></a>
@@ -2137,6 +2177,14 @@ SHA-256: `e4cac694f8b6e1d52e48c699464f1c4c26111ef87e558f7931040d00fdc8d486`
 SHA-256: `fee1caf8ab6a65c1bc981f5a1730164490f22a2a89ffa3d0b76f1f432c44c8b5`
 
 `"instructions"`
+
+<a id="persistence-type-sha256-19f47b50ce335e49029544597c131bd882ef6205bcfd9853fc0d25a2065b07b8"></a>
+
+### `"intake"`
+
+SHA-256: `19f47b50ce335e49029544597c131bd882ef6205bcfd9853fc0d25a2065b07b8`
+
+`"intake"`
 
 <a id="persistence-type-sha256-69d238a6e9b08d67f601b1825962963d8d3523cb69ebf6208c697dc5d058c199"></a>
 
@@ -2209,6 +2257,14 @@ SHA-256: `611cae9a3539733aa0c42f66035a7d90f19dcbbdfb5d9e3b628b13705253942d`
 SHA-256: `4ae007ed190a72c92138b22d059b83208079c7551ca13fb59ae8cf5e23693964`
 
 `"llm/retry-started"`
+
+<a id="persistence-type-sha256-c5e0685dd949d6975c1ff4b2af14651c070251a07bc3e1dce783abbb0d39d7d1"></a>
+
+### `"manufacture"`
+
+SHA-256: `c5e0685dd949d6975c1ff4b2af14651c070251a07bc3e1dce783abbb0d39d7d1`
+
+`"manufacture"`
 
 <a id="persistence-type-sha256-002ee1f53b674da0befac1d67244bb9fa4f9c8499760966032292560a3da37ab"></a>
 
@@ -2329,6 +2385,14 @@ SHA-256: `95a3ffccbf3c8afcf9a2f3b355f724da8e07e98dc47ee741166dde7f9ea058bd`
 SHA-256: `e6411b09c1d982f789bf741ca74e2bea69df56029847f86a6148e722039ee732`
 
 `"parent"`
+
+<a id="persistence-type-sha256-182c443f17e9b064447d546cdeab903c9dfab871ac4176d30ad5f74a794b5b25"></a>
+
+### `"passed"`
+
+SHA-256: `182c443f17e9b064447d546cdeab903c9dfab871ac4176d30ad5f74a794b5b25`
+
+`"passed"`
 
 <a id="persistence-type-sha256-1d8798b1a5e8c545ee4dcd2b4e75c0b4c9ffd985e4744c6d1a1aab992f859721"></a>
 
@@ -4617,6 +4681,112 @@ Sources: [`packages/typert/protocol/src/types.ts:457`](../packages/typert/protoc
 |---|---|---|
 | `kind` | required | `"owner"` |
 
+<a id="persistence-type-sha256-0cf72d5d8de51583d62f3fd8e1140469f027d0af71b27dec90b7edb5ffca33c8"></a>
+
+<a id="persistence-type-packagesworkflowproduction-studiosrctypestsproductioncasebudget"></a>
+
+<a id="persistence-type-productioncasebudget"></a>
+
+### `ProductionCaseBudget`
+
+SHA-256: `0cf72d5d8de51583d62f3fd8e1140469f027d0af71b27dec90b7edb5ffca33c8`
+
+Sources: [`packages/workflow/production-studio/src/types.ts:95`](../packages/workflow/production-studio/src/types.ts)
+
+| Property | Presence | Type |
+|---|---|---|
+| `limit` | required | `number` |
+| `used` | required | `number` |
+
+<a id="persistence-type-sha256-754114503d2d39b633255ab215770cf49671610abc5d9570e4471dd485e77f5c"></a>
+
+<a id="persistence-type-packagesworkflowproduction-studiosrctypestsproductioncasecandidate"></a>
+
+<a id="persistence-type-productioncasecandidate"></a>
+
+### `ProductionCaseCandidate`
+
+SHA-256: `754114503d2d39b633255ab215770cf49671610abc5d9570e4471dd485e77f5c`
+
+Sources: [`packages/workflow/production-studio/src/types.ts:97`](../packages/workflow/production-studio/src/types.ts)
+
+| Property | Presence | Type |
+|---|---|---|
+| `candidateId` | required | `string` |
+| `failure` | optional | `string` |
+| `hypothesis` | optional | `string` |
+| `kind` | required | `string` |
+| `manufacturing` | optional | [`{ pieces?, score?, status }`](#persistence-type-sha256-405ee8ee5383bd9d3f1c9366d43aa4acf123a36aed48038d4485f8d4b8d3de08) |
+| `parentCandidateId` | optional | `string` |
+| `searchCounts` | optional | [`{ bends, pieces, welds }`](#persistence-type-sha256-a726fac5c8eb6852926b506bcf7167ebd3788b4f03e43796180d69736a759395) |
+| `searchScore` | optional | `number` |
+| `searchStatus` | required | `string` |
+
+<a id="persistence-type-sha256-092f97daa02c7b95c4c261504df4879b6c1e793d9881b53cb808ea5e20d607af"></a>
+
+### `ProductionCaseCandidate[]`
+
+SHA-256: `092f97daa02c7b95c4c261504df4879b6c1e793d9881b53cb808ea5e20d607af`
+
+Array of [`ProductionCaseCandidate`](#persistence-type-sha256-754114503d2d39b633255ab215770cf49671610abc5d9570e4471dd485e77f5c).
+
+<a id="persistence-type-sha256-6420fcf7a59711840f7c59602e00853acc57ecd5b8fa7145235d2d5ca4459dd2"></a>
+
+<a id="persistence-type-packagesworkflowproduction-studiosrctypestsproductioncasefile"></a>
+
+<a id="persistence-type-productioncasefile"></a>
+
+### `ProductionCaseFile`
+
+SHA-256: `6420fcf7a59711840f7c59602e00853acc57ecd5b8fa7145235d2d5ca4459dd2`
+
+Sources: [`packages/workflow/production-studio/src/types.ts:122`](../packages/workflow/production-studio/src/types.ts)
+
+| Property | Presence | Type |
+|---|---|---|
+| `kind` | required | `string` |
+| `path` | required | `string` |
+| `sha256` | required | `string` |
+
+<a id="persistence-type-sha256-65690ed576fe01c326f6a6ad718585fcc0fdacaebc4462a60e6ef68682742f13"></a>
+
+### `ProductionCaseFile[]`
+
+SHA-256: `65690ed576fe01c326f6a6ad718585fcc0fdacaebc4462a60e6ef68682742f13`
+
+Array of [`ProductionCaseFile`](#persistence-type-sha256-6420fcf7a59711840f7c59602e00853acc57ecd5b8fa7145235d2d5ca4459dd2).
+
+<a id="persistence-type-sha256-63528878019b5025170a76da28b3fb91e8b57b440dabef48075b43c16720d55b"></a>
+
+<a id="persistence-type-packagesworkflowproduction-studiosrctypestsproductioncaseview"></a>
+
+<a id="persistence-type-productioncaseview"></a>
+
+### `ProductionCaseView`
+
+SHA-256: `63528878019b5025170a76da28b3fb91e8b57b440dabef48075b43c16720d55b`
+
+Sources: [`packages/workflow/production-studio/src/types.ts:127`](../packages/workflow/production-studio/src/types.ts)
+
+| Property | Presence | Type |
+|---|---|---|
+| `attention` | optional | [`{ kind, message }`](#persistence-type-sha256-5b00ae2b6291dd92a4e71263bfca11cf7508107b50352f627c7435acfdafd6e8) |
+| `bestManufacturingCandidateId` | optional | `string` |
+| `bestSearchCandidateId` | optional | `string` |
+| `candidates` | required | [`ProductionCaseBudget`](#persistence-type-sha256-0cf72d5d8de51583d62f3fd8e1140469f027d0af71b27dec90b7edb5ffca33c8) |
+| `caseId` | required | `string` |
+| `delivery` | optional | [`{ candidateId, files }`](#persistence-type-sha256-d970579d55c151e0feb613d242838f34d3f3511de026223222086ff8a26de8bb) |
+| `finishBlockers` | required | [`string[]`](#persistence-type-sha256-93c33d9687613293f8c95d46c4d922fe9ceae83b84c384beff5c3315abe005f2) |
+| `hostCalls` | optional | [`ProductionCaseBudget`](#persistence-type-sha256-0cf72d5d8de51583d62f3fd8e1140469f027d0af71b27dec90b7edb5ffca33c8) |
+| `inputVersion` | required | `string` |
+| `nextActions` | required | [`string[]`](#persistence-type-sha256-93c33d9687613293f8c95d46c4d922fe9ceae83b84c384beff5c3315abe005f2) |
+| `observedAt` | required | `number` |
+| `phase` | required | [`union (6 variants)`](#persistence-type-sha256-96d21c628af251f9bb9b1c9654ac7eecae5bb1e7c369c7bf3bb81e84500b9aff) |
+| `revision` | required | `number` |
+| `rows` | required | [`ProductionCaseCandidate[]`](#persistence-type-sha256-092f97daa02c7b95c4c261504df4879b6c1e793d9881b53cb808ea5e20d607af) |
+| `stage` | required | `string` |
+| `stopReason` | optional | `string` |
+
 <a id="persistence-type-sha256-283bc052f8b5404143b3ec39f3210283c68b3909386f3ca026d55252c1d2e302"></a>
 
 <a id="persistence-type-packagesworkflowproduction-studiosrctypestsproductionedge"></a>
@@ -4831,7 +5001,7 @@ SHA-256: `c5a097449186577cff0084497e5dc5a175a616d4b4d70873ccee0cb7c570a3ff`
 
 Array of [`ProductionPort`](#persistence-type-sha256-0865c014a279cb614e786f91a1e1fe03748e7fc4b0c63426c3378f4f7d258658).
 
-<a id="persistence-type-sha256-9b36ba102558e20ca267d6a1046d57de68e40f6dfbb57f2915e4d38e48956c56"></a>
+<a id="persistence-type-sha256-c97ca02306d7a8c7696f8eef9af60db77f61ce083775dcbbc32fd943182be93b"></a>
 
 <a id="persistence-type-packagesworkflowproduction-studiosrctypestsproductionrun"></a>
 
@@ -4839,13 +5009,14 @@ Array of [`ProductionPort`](#persistence-type-sha256-0865c014a279cb614e786f91a1e
 
 ### `ProductionRun`
 
-SHA-256: `9b36ba102558e20ca267d6a1046d57de68e40f6dfbb57f2915e4d38e48956c56`
+SHA-256: `c97ca02306d7a8c7696f8eef9af60db77f61ce083775dcbbc32fd943182be93b`
 
-Sources: [`packages/workflow/production-studio/src/types.ts:95`](../packages/workflow/production-studio/src/types.ts)
+Sources: [`packages/workflow/production-studio/src/types.ts:155`](../packages/workflow/production-studio/src/types.ts)
 
 | Property | Presence | Type |
 |---|---|---|
 | `binding` | optional | [`{ key, provider }`](#persistence-type-sha256-fbb731fa69d038d9b6879dca428eb4b5b1d65b701bbb97bcfcabbfd44db05e63) |
+| `case` | optional | [`ProductionCaseView`](#persistence-type-sha256-63528878019b5025170a76da28b3fb91e8b57b440dabef48075b43c16720d55b) |
 | `createdAt` | required | `number` |
 | `executions` | required | `number` |
 | `graph` | required | [`ProductionGraph`](#persistence-type-sha256-2533004b4099a33253c42ba451809a147caa9289815b600119cb670ca1794b6c) |
@@ -6152,6 +6323,18 @@ One of:
 - `"conversation"`
 - `"scheduled"`
 
+<a id="persistence-type-sha256-51a75c7012720f9b47e2a6e7df3f49c5217d3ef2f2f949b16b30e56dfa42fdb4"></a>
+
+### `union (3 variants)`
+
+SHA-256: `51a75c7012720f9b47e2a6e7df3f49c5217d3ef2f2f949b16b30e56dfa42fdb4`
+
+One of:
+
+- `"blocked"`
+- `"budget"`
+- `"unknown"`
+
 <a id="persistence-type-sha256-5776e5553ff2dfe3f5bc202dbb1e7c9f93e35a531aebb7764c23b2b6153b2ccc"></a>
 
 <a id="persistence-type-sessioneventenvelope"></a>
@@ -6227,6 +6410,19 @@ One of:
 - `"human"`
 - `"tool"`
 
+<a id="persistence-type-sha256-242eda978895496a66f339bcabc003ea12d14251bbf434c159a47026d6dce7c2"></a>
+
+### `union (4 variants)`
+
+SHA-256: `242eda978895496a66f339bcabc003ea12d14251bbf434c159a47026d6dce7c2`
+
+One of:
+
+- `"failed"`
+- `"passed"`
+- `"running"`
+- `"unknown"`
+
 <a id="persistence-type-sha256-ee5b273d1468be647b9e3ecf591ced2cf42fec407cf8e4463a06a52f26c1068a"></a>
 
 ### `union (4 variants)`
@@ -6290,6 +6486,21 @@ One of:
 - `"edit"`
 - `"pause"`
 - `"resume"`
+
+<a id="persistence-type-sha256-96d21c628af251f9bb9b1c9654ac7eecae5bb1e7c369c7bf3bb81e84500b9aff"></a>
+
+### `union (6 variants)`
+
+SHA-256: `96d21c628af251f9bb9b1c9654ac7eecae5bb1e7c369c7bf3bb81e84500b9aff`
+
+One of:
+
+- `"baseline"`
+- `"compare"`
+- `"delivered"`
+- `"improve"`
+- `"intake"`
+- `"manufacture"`
 
 <a id="persistence-type-sha256-3305a4bb6b6c29b482ba91d59c60b47e8f98282d3dacc8c29e4a4c2712209bdd"></a>
 
@@ -6417,6 +6628,20 @@ Sources: [`packages/workflow/production-studio/src/types.ts:29`](../packages/wor
 | `toolName` | optional | `string` |
 | `tools` | optional | [`string[]`](#persistence-type-sha256-93c33d9687613293f8c95d46c4d922fe9ceae83b84c384beff5c3315abe005f2) |
 
+<a id="persistence-type-sha256-a726fac5c8eb6852926b506bcf7167ebd3788b4f03e43796180d69736a759395"></a>
+
+### `{ bends, pieces, welds }`
+
+SHA-256: `a726fac5c8eb6852926b506bcf7167ebd3788b4f03e43796180d69736a759395`
+
+Sources: [`packages/workflow/production-studio/src/types.ts:109`](../packages/workflow/production-studio/src/types.ts)
+
+| Property | Presence | Type |
+|---|---|---|
+| `bends` | required | `number` |
+| `pieces` | required | `number` |
+| `welds` | required | `number` |
+
 <a id="persistence-type-sha256-1528539c63db8b23506f0209a99ce77d8ad138adfbfcee3d4769b7382d93756c"></a>
 
 ### `{ callId, files, turn }`
@@ -6445,6 +6670,19 @@ Sources: [`packages/interaction/user-approval/src/types.ts:44`](../packages/inte
 | `id` | required | `string` |
 | `reason` | optional | `string` |
 | `toolName` | required | `string` |
+
+<a id="persistence-type-sha256-d970579d55c151e0feb613d242838f34d3f3511de026223222086ff8a26de8bb"></a>
+
+### `{ candidateId, files }`
+
+SHA-256: `d970579d55c151e0feb613d242838f34d3f3511de026223222086ff8a26de8bb`
+
+Sources: [`packages/workflow/production-studio/src/types.ts:150`](../packages/workflow/production-studio/src/types.ts)
+
+| Property | Presence | Type |
+|---|---|---|
+| `candidateId` | required | `string` |
+| `files` | required | [`ProductionCaseFile[]`](#persistence-type-sha256-65690ed576fe01c326f6a6ad718585fcc0fdacaebc4462a60e6ef68682742f13) |
 
 <a id="persistence-type-sha256-4f91f187baeabef5c7950c4780d31bbe39f3345dff591a6cf26ac7e135ac1cf4"></a>
 
@@ -7011,12 +7249,25 @@ Sources: [`packages/core/session/src/types.ts:342`](../packages/core/session/src
 
 SHA-256: `fbb731fa69d038d9b6879dca428eb4b5b1d65b701bbb97bcfcabbfd44db05e63`
 
-Sources: [`packages/workflow/production-studio/src/types.ts:110`](../packages/workflow/production-studio/src/types.ts)
+Sources: [`packages/workflow/production-studio/src/types.ts:170`](../packages/workflow/production-studio/src/types.ts)
 
 | Property | Presence | Type |
 |---|---|---|
 | `key` | required | `string` |
 | `provider` | required | `string` |
+
+<a id="persistence-type-sha256-5b00ae2b6291dd92a4e71263bfca11cf7508107b50352f627c7435acfdafd6e8"></a>
+
+### `{ kind, message }`
+
+SHA-256: `5b00ae2b6291dd92a4e71263bfca11cf7508107b50352f627c7435acfdafd6e8`
+
+Sources: [`packages/workflow/production-studio/src/types.ts:148`](../packages/workflow/production-studio/src/types.ts)
+
+| Property | Presence | Type |
+|---|---|---|
+| `kind` | required | [`union (3 variants)`](#persistence-type-sha256-51a75c7012720f9b47e2a6e7df3f49c5217d3ef2f2f949b16b30e56dfa42fdb4) |
+| `message` | required | `string` |
 
 <a id="persistence-type-sha256-0a30c3be336cdd4f8f34e66543a3d46d611c43986edd9b3ce6cbb9b721d3b5d3"></a>
 
@@ -8391,6 +8642,20 @@ Sources: [`packages/sandbox/sandbox-policy/src/session-mode.ts:33`](../packages/
 | `mode` | required | [`SandboxMode`](#persistence-type-sha256-fab2bb09bc5e3b9db0685e8f5500b029af1a2b33e70bc703c1d5d0f596fbc1fd) |
 | `source` | optional | `"delegation"` |
 
+<a id="persistence-type-sha256-405ee8ee5383bd9d3f1c9366d43aa4acf123a36aed48038d4485f8d4b8d3de08"></a>
+
+### `{ pieces?, score?, status }`
+
+SHA-256: `405ee8ee5383bd9d3f1c9366d43aa4acf123a36aed48038d4485f8d4b8d3de08`
+
+Sources: [`packages/workflow/production-studio/src/types.ts:111`](../packages/workflow/production-studio/src/types.ts)
+
+| Property | Presence | Type |
+|---|---|---|
+| `pieces` | optional | `number` |
+| `score` | optional | `number` |
+| `status` | required | [`union (4 variants)`](#persistence-type-sha256-242eda978895496a66f339bcabc003ea12d14251bbf434c159a47026d6dce7c2) |
+
 <a id="persistence-type-sha256-11f70b595aa76897fc4e25a352bfa718c659f44b799e5aa14e84e5a38fe72912"></a>
 
 ### `{ policy, source? }`
@@ -8442,17 +8707,17 @@ Sources: [`packages/web/web-search-deepseek/src/provider.ts:64`](../packages/web
 | `content` | required | [`tuple (1 positions)`](#persistence-type-sha256-8f6d609794bf5afc01d7ccf3e03811d32f4b8047f58a2c9a98db0154c2ad7cb9) |
 | `role` | required | `"user"` |
 
-<a id="persistence-type-sha256-72e434c3340c1a5933a384c8ca44a82e754c5ca472b876ac832c07f989ba7602"></a>
+<a id="persistence-type-sha256-484c08664c894f61017ffa87ad442931369f682395aaf665a662e1bfc13b6db4"></a>
 
 ### `{ run }`
 
-SHA-256: `72e434c3340c1a5933a384c8ca44a82e754c5ca472b876ac832c07f989ba7602`
+SHA-256: `484c08664c894f61017ffa87ad442931369f682395aaf665a662e1bfc13b6db4`
 
-Sources: [`packages/workflow/production-studio/src/types.ts:177`](../packages/workflow/production-studio/src/types.ts)
+Sources: [`packages/workflow/production-studio/src/types.ts:241`](../packages/workflow/production-studio/src/types.ts)
 
 | Property | Presence | Type |
 |---|---|---|
-| `run` | required | [`ProductionRun`](#persistence-type-sha256-9b36ba102558e20ca267d6a1046d57de68e40f6dfbb57f2915e4d38e48956c56) |
+| `run` | required | [`ProductionRun`](#persistence-type-sha256-c97ca02306d7a8c7696f8eef9af60db77f61ce083775dcbbc32fd943182be93b) |
 
 <a id="persistence-type-sha256-8bb8c3751a6ce64b61aba1ec7ae798c00a5803c4d868a0430873216c6569ed52"></a>
 
@@ -9082,17 +9347,17 @@ SHA-256: `a7cf43ce7c2a4c038feed1885cd7a00d5c6ee2d90a7e0d56b46f78a3e1ca327f`
 | `time` | required | `number` |
 | `type` | required | `"plan/mode"` |
 
-<a id="persistence-type-sha256-1585eed5425771c8549b274afdfe1f2d224cc06dce695f1471a90a0faf4bb535"></a>
+<a id="persistence-type-sha256-39e76ac94d1a78a83f36a97995b2d33e26a2c0679b628e73efa53a3aa659434b"></a>
 
 <a id="persistence-type-eventproductioncheckpoint"></a>
 
 ### `{ type: "production/checkpoint" }`
 
-SHA-256: `1585eed5425771c8549b274afdfe1f2d224cc06dce695f1471a90a0faf4bb535`
+SHA-256: `39e76ac94d1a78a83f36a97995b2d33e26a2c0679b628e73efa53a3aa659434b`
 
 | Property | Presence | Type |
 |---|---|---|
-| `data` | required | [`{ run }`](#persistence-type-sha256-72e434c3340c1a5933a384c8ca44a82e754c5ca472b876ac832c07f989ba7602) |
+| `data` | required | [`{ run }`](#persistence-type-sha256-484c08664c894f61017ffa87ad442931369f682395aaf665a662e1bfc13b6db4) |
 | `ignorable` | optional | `true` |
 | `seq` | required | `number` |
 | `time` | required | `number` |

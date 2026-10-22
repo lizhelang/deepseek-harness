@@ -295,6 +295,7 @@ export class ProductionStudio extends TypertRemoteService {
                 }
                 if (observed?.key && run.binding) run.binding.key = observed.key
                 if (observed?.input !== undefined) run.input = observed.input
+                if (observed?.caseView !== undefined) run.case = { ...observed.caseView, observedAt: Date.now() }
                 const outlet = unresolvedReceipt(receipt) ? 'unknown' : observed?.outlet
                 if (outlet) {
                   if (outlet === 'failure' && observed?.terminal === true) this.transition(run, task, 'blocked', observed.message ?? `已返回 ${exec.name}`)

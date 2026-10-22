@@ -12,9 +12,10 @@ import { en } from '../src/client/locales.ts'
 import type {} from '../src/client/index.ts'
 import { createStudioDraftStore } from '../src/client/stores.ts'
 import { TaskMonitor, ProductionDock } from '../src/client/TaskMonitor.tsx'
+import { CasePanel, caseSummary } from '../src/client/CasePanel.tsx'
 import { ProductionWorkflowView } from '../src/client/WorkflowEditor.tsx'
 import type { StudioReadState, StudioSurfaceProps, StudioViewProps, StudioDockProps } from '../src/client/slots.ts'
-import { deliveredRun, run, snapshot } from './fixtures.ts'
+import { caseView, deliveredRun, run, snapshot } from './fixtures.ts'
 
 afterEach(cleanup)
 const t: TranslateNS<'productionStudio'> = makeTranslate(en, commonEn)
@@ -29,7 +30,8 @@ function fixture(runs = [run('running', 'running')]) {
   const props: StudioSurfaceProps = {
     t, useProduction: hook(read), useStore: hook(drafts), actions: drafts.actions,
     saveGraph: vi.fn(async () => null), start: vi.fn(async () => null), pause: vi.fn(async () => null),
-    resume: vi.fn(async () => null), answer: vi.fn(async () => null), reconcile: vi.fn(async () => null), refresh: vi.fn(),
+    resume: vi.fn(async () => null), answer: vi.fn(async () => null), reconcile: vi.fn(async () => null),
+    send: vi.fn(async (_text: string): Promise<string | null> => null), refresh: vi.fn(),
   }
   // The business-view fixture supplies navigation owners; unused framework seats
   // retain the existing surface-only test double used by the dock fixtures.
@@ -171,15 +173,99 @@ describe('production surfaces', () => {
     expect(screen.getByRole('button', { name: en['dock.collapse'] }).getAttribute('aria-expanded')).toBe('true')
     expect(b.props.start).not.toHaveBeenCalled()
   })
-  it('keeps the collapsed empty monitor readable and explains what it tracks', () => {
+  it('hides the composer dock until the conversation has a task, but still reports a lost connection', () => {
     const b = fixture([])
+    const empty = render(<ProductionDock {...b.props as StudioDockProps} />)
+    expect(empty.container.querySelector('[data-production-dock]')).toBeNull()
+    empty.unmount()
+    b.read.set({ snapshot: snapshot(), loading: false, error: 'socket closed' })
     render(<ProductionDock {...b.props as StudioDockProps} />)
-    expect(screen.getByText(en['view.monitor'])).toBeTruthy()
-    expect(screen.getByText(en['dock.empty'])).toBeTruthy()
-    expect(screen.queryByText(/0 need attention/)).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: en['dock.expand'] }))
-    expect(screen.getByText(en['empty.detail'])).toBeTruthy()
+    expect(screen.getByText(en['dock.disconnected'])).toBeTruthy()
     expect(b.props.start).not.toHaveBeenCalled()
+  })
+  it('summarizes the newest AEA case in the dock and shows its panel ahead of node diagnostics', () => {
+    const older = run('older', 'running'); older.case = caseView({ caseId: 'aaaaaaaa1111', observedAt: 1 })
+    const newer = run('newer', 'running'); newer.case = caseView({ caseId: 'bbbbbbbb2222', observedAt: 2,
+      attention: { kind: 'unknown', message: 'Native result unknown' } })
+    const b = fixture([older, newer])
+    render(<ProductionDock {...b.props as StudioDockProps} />)
+    const summary = screen.getByText(/Case bbbbbbbb/)
+    expect(summary.textContent).toContain('Improve · candidates 2/8')
+    expect(summary.textContent).toContain('best score 39.98')
+    expect(summary.textContent).toContain('Native result unknown')
+    expect(summary.className).toMatch(/attention/)
+    fireEvent.click(screen.getByRole('button', { name: en['dock.expand'] }))
+    expect(document.querySelectorAll('[data-case-panel]').length).toBe(1)
+    expect(document.querySelector('[data-production-legacy]')).toBeNull()
+  })
+  it('queues explicit chat requests only for legal case actions and reports the outcome', async () => {
+    const first = run('first', 'running'); first.case = caseView()
+    const b = fixture([first])
+    const view = render(<TaskMonitor {...b.props} read={b.read.getSnapshot()} />)
+    expect(screen.getAllByRole('button', { name: en['case.do.continueFrom'] })).toHaveLength(2)
+    await act(async () => { fireEvent.click(screen.getAllByRole('button', { name: en['case.do.continueFrom'] })[0]!) })
+    expect(b.props.send).toHaveBeenCalledWith(en['case.msg.continueFrom'].replace('{id}', 'c1c1c1c1c1'))
+    expect(screen.queryAllByRole('button', { name: en['case.do.manufacture'] })).toHaveLength(0)
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: en['case.do.deliverBest'] })) })
+    expect(b.props.send).toHaveBeenCalledWith(en['case.msg.deliverBest'].replace('{id}', 'c2c2c2c2c2'))
+    expect(screen.getByRole('status').textContent).toBe(en['case.sent'])
+    view.unmount()
+    const blocked = run('blocked', 'running')
+    blocked.case = caseView({ stopReason: 'no_improvement', attention: { kind: 'unknown', message: 'Reconcile first' } })
+    const c = fixture([blocked])
+    render(<TaskMonitor {...c.props} read={c.read.getSnapshot()} />)
+    expect(screen.queryByRole('button', { name: en['case.do.deliverBest'] })).toBeNull()
+    expect(screen.queryByRole('button', { name: en['case.do.continueFrom'] })).toBeNull()
+  })
+  it('offers manufacturing for a verified candidate that has none and surfaces a failed send', async () => {
+    const first = run('first', 'running')
+    first.case = caseView({ stopReason: 'no_improvement', rows: [{ candidateId: 'c3c3c3c3c3', kind: 'improvement', searchStatus: 'verified' }] })
+    const b = fixture([first])
+    vi.mocked(b.props.send).mockResolvedValueOnce('session closed')
+    render(<TaskMonitor {...b.props} read={b.read.getSnapshot()} />)
+    expect(screen.queryByRole('button', { name: en['case.do.continueFrom'] })).toBeNull()
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: en['case.do.manufacture'] })) })
+    expect(b.props.send).toHaveBeenCalledWith(en['case.msg.manufacture'].replace('{id}', 'c3c3c3c3c3'))
+    expect(screen.getByRole('status').textContent).toBe(`${en['action.failed']}: session closed`)
+  })
+  it('keeps a read-only panel without a sender and summarizes a case with no known best score', async () => {
+    const view = caseView({ bestSearchCandidateId: undefined, stage: 'baseline_proposal', phase: 'baseline', hostCalls: undefined,
+      finishBlockers: [], nextActions: [], rows: [{ candidateId: 'c9c9c9c9c9', kind: 'custom', searchStatus: 'queued' }],
+      delivery: { candidateId: 'c9c9c9c9c9', files: [{ kind: 'extraModel', path: '/out/extra.3dm', sha256: 'e'.repeat(64) }] } })
+    expect(caseSummary(view, t)).toBe('Case case0001 · Baseline · candidates 2/8')
+    render(<CasePanel view={view} t={t} />)
+    expect(screen.queryByRole('button', { name: en['case.do.deliverBest'] })).toBeNull()
+    expect(screen.queryByText(en['case.table.actions'])).toBeNull()
+    expect(screen.getByText('custom')).toBeTruthy(); expect(screen.getByText('queued')).toBeTruthy()
+    expect(screen.getByText('extraModel')).toBeTruthy()
+    const copy = screen.getByRole('button', { name: en['delivery.copyFile'].replace('{path}', '/out/extra.3dm') })
+    await act(async () => { fireEvent.click(copy) })
+    expect(copy.textContent).toBe(en['delivery.copy'])
+    const writeText = vi.fn(async () => {})
+    vi.stubGlobal('navigator', { clipboard: { writeText } })
+    try {
+      await act(async () => { fireEvent.click(copy) })
+      expect(writeText).toHaveBeenCalledWith('/out/extra.3dm')
+      expect(copy.textContent).toBe(en['delivery.copied'])
+    } finally { vi.unstubAllGlobals() }
+  })
+  it('renders case progress, budgets, blockers, candidates and the verified delivery', () => {
+    const view = caseView({ delivery: { candidateId: 'c2c2c2c2c2', files: [{ kind: 'laserCutModel', path: '/out/laser.3dm', sha256: 'f'.repeat(64) }] } })
+    const first = run('first', 'complete'); first.case = view
+    const b = fixture([first])
+    render(<TaskMonitor {...b.props} read={b.read.getSnapshot()} />)
+    expect(screen.getByRole('listitem', { current: 'step' }).textContent).toBe(en['case.phase.improve'])
+    expect(screen.getByText('Candidates 2/8')).toBeTruthy()
+    expect(screen.getByText('Host calls 12/48')).toBeTruthy()
+    expect(screen.getByText('Best c2c2c2c2 · score 39.98')).toBeTruthy()
+    expect(screen.getByText('Try the strip source')).toBeTruthy()
+    expect(screen.getByText('Next: generate candidates、finish_custom')).toBeTruthy()
+    expect(screen.getByText('Theoretical 2 pieces, 9 bends, 8 welds')).toBeTruthy()
+    expect(document.querySelector('[data-case-candidate="c2c2c2c2c2"]')?.getAttribute('data-best')).toBe('true')
+    expect(screen.getByText(en['case.mfg.failed'])).toBeTruthy()
+    expect(screen.getByText('bend_angle_metadata')).toBeTruthy()
+    expect(screen.getByText('/out/laser.3dm')).toBeTruthy()
+    expect(screen.getByText(en['case.legacy'])).toBeTruthy()
   })
   it('counts waiting and paused workflows alongside running and complete work', () => {
     const paused = run('paused', 'paused'); paused.phase = 'paused'
@@ -288,7 +374,7 @@ describe('production surfaces', () => {
     expect(b.props.start).not.toHaveBeenCalled()
     editor.unmount()
     render(<TaskMonitor {...b.props} read={b.read.getSnapshot()} />)
-    expect(screen.getByText(en['conversation.emptyDetail'])).toBeTruthy()
+    expect(screen.getByText(en['case.empty'])).toBeTruthy()
     expect(screen.queryByText(en['empty.detail'])).toBeNull()
   })
   it('displays authoritative conversation nodes and phases, locks consumed nodes, and edits only future nodes', async () => {

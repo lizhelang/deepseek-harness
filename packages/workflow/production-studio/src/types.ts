@@ -91,6 +91,66 @@ export interface ProductionTask {
 }
 /** Historical transition folded into the run view. */
 export interface ProductionHistory { nodeId: string; attempt: number; phase: ProductionNodePhase; message: string; time: number }
+/** Bounded usage of one frozen case budget. */
+export interface ProductionCaseBudget { used: number; limit: number }
+/** One actual candidate as the domain Host last reported it. */
+export interface ProductionCaseCandidate {
+  candidateId: string
+  parentCandidateId?: string
+  /** Host attempt kind, such as `baseline` or `improvement`. */
+  kind: string
+  /** Host-recorded reason for proposing this candidate. */
+  hypothesis?: string
+  /** Search verification status: `verified`, `failed`, `unknown`, `verifying` or a Host-specific value. */
+  searchStatus: string
+  /** Lower-is-better search score; absent when the Host has no known score. */
+  searchScore?: number
+  /** Theoretical counts from the search report, present only when all three are known; never manufacturing actions. */
+  searchCounts?: { pieces: number; bends: number; welds: number }
+  /** Absent until manufacturing was requested for this candidate. */
+  manufacturing?: {
+    status: 'passed' | 'failed' | 'unknown' | 'running'
+    /** Lower-is-better manufacturing score; absent when not known. */
+    score?: number
+    /** Measured independent pieces of the manufactured result. */
+    pieces?: number
+  }
+  /** First failed check code or Host error, for one-line display. */
+  failure?: string
+}
+/** A file of the Host-selected delivery, published with its digest. */
+export interface ProductionCaseFile { kind: string; path: string; sha256: string }
+/**
+ * Compact, display-only projection of the latest domain Host receipt for one case.
+ * It grants no certificate; delivery checks still read their own evidence.
+ */
+export interface ProductionCaseView {
+  caseId: string
+  inputVersion: string
+  /** Host workflow revision this view was projected from. */
+  revision: number
+  /** Coarse stage shown on the progress bar. */
+  phase: 'intake' | 'baseline' | 'improve' | 'compare' | 'manufacture' | 'delivered'
+  /** Exact Host stage name. */
+  stage: string
+  candidates: ProductionCaseBudget
+  hostCalls?: ProductionCaseBudget
+  rows: ProductionCaseCandidate[]
+  bestSearchCandidateId?: string
+  bestManufacturingCandidateId?: string
+  /** Recorded reason the bounded search stopped. */
+  stopReason?: string
+  /** Host conditions that still prevent ending the search. */
+  finishBlockers: string[]
+  /** Tool names the Host currently allows next. */
+  nextActions: string[]
+  /** Present when the user should look at the case. */
+  attention?: { kind: 'unknown' | 'blocked' | 'budget'; message: string }
+  /** Present once the Host selected an exact manufactured delivery. */
+  delivery?: { candidateId: string; files: ProductionCaseFile[] }
+  /** Settlement time of the receipt this view was projected from. */
+  observedAt: number
+}
 /** Immutable graph version plus mutable persisted execution status. */
 export interface ProductionRun {
   id: ProductionRunId
@@ -108,6 +168,8 @@ export interface ProductionRun {
   mode?: 'conversation' | 'scheduled'
   /** Trusted adapter and source identity; never selected by model prose. */
   binding?: { provider: string; key: string }
+  /** Latest display projection supplied by the trusted conversation adapter. */
+  case?: ProductionCaseView
 }
 /** Single authoritative session projection shared by all Studio views. */
 export interface ProductionSnapshot {
@@ -165,6 +227,8 @@ export interface ConversationWorkflowProvider {
     /** A known terminal failure stops routing; unresolved receipts still take precedence. */
     terminal?: true
     message?: string
+    /** Display projection of the receipt; replaces the run's previous case view, stamped with the settlement time. */
+    caseView?: Omit<ProductionCaseView, 'observedAt'>
   } | undefined
 }
 

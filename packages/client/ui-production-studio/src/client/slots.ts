@@ -15,6 +15,8 @@ export interface StudioInjected {
   resume: (request: ProductionRef) => Promise<string | null>
   answer: (request: AnswerProductionRequest) => Promise<string | null>
   reconcile: (request: ProductionRef) => Promise<string | null>
+  /** Queue one ordinary user message in this Session's conversation. */
+  send: (text: string) => Promise<string | null>
   refresh: () => void
 }
 

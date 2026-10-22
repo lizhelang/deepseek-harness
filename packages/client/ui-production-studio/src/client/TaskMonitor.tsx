@@ -6,6 +6,7 @@ import type { ProductionRun, ProductionTask } from '@deepseek-ai/dsh-production-
 import type { StudioSurfaceProps, StudioDockProps, StudioViewProps, StudioReadState } from './slots.ts'
 import { TASK_GROUPS, matchesRun, orderedBranches, prominentBranch, runGroup } from './task-order.ts'
 import { verifiedDelivery } from './deliverables.ts'
+import { CasePanel, caseRuns, caseSummary } from './CasePanel.tsx'
 import css from './Studio.module.css'
 
 /** Presentation props independent of the Conversation slot's owner values. */
@@ -123,7 +124,7 @@ function Delivery({ run, t }: Pick<StudioSurfaceProps, 't'> & { run: ProductionR
  * @returns the priority list, empty state or connection failure.
  */
 export function TaskMonitor({ read, compact = false, ...props }: TaskMonitorProps) {
-  const { t, refresh, pause, resume } = props
+  const { t, refresh, pause, resume, send } = props
   const [query, setQuery] = useState('')
   const [pending, setPending] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -139,6 +140,40 @@ export function TaskMonitor({ read, compact = false, ...props }: TaskMonitorProp
   if (snapshot === null && read.loading) return <p className={css.empty}>{t('loading')}</p>
   if (snapshot === null) return <div className={css.empty} role="alert"><p>{read.error ?? t('unavailable')}</p><Button size="sm" onClick={refresh}>{t('refresh')}</Button></div>
   const runs = snapshot.runs.filter(run => matchesRun(run, query))
+  const cases = compact ? caseRuns(snapshot.runs).slice(0, 1) : caseRuns(runs)
+  const groups = TASK_GROUPS.map((group) => {
+    const members = runs.filter(run => runGroup(run) === group).sort((left, right) => right.updatedAt - left.updatedAt)
+    if (members.length === 0) return null
+    const body = <div className={css.runList}>{members.map((run) => {
+      const complete = run.tasks.filter(task => task.phase === 'complete' || task.phase === 'skipped').length
+      const prominent = prominentBranch(run)
+      return <details className={css.run} key={run.id} data-production-run={run.id}>
+        <summary className={css.runSummary}>
+          <IconChevronRightOutlineRegular size={14} />
+          <span className={css.runTitle}>{run.objective}
+            {prominent !== undefined && prominent.message !== '' && <span className={css.runPreview}>{prominent.message}</span>}
+          </span>
+          <span className={css.phase} data-phase={run.phase}>{t(`run.${run.phase}`)}</span>
+          <span className={css.runMetrics}>{t('task.branches', { complete, total: run.tasks.length, executions: run.executions })}</span>
+        </summary>
+        <div className={css.runDetails}>
+          <div className={css.toolbar}>
+            <span className={css.muted}>{t(run.mode === 'conversation' ? 'task.versionLive' : 'task.version', { version: run.graph.version })}</span>
+            {(run.phase === 'active' || canPauseSettledFailure(run)) && <Button size="sm" variant="ghost" disabled={pending}
+              onClick={() => { void perform(() => pause({ runId: run.id, revision: run.revision })) }}>{t('task.pause')}</Button>}
+            {run.phase === 'paused' && <Button size="sm" variant="outline" disabled={pending}
+              onClick={() => { void perform(() => resume({ runId: run.id, revision: run.revision })) }}>{t('task.resume')}</Button>}
+          </div>
+          <Delivery run={run} t={t} />
+          <ul className={css.branches}>{orderedBranches(run.tasks).map(task =>
+            <Branch key={task.nodeId} {...props} run={run} task={task} pending={pending} perform={perform} />)}</ul>
+        </div>
+      </details>
+    })}</div>
+    return group === 'complete'
+      ? <details className={css.completed} key={group} data-production-group={group}><summary>{t(`group.${group}`)}{' · '}{members.length}</summary>{body}</details>
+      : <section className={css.group} key={group} data-production-group={group}><h3>{t(`group.${group}`)}<span>{members.length}</span></h3>{body}</section>
+  })
   return <section className={clsx(css.monitor, compact && css.compact)} data-production-monitor>
     {!compact && <div className={css.toolbar}>
       <h2>{t('view.monitor')}</h2>
@@ -146,41 +181,11 @@ export function TaskMonitor({ read, compact = false, ...props }: TaskMonitorProp
     </div>}
     {read.error !== null && <div className={css.error} role="alert">{read.error}<Button size="sm" variant="ghost" onClick={refresh}>{t('refresh')}</Button></div>}
     {error !== null && <p className={css.error} role="alert">{t('action.failed')}{': '}{error}</p>}
-    {snapshot.runs.length === 0 && <div className={css.empty}><p>{t('empty')}</p><p>{t(snapshot.capabilities.conversation === undefined ? 'empty.detail' : 'conversation.emptyDetail')}</p></div>}
+    {snapshot.runs.length === 0 && <div className={css.empty}><p>{t(snapshot.capabilities.conversation === undefined ? 'empty' : 'case.empty')}</p>{snapshot.capabilities.conversation === undefined && <p>{t('empty.detail')}</p>}</div>}
     {snapshot.runs.length > 0 && runs.length === 0 && <p className={css.empty}>{t('search.empty')}</p>}
-    {TASK_GROUPS.map((group) => {
-      const members = runs.filter(run => runGroup(run) === group).sort((left, right) => right.updatedAt - left.updatedAt)
-      if (members.length === 0) return null
-      const body = <div className={css.runList}>{members.map((run) => {
-        const complete = run.tasks.filter(task => task.phase === 'complete' || task.phase === 'skipped').length
-        const prominent = prominentBranch(run)
-        return <details className={css.run} key={run.id} data-production-run={run.id}>
-          <summary className={css.runSummary}>
-            <IconChevronRightOutlineRegular size={14} />
-            <span className={css.runTitle}>{run.objective}
-              {prominent !== undefined && prominent.message !== '' && <span className={css.runPreview}>{prominent.message}</span>}
-            </span>
-            <span className={css.phase} data-phase={run.phase}>{t(`run.${run.phase}`)}</span>
-            <span className={css.runMetrics}>{t('task.branches', { complete, total: run.tasks.length, executions: run.executions })}</span>
-          </summary>
-          <div className={css.runDetails}>
-            <div className={css.toolbar}>
-              <span className={css.muted}>{t(run.mode === 'conversation' ? 'task.versionLive' : 'task.version', { version: run.graph.version })}</span>
-              {(run.phase === 'active' || canPauseSettledFailure(run)) && <Button size="sm" variant="ghost" disabled={pending}
-                onClick={() => { void perform(() => pause({ runId: run.id, revision: run.revision })) }}>{t('task.pause')}</Button>}
-              {run.phase === 'paused' && <Button size="sm" variant="outline" disabled={pending}
-                onClick={() => { void perform(() => resume({ runId: run.id, revision: run.revision })) }}>{t('task.resume')}</Button>}
-            </div>
-            <Delivery run={run} t={t} />
-            <ul className={css.branches}>{orderedBranches(run.tasks).map(task =>
-              <Branch key={task.nodeId} {...props} run={run} task={task} pending={pending} perform={perform} />)}</ul>
-          </div>
-        </details>
-      })}</div>
-      return group === 'complete'
-        ? <details className={css.completed} key={group} data-production-group={group}><summary>{t(`group.${group}`)}{' · '}{members.length}</summary>{body}</details>
-        : <section className={css.group} key={group} data-production-group={group}><h3>{t(`group.${group}`)}<span>{members.length}</span></h3>{body}</section>
-    })}
+    {cases.map(run => <CasePanel key={run.id} view={run.case} t={t} send={send} />)}
+    {cases.length === 0 ? groups
+      : !compact && runs.length > 0 && <details className={css.completed} data-production-legacy><summary>{t('case.legacy')}</summary>{groups}</details>}
   </section>
 }
 
@@ -204,21 +209,23 @@ export function ProductionDock(props: StudioDockProps) {
   const read = useProduction(value => value)
   const expanded = useStore(state => state.dockExpanded)
   const runs = read.snapshot?.runs ?? []
+  if (runs.length === 0 && read.error === null) return null
+  const latest = caseRuns(runs)[0]
   const attention = runs.filter(run => ['critical', 'human'].includes(runGroup(run))).length
   const running = runs.filter(run => runGroup(run) === 'running').length
   const waiting = runs.filter(run => runGroup(run) === 'waiting').length
   const paused = runs.filter(run => runGroup(run) === 'paused').length
   const done = runs.filter(run => run.phase === 'complete').length
   const summary = read.error !== null ? t('dock.disconnected')
-    : read.snapshot === null ? t(read.loading ? 'loading' : 'unavailable')
-      : runs.length === 0 ? t('dock.empty')
-        : t('dock.summary', { attention, running, waiting, paused, done })
+    : latest !== undefined ? caseSummary(latest.case, t)
+      : t('dock.summary', { attention, running, waiting, paused, done })
+  const alert = read.error !== null || (latest !== undefined ? latest.case.attention !== undefined : attention > 0)
   return <section className={css.dock} data-production-dock>
     <button type="button" className={css.dockToggle} aria-expanded={expanded}
       aria-label={t(expanded ? 'dock.collapse' : 'dock.expand')} onClick={() => { actions.expanded(!expanded) }}>
       <IconChevronRightOutlineRegular size={14} />
-      <strong>{t('view.monitor')}</strong>
-      <span className={clsx(css.dockSummary, (attention > 0 || read.error !== null) && css.attention)}>
+      <strong>{t(latest !== undefined ? 'case.panel' : 'view.monitor')}</strong>
+      <span className={clsx(css.dockSummary, alert && css.attention)}>
         {summary}
       </span>
     </button>

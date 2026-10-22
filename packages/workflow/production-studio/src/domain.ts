@@ -30,7 +30,28 @@ const evidence = z.object({ kind: z.enum(['tool', 'file', 'human', 'agent']), no
 const phase = z.enum(['waiting', 'ready', 'running', 'human', 'paused', 'blocked', 'unknown', 'complete', 'skipped'])
 const token = z.record(z.string(), z.object({ data: z.json(), evidence: z.array(evidence), certificates: z.array(certificate) }))
 const task = z.object({ admitted: z.boolean().optional(), nodeId: z.string(), phase, attempts: z.number().int().nonnegative(), message: z.string(), output: z.json().optional(), evidence: z.array(evidence), certificates: z.array(certificate), childSessionId: z.string().optional(), startedAt: z.number().optional(), updatedAt: z.number(), incoming: token.optional(), queued: z.array(token).optional(), breakpoint: z.enum(['before', 'after']).optional(), breakpointReleased: z.boolean().optional(), pendingOutlet: z.enum(['success', 'failure', 'unknown']).optional(), operationId: z.string().optional(), settledOperationId: z.string().optional() }).strict()
-const run = z.object({ id: z.string().min(1), revision: z.number().int().positive(), objective: z.string().min(1), graph: graphSchema, phase: z.enum(['active', 'paused', 'blocked', 'unknown', 'complete']), executions: z.number().int().nonnegative(), input: z.json(), tasks: z.array(task), history: z.array(z.object({ nodeId: z.string(), attempt: z.number().int().nonnegative(), phase, message: z.string(), time: z.number() })), createdAt: z.number(), updatedAt: z.number(), mode: z.enum(['conversation', 'scheduled']).optional(), binding: z.object({ provider: z.string().min(1), key: z.string().min(1) }).strict().optional() }).strict()
+const budget = z.object({ used: z.number().int().nonnegative(), limit: z.number().int().nonnegative() }).strict()
+const caseView = z.object({
+  caseId: z.string().min(1), inputVersion: z.string().min(1), revision: z.number().int().nonnegative(),
+  phase: z.enum(['intake', 'baseline', 'improve', 'compare', 'manufacture', 'delivered']), stage: z.string(),
+  candidates: budget, hostCalls: budget.optional(),
+  rows: z.array(z.object({
+    candidateId: z.string().min(1), parentCandidateId: z.string().optional(), kind: z.string(), hypothesis: z.string().optional(),
+    searchStatus: z.string(), searchScore: z.number().optional(),
+    searchCounts: z.object({ pieces: z.number(), bends: z.number(), welds: z.number() }).strict().optional(),
+    manufacturing: z.object({ status: z.enum(['passed', 'failed', 'unknown', 'running']), score: z.number().optional(), pieces: z.number().optional() }).strict().optional(),
+    failure: z.string().optional(),
+  }).strict()).max(200),
+  bestSearchCandidateId: z.string().optional(), bestManufacturingCandidateId: z.string().optional(), stopReason: z.string().optional(),
+  finishBlockers: z.array(z.string()), nextActions: z.array(z.string()),
+  attention: z.object({ kind: z.enum(['unknown', 'blocked', 'budget']), message: z.string() }).strict().optional(),
+  delivery: z.object({
+    candidateId: z.string().min(1),
+    files: z.array(z.object({ kind: z.string(), path: z.string().min(1), sha256: z.string().min(1) }).strict()),
+  }).strict().optional(),
+  observedAt: z.number(),
+}).strict()
+const run = z.object({ id: z.string().min(1), revision: z.number().int().positive(), objective: z.string().min(1), graph: graphSchema, phase: z.enum(['active', 'paused', 'blocked', 'unknown', 'complete']), executions: z.number().int().nonnegative(), input: z.json(), tasks: z.array(task), history: z.array(z.object({ nodeId: z.string(), attempt: z.number().int().nonnegative(), phase, message: z.string(), time: z.number() })), createdAt: z.number(), updatedAt: z.number(), mode: z.enum(['conversation', 'scheduled']).optional(), binding: z.object({ provider: z.string().min(1), key: z.string().min(1) }).strict().optional(), case: caseView.optional() }).strict()
 const stateSchema = z.object({
   format: z.literal(1), revision: z.number().int().nonnegative(), graph: graphSchema,
   conversationProvider: z.string().min(1).optional(), runs: z.array(run).max(50),

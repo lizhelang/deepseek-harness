@@ -49,6 +49,8 @@ The conversation adapter retains AEA Host's bounded search, required manufacturi
 
 A trusted provider can return `outlet: 'failure', terminal: true` when its Host confirms that no executable continuation remains. The service retains the known receipt and blocks the current node without routing to repair or requesting an after-node human decision. Ordinary failures retain their repair routes and configured human decisions; an unresolved receipt still takes precedence as unknown. Terminal flags inside tool receipt data alone do not change execution.
 
+A provider can also return `caseView`, a display projection of the Host receipt (stage, budgets, candidate results, finish blockers, next actions and selected delivery files). The service stamps the settlement time and stores it as `run.case`, replacing the previous view; an observation without `caseView` keeps it. No gate, certificate, routing or replay decision reads this view.
+
 A known terminal failure retains the node’s immutable incoming boundary, so explicit recovery can compare later repair receipts with the original failed state. Normal routed outcomes still consume that boundary; recovery does not reset evidence, attempts or budgets.
 
 ### Unbound scheduled runs

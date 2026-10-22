@@ -90,6 +90,12 @@ export function apply(ctx: Context): void {
       resume: request => settle(() => remote.resume(sessionId, request)),
       answer: request => settle(() => remote.answer(sessionId, request)),
       reconcile: request => settle(() => remote.reconcile(sessionId, request)),
+      async send(text) {
+        const scope = ctx.sessions.scope(sessionId)
+        if (scope === undefined) return `Session ${sessionId} is not open`
+        try { await scope.conversation.send(text); return null }
+        catch (error: unknown) { return error instanceof Error ? error.message : String(error) }
+      },
       refresh: source.refresh,
     }
   }

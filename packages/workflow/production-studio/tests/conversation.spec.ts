@@ -19,7 +19,7 @@ import { defineTool } from '@deepseek-ai/dsh-tools'
 import { MockAdapter, textResponse, toolCallResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
 import ProductionStudio, { decodeProductionState } from '../src/index.ts'
 import type { Config } from '../src/index.ts'
-import type { ConversationWorkflowProvider, ProductionState } from '../src/types.ts'
+import type { ConversationWorkflowProvider, ProductionCaseView, ProductionState } from '../src/types.ts'
 import { writeFixtureCase } from './fixture-case.ts'
 
 const contexts: Context[] = [], roots: string[] = [], releases: (() => void)[] = []
@@ -210,6 +210,27 @@ describe('one conversation, one production executor', () => {
     expect((await h.call()).isError).toBe(false)
     expect((await h.run()).tasks.find(item => item.nodeId === 'repair')?.phase).toBe('running')
     expect(h.count()).toBe(2)
+  })
+
+  it('persists the latest adapter case view on the run and replaces it on the next receipt', async () => {
+    const h = await harness()
+    const view = (revision: number, used: number): Omit<ProductionCaseView, 'observedAt'> => ({ caseId: 'case-1', inputVersion: 'v1', revision,
+      phase: 'improve', stage: 'improvement_proposal', candidates: { used, limit: 8 }, hostCalls: { used: revision, limit: 48 },
+      rows: [{ candidateId: 'c1', kind: 'baseline', searchStatus: 'verified', searchCounts: { pieces: 1, bends: 10, welds: 7 } }],
+      finishBlockers: ['Try a second source'], nextActions: ['suggest_candidates'] })
+    h.provider.observe = () => ({ caseView: view(3, 1) })
+    const before = Date.now()
+    expect((await h.call()).isError).toBe(false)
+    const { observedAt, ...first } = (await h.run()).case ?? { observedAt: 0 }
+    expect(first).toEqual(view(3, 1))
+    expect(observedAt).toBeGreaterThanOrEqual(before)
+    h.provider.observe = () => ({ caseView: view(4, 2) })
+    expect((await h.call()).isError).toBe(false)
+    expect((await h.run()).case?.revision).toBe(4)
+    expect((await h.saved()).runs[0]?.case?.candidates).toEqual({ used: 2, limit: 8 })
+    h.provider.observe = () => undefined
+    expect((await h.call()).isError).toBe(false)
+    expect((await h.run()).case?.revision).toBe(4)
   })
 
   it('preserves a genuine human breakpoint on a nonterminal failure', async () => {

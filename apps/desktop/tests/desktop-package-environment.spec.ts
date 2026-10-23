@@ -2,7 +2,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { loadDesktopPackageEnvironment, localMacOSPackageEnvironment, validateDesktopPackageEnvironment } from '../scripts/desktop-package-environment.mjs'
+import { loadDesktopPackageEnvironment, localPackageEnvironment, usesLocalPackageEnvironment, validateDesktopPackageEnvironment } from '../scripts/desktop-package-environment.mjs'
 import { resolveWindowsPackageSettings } from '../scripts/windows-package-settings.mjs'
 
 const WINDOWS = { platform: 'win32', arch: 'x64' } as const
@@ -32,7 +32,7 @@ describe('Desktop local packaging configuration', () => {
       DSH_DESKTOP_MACOS_SIGNING_IDENTITY: 'Release identity', CSC_LINK: 'missing.p12',
       APPLE_API_KEY: 'missing.p8', DOWNLOAD_PROD_COS_SECRET_KEY: 'unused-secret',
     }
-    const local = localMacOSPackageEnvironment(parent)
+    const local = localPackageEnvironment(parent)
     expect(local).toEqual({
       PATH: parent.PATH, HTTPS_PROXY: parent.HTTPS_PROXY, DSH_DESKTOP_NPM_REGISTRY: parent.DSH_DESKTOP_NPM_REGISTRY,
       DSH_DESKTOP_APP_ID: 'com.deepseek.harness', DSH_DESKTOP_UNSIGNED: '1',
@@ -43,11 +43,30 @@ describe('Desktop local packaging configuration', () => {
   })
 
   it('accepts an explicit local identity and rejects malformed identifiers without inheriting release settings', () => {
-    const environment = localMacOSPackageEnvironment({ DSH_DESKTOP_LOCAL_APP_ID: 'com.deepseek.dsh',
+    const environment = localPackageEnvironment({ DSH_DESKTOP_LOCAL_APP_ID: 'com.deepseek.dsh',
       DSH_DESKTOP_APP_ID: 'com.example.release', DSH_DESKTOP_AUTO_UPDATE_ENV: 'production' })
     expect(environment.DSH_DESKTOP_APP_ID).toBe('com.deepseek.dsh')
     expect(environment.DSH_DESKTOP_AUTO_UPDATE_ENV).toBeUndefined()
-    expect(() => localMacOSPackageEnvironment({ DSH_DESKTOP_LOCAL_APP_ID: 'invalid/id' })).toThrow('reverse-DNS')
+    expect(() => localPackageEnvironment({ DSH_DESKTOP_LOCAL_APP_ID: 'invalid/id' })).toThrow('reverse-DNS')
+  })
+
+  it('selects local defaults for unsigned macOS builds and unsigned local forks only', () => {
+    const fork = { DSH_DESKTOP_LOCAL_FORK_METADATA: '{}' }
+    expect(usesLocalPackageEnvironment('darwin', true, {})).toBe(true)
+    expect(usesLocalPackageEnvironment('win32', true, fork)).toBe(true)
+    expect(usesLocalPackageEnvironment('win32', true, {})).toBe(false)
+    expect(usesLocalPackageEnvironment('win32', false, fork)).toBe(false)
+    expect(usesLocalPackageEnvironment('darwin', false, fork)).toBe(false)
+  })
+
+  it('accepts an unsigned Windows local fork without update policy while other Windows modes keep requiring it', () => {
+    const local = localPackageEnvironment({ DSH_DESKTOP_LOCAL_FORK_METADATA: '{}', DSH_DESKTOP_WINDOWS_TOKEN_PIN: 'unused-pin' })
+    expect(local).toEqual({ DSH_DESKTOP_LOCAL_FORK_METADATA: '{}', DSH_DESKTOP_APP_ID: 'com.deepseek.harness', DSH_DESKTOP_UNSIGNED: '1' })
+    expect(() => { validateDesktopPackageEnvironment(local, WINDOWS, { unsigned: true }) }).not.toThrow()
+    expect(() => { validateDesktopPackageEnvironment(localPackageEnvironment({}), WINDOWS, { unsigned: true }) })
+      .toThrow('DSH_DESKTOP_MANDATORY_UPDATE_TEST_ORIGIN')
+    expect(() => { validateDesktopPackageEnvironment(local, WINDOWS, { prepareOnly: true }) })
+      .toThrow('DSH_DESKTOP_MANDATORY_UPDATE_TEST_ORIGIN')
   })
 
   it('takes cache concurrency from the Windows file and defaults to four without ambient overrides', async () => {
@@ -167,7 +186,7 @@ describe('Desktop local packaging configuration', () => {
   })
 
   it('accepts unsigned macOS configuration without Apple or update policy settings while keeping release validation', () => {
-    const local = localMacOSPackageEnvironment({})
+    const local = localPackageEnvironment({})
     expect(() => { validateDesktopPackageEnvironment(local, MACOS, { unsigned: true }) }).not.toThrow()
     expect(() => { validateDesktopPackageEnvironment(local, MACOS) })
       .toThrow('DSH_DESKTOP_MANDATORY_UPDATE_TEST_ORIGIN')

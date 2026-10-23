@@ -1,11 +1,20 @@
 /** Select local test defaults or platform release settings without changing the caller's environment. */
 
 /**
- * Select local macOS test defaults without reading dotenv files or inheriting release settings.
- * @param environment Parent environment, retained for build tools and networking.
+ * Report whether a build uses local defaults: every unsigned macOS build, and an unsigned build that declares local-fork metadata.
+ * @param platform Target platform.
+ * @param unsigned Whether the build skips release signing.
+ * @param environment Parent environment that may carry DSH_DESKTOP_LOCAL_FORK_METADATA.
+ * @returns True when packaging must read no dotenv file and embed no update policy.
+ */
+export function usesLocalPackageEnvironment(platform: 'win32' | 'darwin', unsigned: boolean, environment?: NodeJS.ProcessEnv): boolean
+
+/**
+ * Select local test defaults without reading dotenv files or inheriting release settings.
+ * @param environment Parent environment, retained for build tools, networking and local-fork metadata.
  * @returns Unsigned build environment with the explicit local application identifier (or the standard default) and no update policy.
  */
-export function localMacOSPackageEnvironment(environment?: NodeJS.ProcessEnv): NodeJS.ProcessEnv
+export function localPackageEnvironment(environment?: NodeJS.ProcessEnv): NodeJS.ProcessEnv
 
 /**
  * Read a machine preset when selected, otherwise the target's required dotenv; no ambient release fallback.

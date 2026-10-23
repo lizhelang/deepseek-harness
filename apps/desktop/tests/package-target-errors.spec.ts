@@ -7,6 +7,7 @@ import { expect, it, vi } from 'vitest'
 const state = vi.hoisted(() => ({ root: '', directory: '' }))
 vi.mock('../scripts/desktop-package-environment.mjs', () => ({
   loadDesktopPackageEnvironment: () => ({ DSH_DESKTOP_WINDOWS_TOKEN_PIN: 'credential-sentinel' }),
+  usesLocalPackageEnvironment: () => false,
   validateDesktopPackageEnvironment: () => {},
 }))
 vi.mock('../scripts/macos-signing-keychain.mjs', () => ({

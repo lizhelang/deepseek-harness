@@ -21,11 +21,22 @@ const AMBIENT_RELEASE_SETTING = /^(?:DSH_DESKTOP_(?:APP_ID|AUTO_UPDATE_ENV|MANDA
 const FILE_SETTINGS = ['DSH_DESKTOP_WINDOWS_CER_FILE', 'DSH_DESKTOP_WINDOWS_SIGNTOOL', 'APPLE_API_KEY', 'APPLE_KEYCHAIN', 'CSC_LINK']
 
 /**
- * Select local macOS test defaults without reading dotenv files or inheriting release settings.
- * @param {NodeJS.ProcessEnv} environment Parent environment, retained for build tools and networking.
+ * Report whether a build uses local defaults: every unsigned macOS build, and an unsigned build that declares local-fork metadata.
+ * @param {'win32' | 'darwin'} platform Target platform.
+ * @param {boolean} unsigned Whether the build skips release signing.
+ * @param {NodeJS.ProcessEnv} environment Parent environment that may carry DSH_DESKTOP_LOCAL_FORK_METADATA.
+ * @returns {boolean} True when packaging must read no dotenv file and embed no update policy.
+ */
+export function usesLocalPackageEnvironment(platform, unsigned, environment = process.env) {
+  return unsigned && (platform === 'darwin' || environment.DSH_DESKTOP_LOCAL_FORK_METADATA !== undefined)
+}
+
+/**
+ * Select local test defaults without reading dotenv files or inheriting release settings.
+ * @param {NodeJS.ProcessEnv} environment Parent environment, retained for build tools, networking and local-fork metadata.
  * @returns {NodeJS.ProcessEnv} Unsigned build environment with the explicit local application identifier (or the standard default) and no update policy.
  */
-export function localMacOSPackageEnvironment(environment = process.env) {
+export function localPackageEnvironment(environment = process.env) {
   return {
     ...Object.fromEntries(Object.entries(environment).filter(([name]) => !AMBIENT_RELEASE_SETTING.test(name))),
     DSH_DESKTOP_APP_ID: resolveDesktopAppId({
@@ -138,7 +149,7 @@ function requireReadableFile(environment, name) {
 export function validateDesktopPackageEnvironment(environment, target, options = {}) {
   resolveDesktopAppId(environment)
   resolveNpmRegistry(environment)
-  if (target.platform !== 'darwin' || !options.unsigned) resolveDesktopPolicyEnvironment(environment)
+  if (!usesLocalPackageEnvironment(target.platform, options.unsigned === true, environment)) resolveDesktopPolicyEnvironment(environment)
   if (target.platform === 'darwin') resolveMacOSPackageSettings(environment)
   else resolveWindowsPackageSettings(environment)
   if (options.unsigned) return

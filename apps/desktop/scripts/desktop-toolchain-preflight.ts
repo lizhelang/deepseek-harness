@@ -72,16 +72,18 @@ async function probeWindowsInstallerToolchain(environment: NodeJS.ProcessEnv): P
  * Probe every external tool one packaging run needs.
  * @param platform - Target platform; a Windows target already requires a Windows build host.
  * @param environment - Packaging environment used to locate Windows tooling.
+ * @param installer - Whether the run produces an installer; only a Windows installer compiles the installer helper.
  * @returns Every probe that failed, empty when the host can run the packaging sequence.
  */
 export async function probeDesktopToolchain(
   platform: 'darwin' | 'win32',
   environment: NodeJS.ProcessEnv = process.env,
+  installer = true,
 ): Promise<readonly DesktopToolchainProbeFailure[]> {
   const failures: DesktopToolchainProbeFailure[] = []
   const tar = await probeTar()
   if (tar !== undefined) failures.push({ tool: 'tar', detail: tar })
-  if (platform === 'win32') failures.push(...await probeWindowsInstallerToolchain(environment))
+  if (platform === 'win32' && installer) failures.push(...await probeWindowsInstallerToolchain(environment))
   return failures
 }
 
@@ -89,13 +91,15 @@ export async function probeDesktopToolchain(
  * Probe the toolchain and fail with every problem the host has.
  * @param platform - Target platform; a Windows target already requires a Windows build host.
  * @param environment - Packaging environment used to locate Windows tooling.
+ * @param installer - Whether the run produces an installer; only a Windows installer compiles the installer helper.
  * @returns Resolves when every probe passes.
  */
 export async function requireDesktopToolchain(
   platform: 'darwin' | 'win32',
   environment: NodeJS.ProcessEnv = process.env,
+  installer = true,
 ): Promise<void> {
-  const failures = await probeDesktopToolchain(platform, environment)
+  const failures = await probeDesktopToolchain(platform, environment, installer)
   if (failures.length === 0) return
   throw new Error(`desktop package: the build host cannot run this packaging sequence:\n${
     failures.map(failure => `  ${failure.tool}: ${failure.detail}`).join('\n')}`)

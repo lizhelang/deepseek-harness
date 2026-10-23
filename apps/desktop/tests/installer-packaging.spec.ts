@@ -77,19 +77,38 @@ describe('installer preparation preserves application dependencies', () => {
     expect(config.artifactName).toBe('deepseek-harness-${version}-${os}-${arch}-unsigned.${ext}')
   })
 
-  it('binds local fork source hashes without an official feed or mandatory update policy', async () => {
+  it.each([['darwin', 'arm64'], ['win32', 'x64']] as const)('binds local fork source hashes without an official feed or mandatory update policy on %s', async (platform, arch) => {
     const { createElectronBuilderConfig } = await import('../scripts/electron-builder-config.mjs')
     const source = { upstreamCommit: 'b'.repeat(40), preservedSourceCommit: 'c'.repeat(40), preservedDiffSha256: 'd'.repeat(64) }
     const env = { DSH_DESKTOP_APP_ID: 'com.deepseek.dsh', DSH_DESKTOP_UNSIGNED: '1',
+      DSH_DESKTOP_TARGET_PLATFORM: platform, DSH_DESKTOP_TARGET_ARCH: arch,
       DSH_DESKTOP_BUILD_COMMIT: 'a'.repeat(40), DSH_DESKTOP_BUILD_DIRTY: '0',
       DSH_DESKTOP_LOCAL_FORK_METADATA: JSON.stringify(source) }
-    const config = createElectronBuilderConfig(env, 'darwin', 'arm64')
+    const config = createElectronBuilderConfig(env, platform, arch)
     expect(config.publish).toBeNull()
     expect(config.extraMetadata).toMatchObject({ dshDesktopAppId: 'com.deepseek.dsh', dshBuildCommit: 'a'.repeat(40),
       dshLocalFork: { schemaVersion: 2, sourceCommit: 'a'.repeat(40), sourceDirty: false, ...source, officialUpdates: 'disabled' } })
     expect(config.extraMetadata).not.toHaveProperty('dshMandatoryUpdatePolicy')
-    expect(() => createElectronBuilderConfig({ ...env, DSH_DESKTOP_LOCAL_FORK_METADATA: '{"invalid":true}' }, 'darwin', 'arm64'))
+    expect(() => createElectronBuilderConfig({ ...env, DSH_DESKTOP_LOCAL_FORK_METADATA: '{"invalid":true}' }, platform, arch))
       .toThrow('invalid source hashes')
+  })
+
+  it.each([['1', 1], ['0', 0]] as const)('compiles the Windows installer helper only for installer runs (DSH_DESKTOP_INSTALLER=%s)', async (value, calls) => {
+    execute.mockClear()
+    const { createElectronBuilderConfig } = await import('../scripts/electron-builder-config.mjs')
+    const config = createElectronBuilderConfig({
+      DSH_DESKTOP_APP_ID: 'com.example.installer',
+      DSH_DESKTOP_MANDATORY_UPDATE_TEST_ORIGIN: 'https://policy.example.com',
+      DSH_DESKTOP_MANDATORY_UPDATE_CONFIG: JSON.stringify({ allowedAuthOrigins: ['https://login.example.com'] }),
+      DSH_DESKTOP_TARGET_PLATFORM: 'win32',
+      DSH_DESKTOP_TARGET_ARCH: 'x64',
+      DSH_DESKTOP_UNSIGNED: '1',
+      DSH_DESKTOP_INSTALLER: value,
+    }, 'win32', 'x64')
+    expect(await config.beforeBuild()).toBe(true)
+    expect(execute).toHaveBeenCalledTimes(calls)
+    expect(() => createElectronBuilderConfig({ DSH_DESKTOP_APP_ID: 'com.example.installer', DSH_DESKTOP_INSTALLER: 'yes' }, 'win32', 'x64'))
+      .toThrow('DSH_DESKTOP_INSTALLER must be 0 or 1')
   })
 
   it('packages every preload entry point the shell loads', async () => {

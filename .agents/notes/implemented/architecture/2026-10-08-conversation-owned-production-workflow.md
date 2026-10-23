@@ -16,6 +16,8 @@ Bound AEA execution follows the existing Host's bounded optimization and manufac
 
 ### Future edits and continuation
 
+[Fixed production conversation graph](2026-10-22-fixed-production-conversation-graph.md) supersedes graph editing, human nodes and the unbound scheduler described in this section and above; stored runs that used them stay read-only. The binding, single executor, continuation, checkpoint and recovery rules in this note remain current.
+
 Graph saves compare the expected graph version. Supported future prompts, tool lists and routes change the same run. Executable settings and outgoing routes of admitted nodes remain immutable; labels and canvas positions do not change execution. Human nodes retain a stable admission record after approval, independent of later phase changes, so those changes cannot make admitted settings or consumed routes editable again. Required evidence checks cannot weaken, and execution and retry budgets cannot increase. Tool filtering at prompt assembly is accompanied by enforcement at actual admission.
 
 The current conversation adapter recognizes only `baseline`, `manufacture` and `repair` agent IDs. It rejects parallel routes, custom agent IDs, per-node provider or model overrides, program nodes and automatic operations other than read-only AEA evidence checks. Human nodes can pause admission without supplying another executor.
@@ -54,10 +56,11 @@ The four views describe the same run at different times: current controls follow
 
 ## Testing
 
-[Conversation regressions](../../../../packages/workflow/production-studio/tests/conversation.spec.ts) exercise a real parent chat driver with deterministic tool fixtures, future prompt and route edits, direct-call tool denial, explicit idle-parent continuation with `user-approval`, failed checkpoint publication and lifecycle settlement of known receipts. They also verify that an unresolved invocation refuses resume and a second dispatch. [Scheduled regressions](../../../../packages/workflow/production-studio/tests/runtime.spec.ts) retain coverage of child execution, independent branches, protected delivery evidence and native leases. These keyless tests establish software behavior, not real Rhino geometry, physical refolding or workshop acceptance. Native and installed-application validation remain the integration owner's responsibility.
+[Conversation regressions](../../../../packages/workflow/production-studio/tests/conversation.spec.ts) exercise a real parent chat driver with deterministic tool fixtures, direct-call tool denial, explicit idle-parent continuation with `user-approval`, failed checkpoint publication and lifecycle settlement of known receipts. They also verify that an unresolved invocation refuses resume and a second dispatch. [Native lease regressions](../../../../packages/workflow/production-studio/tests/native-lease.spec.ts) cover native leases and quarantine. These keyless tests establish software behavior, not real Rhino geometry, physical refolding or workshop acceptance. Native and installed-application validation remain the integration owner's responsibility.
 
 ## Related
 
+- [Fixed production conversation graph](2026-10-22-fixed-production-conversation-graph.md) — supersedes graph editing, human nodes and scheduled runs.
 - [Production Studio reference](../../../../packages/workflow/production-studio/README.md) — consumer controls and current limitations.
 - [Production Studio client](../../../../packages/client/ui-production-studio/README.md) — current-state and historical renderers.
 - [Event-sourced sessions](2026-06-11-event-sourced-sessions.md) — Session history and synchronous append ownership.

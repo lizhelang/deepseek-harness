@@ -1878,18 +1878,6 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'current graph and runs.',
       },
       {
-        signature: '@Remote async saveGraph(sessionId: SessionId, request: SaveProductionGraphRequest): Promise<ProductionSnapshot>',
-        description: 'Save only the draft; active runs retain their captured graph version.',
-        parameters: [{ name: 'sessionId', description: 'owning conversation.' }, { name: 'request', description: 'expected version and edited draft.' }],
-        returns: 'committed state.',
-      },
-      {
-        signature: '@Remote async start(sessionId: SessionId, request: StartProductionRunRequest): Promise<ProductionSnapshot>',
-        description: 'Start new explicitly authorized work with a frozen graph version.',
-        parameters: [{ name: 'sessionId', description: 'owning conversation.' }, { name: 'request', description: 'graph version, objective and source input.' }],
-        returns: 'initial persisted run.',
-      },
-      {
         signature: '@Remote async pause(sessionId: SessionId, ref: ProductionRef): Promise<ProductionSnapshot>',
         description: 'Pause a branch or whole run; in-flight outcomes remain unknown until reconciled.',
         parameters: [{ name: 'sessionId', description: 'owning conversation.' }, { name: 'ref', description: 'expected run revision and optional node.' }],
@@ -1900,12 +1888,6 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'Resume only paused work; unknown work refuses replay.',
         parameters: [{ name: 'sessionId', description: 'owning conversation.' }, { name: 'ref', description: 'expected run revision and optional branch.' }, { name: 'continuation', description: 'optional uniquely identified instructions for one idle paused conversation.' }],
         returns: 'committed state with the admitted continuation identity; uncertain delivery is never resent.',
-      },
-      {
-        signature: '@Remote async answer(sessionId: SessionId, request: AnswerProductionRequest): Promise<ProductionSnapshot>',
-        description: 'Supply a human decision without certifying objective evidence.',
-        parameters: [{ name: 'sessionId', description: 'owning conversation.' }, { name: 'request', description: 'exact waiting branch and decision.' }],
-        returns: 'committed dependent state.',
       },
       {
         signature: 'registerNativeReconciliationProvider(provider: NativeReconciliationProvider): () => void',
@@ -4863,10 +4845,6 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface AnonymousTranslationSpec extends TranslationSpecFields {\n    readonly provider: AnonymousTranslationProvider;\n}',
   },
   {
-    name: 'AnswerProductionRequest',
-    declaration: 'export interface AnswerProductionRequest extends ProductionRef {\n    nodeId: string;\n    answer: string;\n    accepted: boolean;\n}',
-  },
-  {
     name: 'AnyHook',
     declaration: 'export type AnyHook = ModHook<unknown, unknown>;',
   },
@@ -5260,7 +5238,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ConversationWorkflowProvider',
-    declaration: 'export interface ConversationWorkflowProvider {\n    id: string;\n    toolNames: readonly string[];\n    appliesTo(agent: Agent): boolean;\n    start(call: {\n        agent: Agent;\n        name: string;\n        arguments: JsonValue;\n    }): {\n        key: string;\n        objective: string;\n        input: JsonValue;\n    } | undefined;\n    observe(call: {\n        nodeId: string;\n        name: string;\n        arguments: JsonValue;\n        receipt: JsonValue;\n        run: ProductionRun;\n    }): {\n        key?: string;\n        input?: JsonValue;\n        outlet?: ProductionOutlet;\n        terminal?: true;\n        message?: string;\n    } | undefined;\n}',
+    declaration: 'export interface ConversationWorkflowProvider {\n    id: string;\n    toolNames: readonly string[];\n    appliesTo(agent: Agent): boolean;\n    start(call: {\n        agent: Agent;\n        name: string;\n        arguments: JsonValue;\n    }): {\n        key: string;\n        objective: string;\n        input: JsonValue;\n    } | undefined;\n    observe(call: {\n        nodeId: string;\n        name: string;\n        arguments: JsonValue;\n        receipt: JsonValue;\n        run: ProductionRun;\n    }): {\n        key?: string;\n        input?: JsonValue;\n        outlet?: ProductionOutlet;\n        terminal?: true;\n        message?: string;\n        caseView?: Omit<ProductionCaseView, \'observedAt\'>;\n    } | undefined;\n}',
   },
   {
     name: 'CordisDynamicPackageId',
@@ -6619,6 +6597,22 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface ProductEventMap {\n    desktop_app_launch: Record<string, never>;\n    auth_page_view: Record<string, never>;\n    auth_page_click: {\n        button_name: \'sign_in\' | \'api-key\';\n    };\n    api_key_save_click: Record<string, never>;\n    onboarding_page_view: {\n        page_name: OnboardingPage;\n    };\n    onboarding_page_click: {\n        page_name: OnboardingPage;\n        button_name: \'next\' | \'back\' | \'skip\' | \'charge\' | \'later\' | \'continue\';\n        selected_content?: \'office\' | \'code\' | \'code_office\' | \'focus_result\' | \'key_detail\' | \'full_process\';\n    };\n    onboarding_popup_view: {\n        popup_name: \'skip_charge\' | \'skip_setting\';\n    };\n    onboarding_popup_click: {\n        popup_name: \'skip_charge\' | \'skip_setting\';\n        button_name: \'charge\' | \'know\' | \'enter\' | \'setting\' | \'close\';\n    };\n    desktop_upgrade_click: Record<string, never>;\n    desktop_upgrade_download_result: {\n        is_success: boolean;\n        error_reason?: string;\n    };\n    desktop_upgrade_install_restart_click: Record<string, never>;\n    send_button_click: {\n        session_id?: SessionId;\n        model_name?: string;\n        thinking_effort?: string;\n        run_mode: \'plan\' | \'goal\' | \'default\';\n        msg_type: \'default\' | \'steer\' | \'queue\';\n    };\n    model_switch: {\n        session_id?: SessionId;\n        switch_from: string;\n        switch_to: string;\n    };\n    thinking_level_switch: {\n        session_id?: SessionId;\n        switch_from: string;\n        switch_to: str /* …truncated — full shape in source */',
   },
   {
+    name: 'ProductionCaseBudget',
+    declaration: 'export interface ProductionCaseBudget {\n    used: number;\n    limit: number;\n}',
+  },
+  {
+    name: 'ProductionCaseCandidate',
+    declaration: 'export interface ProductionCaseCandidate {\n    candidateId: string;\n    parentCandidateId?: string;\n    kind: string;\n    hypothesis?: string;\n    searchStatus: string;\n    searchScore?: number;\n    searchCounts?: {\n        pieces: number;\n        bends: number;\n        welds: number;\n    };\n    manufacturing?: {\n        status: \'passed\' | \'failed\' | \'unknown\' | \'running\';\n        score?: number;\n        pieces?: number;\n    };\n    failure?: string;\n}',
+  },
+  {
+    name: 'ProductionCaseFile',
+    declaration: 'export interface ProductionCaseFile {\n    kind: string;\n    path: string;\n    sha256: string;\n}',
+  },
+  {
+    name: 'ProductionCaseView',
+    declaration: 'export interface ProductionCaseView {\n    caseId: string;\n    inputVersion: string;\n    revision: number;\n    phase: \'intake\' | \'baseline\' | \'improve\' | \'compare\' | \'manufacture\' | \'delivered\';\n    stage: string;\n    candidates: ProductionCaseBudget;\n    hostCalls?: ProductionCaseBudget;\n    rows: ProductionCaseCandidate[];\n    bestSearchCandidateId?: string;\n    bestManufacturingCandidateId?: string;\n    stopReason?: string;\n    finishBlockers: string[];\n    nextActions: string[];\n    attention?: {\n        kind: \'unknown\' | \'blocked\' | \'budget\';\n        message: string;\n    };\n    delivery?: {\n        candidateId: string;\n        files: ProductionCaseFile[];\n    };\n    observedAt: number;\n}',
+  },
+  {
     name: 'ProductionContinuation',
     declaration: 'export interface ProductionContinuation {\n    requestId: string;\n    text: string;\n}',
   },
@@ -6664,7 +6658,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ProductionRun',
-    declaration: 'export interface ProductionRun {\n    id: ProductionRunId;\n    revision: number;\n    objective: string;\n    graph: ProductionGraph;\n    phase: \'active\' | \'paused\' | \'blocked\' | \'unknown\' | \'complete\';\n    executions: number;\n    input: JsonValue;\n    tasks: ProductionTask[];\n    history: ProductionHistory[];\n    createdAt: number;\n    updatedAt: number;\n    mode?: \'conversation\' | \'scheduled\';\n    binding?: {\n        provider: string;\n        key: string;\n    };\n}',
+    declaration: 'export interface ProductionRun {\n    id: ProductionRunId;\n    revision: number;\n    objective: string;\n    graph: ProductionGraph;\n    phase: \'active\' | \'paused\' | \'blocked\' | \'unknown\' | \'complete\';\n    executions: number;\n    input: JsonValue;\n    tasks: ProductionTask[];\n    history: ProductionHistory[];\n    createdAt: number;\n    updatedAt: number;\n    mode?: \'conversation\' | \'scheduled\';\n    binding?: {\n        provider: string;\n        key: string;\n    };\n    case?: ProductionCaseView;\n}',
   },
   {
     name: 'ProductionRunId',
@@ -6672,7 +6666,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ProductionSnapshot',
-    declaration: 'export interface ProductionSnapshot {\n    sessionId: SessionId;\n    revision: number;\n    graph: ProductionGraph;\n    runs: ProductionRun[];\n    capabilities: {\n        subagent: boolean;\n        tools: string[];\n        filesystem: boolean;\n        conversation?: {\n            provider: string;\n        };\n    };\n    error?: string;\n}',
+    declaration: 'export interface ProductionSnapshot {\n    sessionId: SessionId;\n    revision: number;\n    graph: ProductionGraph;\n    runs: ProductionRun[];\n    capabilities: {\n        tools: string[];\n        filesystem: boolean;\n        conversation?: {\n            provider: string;\n        };\n    };\n    error?: string;\n}',
   },
   {
     name: 'ProductionTask',
@@ -7033,10 +7027,6 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'SaveImageAttachment',
     declaration: 'export interface SaveImageAttachment {\n    data: Uint8Array;\n    mediaType: ImageMediaType;\n    name?: string;\n}',
-  },
-  {
-    name: 'SaveProductionGraphRequest',
-    declaration: 'export interface SaveProductionGraphRequest {\n    expectedVersion: number;\n    graph: ProductionGraph;\n}',
   },
   {
     name: 'SaveTextSpill',
@@ -7973,10 +7963,6 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'SshStreamEndpoint',
     declaration: 'export type SshStreamEndpoint = z.infer<typeof streamEndpointSchema>;',
-  },
-  {
-    name: 'StartProductionRunRequest',
-    declaration: 'export interface StartProductionRunRequest {\n    graphVersion: number;\n    objective: string;\n    input: JsonValue;\n    goalContractAcknowledged: boolean;\n}',
   },
   {
     name: 'StorageBackend',

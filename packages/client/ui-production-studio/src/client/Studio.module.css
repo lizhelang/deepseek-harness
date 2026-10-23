@@ -1,4 +1,4 @@
-.monitor, .editor {
+.monitor {
   box-sizing: border-box;
   min-width: 0;
   width: 100%;
@@ -8,8 +8,8 @@
   font-size: 13px;
   line-height: 20px;
 }
-.monitor h2, .editor h2 { margin: 0; font-size: 16px; line-height: 24px; font-weight: 600; }
-.monitor h3, .editor h3 { margin: 0; font-size: 13px; line-height: 20px; font-weight: 600; }
+.monitor h2 { margin: 0; font-size: 16px; line-height: 24px; font-weight: 600; }
+.monitor h3 { margin: 0; font-size: 13px; line-height: 20px; font-weight: 600; }
 .toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
 .toolbar > h2, .toolbar > h3 { margin-right: auto; }
 .search { flex: 1; min-width: 180px; max-width: 370px; }
@@ -17,7 +17,6 @@
 .empty p { margin: 0 0 8px; }
 .muted { color: var(--dsw-alias-label-tertiary); margin: 6px 0; font-size: 12px; line-height: 18px; overflow-wrap: anywhere; }
 .error { color: var(--dsw-alias-state-error-primary); margin: 8px 0; white-space: pre-wrap; overflow-wrap: anywhere; }
-.feedback { padding: 10px 12px; border: 0.5px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-sm); background: var(--dsw-alias-bg-layer-1); white-space: pre-wrap; }
 .group { margin: 16px 0; }
 .group h3 { display: flex; gap: 8px; align-items: center; margin-bottom: 6px; color: var(--dsw-alias-label-secondary); }
 .group h3 span { color: var(--dsw-alias-label-tertiary); font-size: 12px; line-height: 18px; font-weight: 400; }
@@ -57,16 +56,10 @@
 .history { margin-top: 8px; color: var(--dsw-alias-label-tertiary); font-size: 12px; line-height: 18px; }
 .history summary { cursor: pointer; padding: 4px 0; }
 .history ol { margin: 4px 0; padding-left: 22px; }
-.history pre, .start textarea { font-family: var(--dsw-font-markdown-code-block-font-family); }
+.history pre { font-family: var(--dsw-font-markdown-code-block-font-family); }
 .history pre { padding: 8px; max-height: 240px; overflow: auto; background: var(--dsw-alias-bg-layer-1); border-radius: var(--dsw-radius-sm); white-space: pre-wrap; overflow-wrap: anywhere; }
 .completed { margin-top: 16px; color: var(--dsw-alias-label-tertiary); }
 .completed > summary { padding: 8px 0; cursor: pointer; }
-.answer { max-width: 680px; margin-top: 8px; }
-.field { display: flex; flex-direction: column; gap: 6px; min-width: 0; color: var(--dsw-alias-label-secondary); }
-.field > textarea { box-sizing: border-box; width: 100%; min-width: 0; resize: vertical; padding: 8px 10px; border: 0.5px solid var(--dsw-alias-border-l3); border-radius: var(--dsw-radius-sm); background: var(--dsw-alias-bg-base); color: var(--dsw-alias-label-primary); font-size: 13px; line-height: 20px; font-family: inherit; }
-.field > textarea:focus-visible { outline: 1px solid var(--dsw-focus-ring-color); outline-offset: 2px; }
-.field > textarea[aria-invalid="true"] { border-color: var(--dsw-alias-state-error-primary); }
-.fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 14px 0; }
 .dock { flex: none; min-height: 36px; box-sizing: border-box; width: calc(100% - 2 * var(--dsh-composer-side-clearance) - 4 * var(--dsh-composer-dock-inset)); max-width: calc(var(--dsh-composer-card-max-width) - 4 * var(--dsh-composer-dock-inset)); margin: 0 auto; border: 0; border-radius: var(--dsw-radius-md); box-shadow: var(--dsw-elevation-panel); --dsw-elevation-stroke-color: var(--dsw-alias-border-l1); background: var(--dsw-alias-bg-layer-1); overflow: hidden; }
 .dockToggle { box-sizing: border-box; display: flex; width: 100%; min-height: 36px; align-items: center; gap: 8px; padding: 6px 12px; border: 0; background: transparent; color: var(--dsw-alias-label-secondary); cursor: pointer; text-align: left; font: inherit; font-size: 13px; line-height: 20px; }
 .dockToggle:hover { background: var(--dsw-alias-interactive-bg-hover); }
@@ -81,43 +74,14 @@
 .compact .runMetrics { display: none; }
 .compact .runSummary { min-height: 34px; }
 .compact .runDetails { margin-left: 8px; }
-.canvas { position: relative; height: clamp(380px, 60vh, 670px); min-height: 380px; overflow: hidden; touch-action: none; border: 0.5px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-md); background-color: var(--dsw-alias-bg-layer-1); background-image: radial-gradient(var(--dsw-alias-border-l2) 0.7px, transparent 0.7px); background-size: 18px 18px; cursor: grab; }
-.canvas:active { cursor: grabbing; }
-.world { position: absolute; top: 0; left: 0; transform-origin: 0 0; transform: translate(var(--studio-x), var(--studio-y)) scale(var(--studio-zoom)); pointer-events: none; }
-.wires { position: absolute; top: 0; left: 0; overflow: visible; pointer-events: none; }
-.wire { fill: none; stroke: var(--dsw-alias-state-business-primary); stroke-width: 2; pointer-events: none; }
-.recoveryWire { stroke: var(--dsw-alias-label-tertiary); stroke-dasharray: 5 5; opacity: 0.55; }
-.selectedWire { stroke: var(--dsw-alias-state-warn-primary); stroke-width: 3; }
-.wireHit { fill: none; stroke: transparent; stroke-width: 16; pointer-events: stroke; cursor: pointer; }
-.node { box-sizing: border-box; position: absolute; width: 236px; min-height: 180px; transform: translate(var(--studio-x), var(--studio-y)); pointer-events: auto; border: 0.5px solid var(--dsw-alias-border-l3); border-radius: var(--dsw-radius-md); background: var(--dsw-alias-bg-base); color: var(--dsw-alias-label-primary); }
-.selectedNode { border-color: var(--dsw-alias-state-business-primary); }
-.nodeTitle { display: block; box-sizing: border-box; width: 100%; height: 42px; padding: 10px 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border: 0; border-radius: var(--dsw-radius-md) var(--dsw-radius-md) 0 0; background: var(--dsw-alias-interactive-bg-hover); color: inherit; text-align: left; font-size: 13px; line-height: 20px; font-weight: 600; cursor: grab; }
-.nodeKind { height: 22px; padding: 3px 12px 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--dsw-alias-label-tertiary); font-size: 11px; line-height: 16px; }
-.ports { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
-.ports > div { min-width: 0; }
-.inputPort, .outputPort { box-sizing: border-box; position: relative; display: flex; width: 100%; align-items: center; gap: 6px; height: 26px; padding: 0 12px; border: 0; background: transparent; color: var(--dsw-alias-label-secondary); font-size: 12px; line-height: 18px; cursor: crosshair; white-space: nowrap; }
-.outputPort { justify-content: flex-end; }
-.inputPort:hover, .outputPort:hover { background: var(--dsw-alias-interactive-bg-hover); }
-.portDot { position: absolute; width: 8px; height: 8px; border: 1px solid var(--dsw-alias-state-business-primary); border-radius: 50%; corner-shape: round; background: var(--dsw-alias-bg-base); }
-.inputPort .portDot { left: -5px; }
-.outputPort .portDot { right: -5px; }
-.outputPort[data-outlet="failure"] .portDot { border-color: var(--dsw-alias-state-warn-primary); }
-.outputPort[data-outlet="unknown"] .portDot { border-color: var(--dsw-alias-state-error-primary); }
-.nodeBudget { margin: 8px 12px 10px; color: var(--dsw-alias-label-tertiary); font-size: 11px; line-height: 16px; }
-.inspector { padding: 14px 0; border-top: 0.5px solid var(--dsw-alias-border-l2); margin-top: 16px; }
-.inspectorFields { border: 0; padding: 0; margin: 0; min-width: 0; }
 .checkpoint { margin: 12px 0; padding: 10px 12px; border: 0.5px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-sm); color: var(--dsw-alias-label-primary); font-size: 13px; line-height: 20px; }
 .checkpoint .toolbar { margin-bottom: 4px; }
-.inputPort:disabled, .outputPort:disabled { cursor: not-allowed; opacity: 0.5; }
-.start { display: grid; gap: 10px; border-top: 0.5px solid var(--dsw-alias-border-l2); padding-top: 18px; margin-top: 18px; }
 @media (max-width: 700px) {
-  .monitor, .editor { padding: 12px 14px 20px; }
+  .monitor { padding: 12px 14px 20px; }
   .compact { padding: 0 10px 8px; }
   .runSummary { flex-wrap: wrap; }
   .runTitle { flex-basis: calc(100% - 80px); }
   .runMetrics { margin-left: 22px; flex-basis: 100%; }
-  .fields { grid-template-columns: minmax(0, 1fr); }
   .branchHeading .rowActions { margin-left: 0; width: 100%; }
-  .canvas { height: 450px; }
   .dockToggle { gap: 6px; padding: 6px 9px; }
 }

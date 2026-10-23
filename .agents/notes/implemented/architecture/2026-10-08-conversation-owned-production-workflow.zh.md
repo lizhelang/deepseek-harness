@@ -16,6 +16,8 @@ Status: implemented
 
 ### 未来编辑与继续执行
 
+[固定的生产对话流程](2026-10-22-fixed-production-conversation-graph.zh.md)取代了本节及上文所述的流程编辑、人工节点和未绑定调度器；使用过这些功能的已保存运行保持只读。本说明中的绑定、单执行器、继续执行、检查点和恢复规则仍然有效。
+
 流程保存比较预期流程版本。受支持的未来提示词、工具列表和接线改变同一次运行。已准入节点的执行设置和出线保持不可修改，标签和画布位置不改变执行。人工节点批准后保留稳定的准入记录，不随后续阶段变化而消失，因此阶段变化不能让已准入设置或已消费接线重新变为可编辑。必需证据检查不能弱化，执行与重试预算不能增加。提示词装配阶段的工具过滤，在实际准入阶段也有对应限制。
 
 当前对话适配器只识别 `baseline`、`manufacture`、`repair` 三个 agent ID。它拒绝并行接线、自定义 agent ID、按节点覆盖提供方或模型、程序节点，以及只读 AEA 证据检查以外的自动操作。人工节点可以暂停准入，但不提供另一个执行器。
@@ -54,10 +56,11 @@ Status: implemented
 
 ## 测试
 
-[对话回归](../../../../packages/workflow/production-studio/tests/conversation.spec.ts)使用真实父对话驱动器与确定性工具 fixture（测试前置数据），覆盖未来提示词与接线编辑、直接调用工具拒绝、使用 `user-approval` 显式继续空闲父对话、检查点发布失败，以及已知回执的生命周期结算。它们也验证未决调用会拒绝恢复与第二次分派。[调度式回归](../../../../packages/workflow/production-studio/tests/runtime.spec.ts)保留对子会话执行、独立分支、受保护交付证据与原生租约的覆盖。这些无密钥测试验证软件行为，不验证真实 Rhino 几何、实物回折或车间验收。原生与已安装应用的验证仍由集成负责人承担。
+[对话回归](../../../../packages/workflow/production-studio/tests/conversation.spec.ts)使用真实父对话驱动器与确定性工具 fixture（测试前置数据），覆盖直接调用工具拒绝、使用 `user-approval` 显式继续空闲父对话、检查点发布失败，以及已知回执的生命周期结算。它们也验证未决调用会拒绝恢复与第二次分派。[原生租约回归](../../../../packages/workflow/production-studio/tests/native-lease.spec.ts)覆盖原生租约与隔离。这些无密钥测试验证软件行为，不验证真实 Rhino 几何、实物回折或车间验收。原生与已安装应用的验证仍由集成负责人承担。
 
 ## 相关文档
 
+- [固定的生产对话流程](2026-10-22-fixed-production-conversation-graph.zh.md)——取代流程编辑、人工节点和调度式运行。
 - [Production Studio 参考](../../../../packages/workflow/production-studio/README.zh.md)——消费方控制方式与当前限制。
 - [Production Studio 客户端](../../../../packages/client/ui-production-studio/README.zh.md)——当前状态与历史渲染器。
 - [事件溯源会话](2026-06-11-event-sourced-sessions.zh.md)——Session 历史与同步追加的归属。

@@ -3,32 +3,32 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/workflow/production-studio/README.md
 /:
-  en: 83595678f7c39041
-  zh: 2ef4411073ec7475
+  en: 3609cf121f69f4da
+  zh: 827b3798b79cea78
 /deepseek-ai-dsh-production-studio:
   en: 5707796371c79d0d
   zh: 5f04a801cca4e9d3
 /deepseek-ai-dsh-production-studio/summary:
-  en: f7bec641c51be65c
-  zh: b5385e1451cc5507
+  en: 87b295b4957598eb
+  zh: 96788737bb1ddcb8
 /deepseek-ai-dsh-production-studio/table-of-contents:
   en: d152484eb41ac6b4
   zh: 184c58005fb159f7
 /deepseek-ai-dsh-production-studio/use-this-package:
-  en: 0e6aad7cc480fff9
-  zh: 9b300f3bf4d8fb62
+  en: e3143c33f0c60ead
+  zh: de577986622586f1
 /deepseek-ai-dsh-production-studio/use-this-package/bound-aea-conversations:
-  en: 2b018f0aa6e9d968
-  zh: d65b5a3435f36b98
-/deepseek-ai-dsh-production-studio/use-this-package/unbound-scheduled-runs:
-  en: f8ab59a8cbec0a26
-  zh: 68d4229e7087cd13
+  en: 3a4561808d19a5f7
+  zh: 89fcd5c1f119ef1d
+/deepseek-ai-dsh-production-studio/use-this-package/retired-runs:
+  en: 962fd72b000009c9
+  zh: 56b6fffc99e60df4
 /deepseek-ai-dsh-production-studio/use-this-package/evidence-and-recovery:
-  en: a272ebe0dbc732bc
-  zh: b4dc1bb00c595b66
+  en: d0ac8b2c05538ce0
+  zh: 1b162e1c03599857
 /deepseek-ai-dsh-production-studio/understand-the-implementation:
-  en: f58b85e3d2d955f2
-  zh: df4b48203a4b6078
+  en: 940270766fbf4c8c
+  zh: 337c975c1d369e50
 /deepseek-ai-dsh-production-studio/further-exploration:
   en: 6db4974f7a962f74
   zh: d14b2f09a7024507
@@ -39,32 +39,23 @@
   en: 0cacabb032aec9b2
   zh: e91e2acee8f619cd
 /deepseek-ai-dsh-production-studio/model-experience/bound-conversation-steps/what-the-model-sees:
-  en: 35ec92c5fcc414ef
-  zh: 072b4a5678a4cbe4
+  en: a35d0647ed074396
+  zh: f9a8458eedbde756
+/deepseek-ai-dsh-production-studio/model-experience/bound-conversation-steps/what-the-model-sees/no-tools-instruction:
+  en: 44be01d5fceea533
+  zh: 430e9363fe6656f3
+/deepseek-ai-dsh-production-studio/model-experience/bound-conversation-steps/what-the-model-sees/no-tools-notice:
+  en: dbc0e1bc24c5a97f
+  zh: 053299f9446fc19e
 /deepseek-ai-dsh-production-studio/model-experience/bound-conversation-steps/token-effect:
-  en: a38f54be1d38c558
-  zh: 62f36e7fe3a0ac74
+  en: 63def3ebd514d6a8
+  zh: 42c410c5c28a288f
 /deepseek-ai-dsh-production-studio/model-experience/bound-conversation-steps/kv-cache-effect:
-  en: 03ef6ab71565dfd5
-  zh: e6b5d32da64298e3
-/deepseek-ai-dsh-production-studio/model-experience/scheduled-agent-node-child-input:
-  en: c60b94e8744ce0bf
-  zh: 72495d085ccf836c
-/deepseek-ai-dsh-production-studio/model-experience/scheduled-agent-node-child-input/what-the-model-sees:
-  en: 8f6c798c36abb0b8
-  zh: cc3fbe65f4d76816
-/deepseek-ai-dsh-production-studio/model-experience/scheduled-agent-node-child-input/what-the-model-sees/execution-instruction:
-  en: 33d03bfbc4d5e24b
-  zh: 55572138aa1bdbe6
-/deepseek-ai-dsh-production-studio/model-experience/scheduled-agent-node-child-input/token-effect:
-  en: eb12d6a423ab2e89
-  zh: 35a86d7ad2ef9d05
-/deepseek-ai-dsh-production-studio/model-experience/scheduled-agent-node-child-input/kv-cache-effect:
-  en: 31dd052f19947988
-  zh: 445e210f8f2f01ec
+  en: f65af187b8b1239a
+  zh: 08d2d78368553e13
 /deepseek-ai-dsh-production-studio/known-limitations-and-deferred-work:
-  en: 470485c835e5c6fc
-  zh: a2fa15f4db305698
+  en: 885a6a96740ac54c
+  zh: 5c3be16bda12a1cf
 /deepseek-ai-dsh-production-studio/known-limitations-and-deferred-work/dev-note:
   en: e67f633dc6fe7773
   zh: 3bb0c20c93f16f98

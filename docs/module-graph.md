@@ -176,6 +176,7 @@ flowchart TD
     pkg_client_ui_plugin_manager["client-ui-plugin-manager"]
     pkg_client_ui_plugin_market["client-ui-plugin-market"]
     pkg_client_ui_primitives["client-ui-primitives"]
+    pkg_client_ui_production_studio["client-ui-production-studio"]
     pkg_client_ui_reference["client-ui-reference"]
     pkg_client_ui_renderer["client-ui-renderer"]
     pkg_client_ui_schedule["client-ui-schedule"]
@@ -444,6 +445,7 @@ flowchart TD
     pkg_typert_registry["typert-registry"]
   end
   subgraph group_workflow["packages/workflow"]
+    pkg_production_studio["production-studio"]
     pkg_tool_workflow["tool-workflow"]
     pkg_workflow["workflow"]
     pkg_workflow_ptc["workflow-ptc"]
@@ -1033,6 +1035,15 @@ flowchart TD
   pkg_llm_replay --> pkg_deepseek_llm_api_extensions
   pkg_llm_replay --> pkg_llm
   pkg_llm_replay --> pkg_session
+  pkg_production_studio --> pkg_agent
+  pkg_production_studio --> pkg_brand
+  pkg_production_studio --> pkg_fs
+  pkg_production_studio --> pkg_llm
+  pkg_production_studio --> pkg_session
+  pkg_production_studio --> pkg_session_projection
+  pkg_production_studio --> pkg_tools
+  pkg_production_studio --> pkg_typert_protocol
+  pkg_production_studio --> pkg_util_values
   pkg_tool_workflow --> pkg_agent
   pkg_tool_workflow --> pkg_jobs
   pkg_tool_workflow --> pkg_llm
@@ -1483,6 +1494,7 @@ flowchart TD
 | [`client-ui-plugin-manager`](../packages/client/ui-plugin-manager) | `client` | — |
 | [`client-ui-plugin-market`](../packages/client/ui-plugin-market) | `client` | — |
 | [`client-ui-primitives`](../packages/client/ui-primitives) | `client` | — |
+| [`client-ui-production-studio`](../packages/client/ui-production-studio) | `client` | — |
 | [`client-ui-reference`](../packages/client/ui-reference) | `client` | — |
 | [`client-ui-renderer`](../packages/client/ui-renderer) | `client` | — |
 | [`client-ui-schedule`](../packages/client/ui-schedule) | `client` | — |
@@ -1708,6 +1720,7 @@ flowchart TD
 | [`tool-pwsh-persistent`](../packages/shell/tool-pwsh-persistent) | `shell` | [`agent`](../packages/core/agent), [`output-retention`](../packages/util/output-retention), [`terminal`](../packages/terminal/terminal), [`timeout`](../packages/util/timeout), [`tools`](../packages/core/tools), [`working-directory`](../packages/session/working-directory) |
 | [`ssh`](../packages/ssh/ssh) | `ssh` | [`brand`](../packages/util/brand), [`fs`](../packages/fs/fs), [`fs-local`](../packages/fs/fs-local), [`fs-sandbox`](../packages/fs/fs-sandbox), [`sandbox`](../packages/sandbox/sandbox), [`sandbox-local`](../packages/sandbox/sandbox-local), [`sandbox-policy`](../packages/sandbox/sandbox-policy), [`session-projection`](../packages/session/session-projection), [`subprocess`](../packages/subprocess/subprocess), [`subprocess-local`](../packages/subprocess/subprocess-local), [`util-values`](../packages/util/values) |
 | [`llm-replay`](../packages/test-support/llm-replay) | `test-support` | [`compaction`](../packages/compaction/compaction), [`deepseek-llm-api-extensions`](../packages/llm/deepseek-llm-api-extensions), [`llm`](../packages/llm/llm), [`session`](../packages/core/session) |
+| [`production-studio`](../packages/workflow/production-studio) | `workflow` | [`agent`](../packages/core/agent), [`brand`](../packages/util/brand), [`fs`](../packages/fs/fs), [`llm`](../packages/llm/llm), [`session`](../packages/core/session), [`session-projection`](../packages/session/session-projection), [`tools`](../packages/core/tools), [`typert-protocol`](../packages/typert/protocol), [`util-values`](../packages/util/values) |
 | [`tool-workflow`](../packages/workflow/tool-workflow) | `workflow` | [`agent`](../packages/core/agent), [`jobs`](../packages/jobs/jobs), [`llm`](../packages/llm/llm), [`session`](../packages/core/session), [`system-prompt`](../packages/core/system-prompt), [`tools`](../packages/core/tools), [`workflow`](../packages/workflow/workflow) |
 | [`plugin-package-inventory-deepseek`](../packages/llm/plugin-package-inventory-deepseek) | `llm` | [`agent`](../packages/core/agent), [`agent-preset-registry`](../packages/preset/agent-preset-registry), [`deepseek-llm-api-extensions`](../packages/llm/deepseek-llm-api-extensions), [`session`](../packages/core/session) |
 | [`token-meter`](../packages/llm/token-meter) | `llm` | [`compaction`](../packages/compaction/compaction), [`compaction-image-offload`](../packages/compaction/compaction-image-offload), [`llm`](../packages/llm/llm), [`llm-retry`](../packages/llm/llm-retry), [`session`](../packages/core/session), [`session-projection`](../packages/session/session-projection) |

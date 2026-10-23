@@ -1,5 +1,5 @@
 /** Real domain-shaped fixtures for presentation tests; never shipped by the plugin. */
-import type { ProductionGraph, ProductionNode, ProductionNodePhase, ProductionRun, ProductionRunId, ProductionSnapshot } from '@deepseek-ai/dsh-production-studio/types'
+import type { ProductionCaseView, ProductionGraph, ProductionNode, ProductionNodePhase, ProductionRun, ProductionRunId, ProductionSnapshot } from '@deepseek-ai/dsh-production-studio/types'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 
 export const SID = 'studio-test' as SessionId
@@ -29,7 +29,7 @@ export function run(id: string, taskPhase: ProductionNodePhase): ProductionRun {
 }
 
 export function snapshot(runs: ProductionRun[] = []): ProductionSnapshot {
-  return { sessionId: SID, revision: 2, graph: graph(), runs, capabilities: { subagent: true, tools: ['native-test'], filesystem: true } }
+  return { sessionId: SID, revision: 2, graph: graph(), runs, capabilities: { tools: ['native-test'], filesystem: true } }
 }
 
 export function deliveredRun(): ProductionRun {
@@ -43,4 +43,20 @@ export function deliveredRun(): ProductionRun {
     }],
   }]
   return delivered
+}
+
+/**
+ * AEA case projection shaped like a real Host receipt fold.
+ * @param overrides - fields replaced on the default view.
+ * @returns a complete case view.
+ */
+export function caseView(overrides: Partial<ProductionCaseView> = {}): ProductionCaseView {
+  return { caseId: 'case0001abcd', inputVersion: 'v1', revision: 9, phase: 'improve', stage: 'improvement_proposal',
+    candidates: { used: 2, limit: 8 }, hostCalls: { used: 12, limit: 48 },
+    rows: [
+      { candidateId: 'c1c1c1c1c1', kind: 'baseline', searchStatus: 'verified', searchCounts: { pieces: 1, bends: 10, welds: 7 }, manufacturing: { status: 'passed', score: 41.5, pieces: 1 } },
+      { candidateId: 'c2c2c2c2c2', parentCandidateId: 'c1c1c1c1c1', kind: 'improvement', searchStatus: 'verified', searchScore: 39.982, searchCounts: { pieces: 2, bends: 9, welds: 8 }, manufacturing: { status: 'failed' }, failure: 'bend_angle_metadata' },
+    ],
+    bestSearchCandidateId: 'c2c2c2c2c2', finishBlockers: ['Try the strip source'], nextActions: ['suggest_candidates', 'finish_custom'],
+    observedAt: 1, ...overrides }
 }

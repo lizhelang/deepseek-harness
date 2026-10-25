@@ -5,6 +5,7 @@ import { cleanup, fireEvent, render } from '@testing-library/react'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { en as commonEn } from '@deepseek-ai/dsh-client-locale/src/locales/en.ts'
 import { TurnUsagePanel } from '../src/client/chat/TurnUsagePanel.tsx'
+import { DEFAULT_TOKEN_PRICING } from '../src/client/token-pricing.ts'
 import type { TurnTokenUsage } from '../src/client/contract/chat-nodes.ts'
 import { en } from '../src/client/locale.ts'
 
@@ -23,7 +24,7 @@ describe('TurnUsagePanel', () => {
       totalTokens: 15_800,
       routes: [{ provider: 'deepseek', model: 'deepseek-chat' }],
     }
-    const view = render(<TurnUsagePanel usage={usage} t={t} />)
+    const view = render(<TurnUsagePanel usage={usage} pricing={DEFAULT_TOKEN_PRICING} t={t} />)
 
     const trigger = view.getByRole('button')
     expect(trigger.textContent).toBe('Usage 15.8K tok')
@@ -50,13 +51,47 @@ describe('TurnUsagePanel', () => {
     expect(details.textContent).not.toContain('Total')
   })
 
+  it('prices a single-model Turn and names an unpriced model', () => {
+    const usage: TurnTokenUsage = {
+      uncachedInputTokens: 1_000_000,
+      cacheReadTokens: 1_000_000,
+      outputTokens: 100_000,
+      totalTokens: 2_100_000,
+      routes: [{ provider: 'deepseek', model: 'deepseek-flash' }],
+    }
+    const view = render(<TurnUsagePanel usage={usage} pricing={DEFAULT_TOKEN_PRICING} t={t} />)
+    const trigger = view.getByRole('button')
+    expect(trigger.textContent).toBe('Usage 2.1M tok · ¥4.00')
+    fireEvent.click(trigger)
+    expect(view.getByRole('dialog').textContent).toContain('Estimated cost¥4.00')
+    cleanup()
+
+    const unpricedUsage: TurnTokenUsage = { ...usage, routes: [{ provider: 'x', model: 'y' }] }
+    const unpriced = render(<TurnUsagePanel usage={unpricedUsage} pricing={DEFAULT_TOKEN_PRICING} t={t} />)
+    fireEvent.click(unpriced.getByRole('button'))
+    expect(unpriced.getByRole('dialog').textContent).toContain('Estimated costNo price set: y')
+  })
+
+  it('omits cost when a Turn spans several models', () => {
+    const usage: TurnTokenUsage = {
+      uncachedInputTokens: 10,
+      outputTokens: 10,
+      totalTokens: 20,
+      routes: [{ provider: 'deepseek', model: 'deepseek-flash' }, { provider: 'deepseek', model: 'deepseek-v4-pro' }],
+    }
+    const view = render(<TurnUsagePanel usage={usage} pricing={DEFAULT_TOKEN_PRICING} t={t} />)
+    expect(view.getByRole('button').textContent).toBe('Usage 20 tok')
+    fireEvent.click(view.getByRole('button'))
+    expect(view.getByRole('dialog').textContent).not.toContain('Estimated cost')
+  })
+
   it('omits unavailable optional facts instead of inventing values', () => {
     const usage: TurnTokenUsage = {
       uncachedInputTokens: 120,
       outputTokens: 30,
       totalTokens: 150,
     }
-    const view = render(<TurnUsagePanel usage={usage} t={t} />)
+    const view = render(<TurnUsagePanel usage={usage} pricing={DEFAULT_TOKEN_PRICING} t={t} />)
 
     const trigger = view.getByRole('button')
     expect(trigger.textContent).toBe('Usage 150 tok')
@@ -75,7 +110,7 @@ describe('TurnUsagePanel', () => {
       outputTokens: 100,
       totalTokens: 1_100,
     }
-    const view = render(<TurnUsagePanel usage={usage} t={t} />)
+    const view = render(<TurnUsagePanel usage={usage} pricing={DEFAULT_TOKEN_PRICING} t={t} />)
     const trigger = view.getByRole('button')
     // The pill carries the compact total; cache-hit rate and exact token
     // counts stay in the dialog.
@@ -97,7 +132,8 @@ describe('TurnUsagePanel', () => {
   })
 
   it('closes on an outside click without pointerdown, as keyboard activation elsewhere fires', () => {
-    const view = render(<TurnUsagePanel usage={{ uncachedInputTokens: 1, outputTokens: 1, totalTokens: 2 }} t={t} />)
+    const usage: TurnTokenUsage = { uncachedInputTokens: 1, outputTokens: 1, totalTokens: 2 }
+    const view = render(<TurnUsagePanel usage={usage} pricing={DEFAULT_TOKEN_PRICING} t={t} />)
     fireEvent.click(view.getByRole('button'))
     fireEvent.click(view.getByRole('dialog'))
     expect(view.queryByRole('dialog')).toBeTruthy()

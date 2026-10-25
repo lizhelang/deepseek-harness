@@ -8,7 +8,7 @@ import type {} from '@deepseek-ai/dsh-llm-retry/types'
 import { SessionSeq } from '@deepseek-ai/dsh-session'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import type { ProjectionDefinition } from '@deepseek-ai/dsh-session-projection'
-import type { ContextPressureProjection, TokenUsageProjection } from './projection.ts'
+import type { ContextPressureProjection, TokenRouteUsageProjection, TokenUsageProjection } from './projection.ts'
 import { foldSurfaceProjection } from './surface-projection.ts'
 
 const zeroBuckets = (): TokenUsageProjection => ({
@@ -88,9 +88,123 @@ function usageOf(event: SessionEvent): TokenUsage | undefined {
 declare module '@deepseek-ai/dsh-session-projection/types' {
   interface SessionProjectionStateMap {
     tokenUsage: TokenUsageState
+    tokenUsageByRoute: TokenUsageByRouteState
     contextPressure: ContextPressureState
   }
 }
+
+const routeSchema = z.object({
+  provider: z.string(),
+  model: z.string(),
+}).strict()
+
+const routeBucketsSchema = z.object({
+  ...routeSchema.shape,
+  ...projectionSchema.shape,
+}).strict()
+
+/** The per-route usage state schema and source of its inferred type. */
+const tokenUsageByRouteStateSchema = z.object({
+  /** Newest `request/context` route; attributes attempts whose message names no route. */
+  route: routeSchema.nullable(),
+  routes: z.array(routeBucketsSchema),
+  last: z.object({
+    turn: z.number().int().nonnegative(),
+    step: z.number().int().nonnegative(),
+    route: routeSchema,
+    buckets: projectionSchema,
+  }).nullable(),
+}).strict()
+
+type TokenUsageByRouteState = z.infer<typeof tokenUsageByRouteStateSchema>
+type Route = z.infer<typeof routeSchema>
+
+const UNATTRIBUTED: Route = { provider: '', model: '' }
+
+/** The route an event's usage is billed to: the settled message's source, else the newest request context. */
+function routeOf(event: SessionEvent, current: Route | null): Route {
+  if (event.type === 'assistant/message') {
+    const { provider, model } = event.data.message.source
+    if (provider.length > 0 && model.length > 0) return { provider, model }
+  }
+  return current ?? UNATTRIBUTED
+}
+
+const sameRoute = (left: Route, right: Route): boolean =>
+  left.provider === right.provider && left.model === right.model
+
+const billsTokens = (entry: TokenUsageProjection): boolean =>
+  entry.uncachedInputTokens + entry.outputTokens + entry.cacheReadTokens + entry.cacheWriteTokens > 0
+
+/**
+ * Add `next` to `route` after removing `previous` from its route.
+ * Routes keep their first-billed position; a route emptied by the removal is dropped.
+ */
+function replaceRouteBuckets(
+  routes: TokenUsageByRouteState['routes'],
+  previous: { route: Route; buckets: TokenUsageProjection } | undefined,
+  route: Route,
+  next: TokenUsageProjection,
+): TokenUsageByRouteState['routes'] {
+  const reduced = previous === undefined
+    ? routes
+    : routes
+      .map(entry => sameRoute(entry, previous.route)
+        ? { ...entry, ...addReplacing(entry, previous.buckets, zeroBuckets()) }
+        : entry)
+      .filter(billsTokens)
+  const index = reduced.findIndex(entry => sameRoute(entry, route))
+  if (index < 0) return [...reduced, { ...route, ...next }]
+  return reduced.map((entry, position) =>
+    position === index ? { ...entry, ...addReplacing(entry, undefined, next) } : entry)
+}
+
+/**
+ * Token-meter's per-route usage projection unit.
+ *
+ * Accumulates the same attempt samples as `tokenUsage`, under the same
+ * replacement rules, keyed by the provider/model that billed them, so a
+ * consumer can price each route at its own rates. An attempt with no
+ * attributable route is kept under an empty provider and model.
+ */
+export const tokenUsageByRouteProjectionDefinition = {
+  key: 'tokenUsageByRoute',
+  stateVersion: 1,
+  stateSchema: tokenUsageByRouteStateSchema,
+  init: () => ({ route: null, routes: [], last: null }),
+  apply: (state, event) => {
+    if (event.type === 'request/context') {
+      const route = { provider: event.data.provider, model: event.data.model }
+      return state.route !== null && sameRoute(state.route, route) ? state : { ...state, route }
+    }
+    if (event.type === 'llm/retry-started') {
+      return state.last?.turn === event.data.turn && state.last.step === event.data.step
+        ? { ...state, last: null }
+        : state
+    }
+    if (event.type !== 'assistant/message' && event.type !== 'assistant/attempt') return state
+    const sample = usageOf(event)
+    if (sample === undefined) return state
+    const { turn, step } = event.data
+    const route = routeOf(event, state.route)
+    const buckets = bucketsFrom(sample)
+    const previous = state.last !== null && state.last.turn === turn && state.last.step === step
+      ? state.last
+      : undefined
+    if (previous !== undefined && sameRoute(previous.route, route) && bucketsEqual(previous.buckets, buckets)) {
+      return state
+    }
+    return {
+      route: state.route,
+      routes: replaceRouteBuckets(state.routes, previous, route, buckets),
+      last: { turn, step, route, buckets },
+    }
+  },
+  wire: {
+    viewSchema: z.object({ routes: z.array(routeBucketsSchema) }).strict(),
+    view: (state): TokenRouteUsageProjection => ({ routes: state.routes }),
+  },
+} satisfies ProjectionDefinition<'tokenUsageByRoute', TokenUsageByRouteState>
 
 /** The context-pressure state schema and source of its inferred type. */
 const contextPressureStateSchema = z.object({

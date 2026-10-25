@@ -57,6 +57,7 @@ import { installTurnNavigatorObserver } from './turn-navigator-fixture.ts'
 import { renderReasoningSlot } from './reasoning-component-fixture.tsx'
 import { createUserContentFixture } from './user-content-component-fixture.tsx'
 import { ConversationGroupStore } from '../../ui-conversation/src/client/conversation/group-store.ts'
+import { DEFAULT_TOKEN_PRICING } from '../src/client/token-pricing.ts'
 
 function installGroupedSnapshot(
   builder: ChatSnapshotBuilder, state: ProcessState, groups: ConversationGroupStore<ProcessGroupData>, source: ChatSnapshot,
@@ -337,7 +338,8 @@ function HarnessChatNode({ standard, owner, hookContext, usePerformanceUsage, to
       return <SystemPromptNodeView {...nodeProps} node={owner.node} />
     case 'turn-tail':
       return <TurnTailNodeView {...nodeProps} node={owner.node}
-        usePerformanceUsage={usePerformanceUsage} renderSlot={renderTurnTailSlot} />
+        usePerformanceUsage={usePerformanceUsage} useTokenPricing={selector => selector(DEFAULT_TOKEN_PRICING)}
+        renderSlot={renderTurnTailSlot} />
     case 'unknown':
       return <UnknownNodeView {...nodeProps} node={owner.node} />
     case 'tool-call': {

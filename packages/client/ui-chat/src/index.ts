@@ -2,7 +2,7 @@
 import type {} from '@deepseek-ai/dsh-settings'
 
 import type { Volatile, Context } from '@deepseek-ai/cordis'
-import type { ChatSettings, CollapseTiming, LinkOpening, PerformanceUsageMode } from './chat-settings.ts'
+import type { ChatSettings, CollapseTiming, CostCurrency, LinkOpening, ModelTokenPrice, PerformanceUsageMode } from './chat-settings.ts'
 import z from '@deepseek-ai/schemastery'
 import { TRANSCRIPT_VIEW_FIELD } from './chat-settings.ts'
 
@@ -24,6 +24,12 @@ export interface Config {
   performanceUsage: Volatile<PerformanceUsageMode>
   /** Default destination for Chat HTTP(S) links. */
   linkOpening: Volatile<LinkOpening>
+  /** Currency of the estimated cost shown beside token usage. */
+  costCurrency: Volatile<CostCurrency>
+  /** Yuan per US dollar for USD display. */
+  cnyPerUsd: Volatile<number>
+  /** Yuan prices per million tokens by model. */
+  modelPrices: Volatile<ModelTokenPrice[]>
 }
 
 /** Live preferences projected to the browser. */
@@ -32,6 +38,9 @@ export const Config = z.object({
   collapseTiming: ChatSettingsFields.collapseTiming.volatile(),
   performanceUsage: ChatSettingsFields['performanceUsage'].volatile(),
   linkOpening: ChatSettingsFields.linkOpening.volatile(),
+  costCurrency: ChatSettingsFields.costCurrency.volatile(),
+  cnyPerUsd: ChatSettingsFields.cnyPerUsd.volatile(),
+  modelPrices: ChatSettingsFields.modelPrices.volatile(),
 })
 
 /** Host preferences are consumed through the configuration form projection.

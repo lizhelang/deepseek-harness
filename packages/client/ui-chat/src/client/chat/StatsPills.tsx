@@ -1,10 +1,10 @@
 // Composer statistics pills, each its own 'conversation.composer.dock' list
 // entry (activity, usage) so a plugin can replace or add one pill by id.
-// Compact keeps speed and cache hit as plain readings; Detailed adds counts,
+// Compact keeps speed, estimated cost, and cache hit as plain readings; Detailed adds counts,
 // token totals, and click-open dialogs. Settled-node identity prevents
 // stream-delta updates from rerendering the pills.
 
-import { memo, useMemo, type ReactNode } from 'react'
+import { Fragment, memo, useMemo, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { IconDatabaseOutlineRegular, IconGaugeOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { UseProjection } from '@deepseek-ai/dsh-api-session-controller/client'
@@ -18,6 +18,9 @@ import { formatTokensPerSecond } from './message-chrome.ts'
 import { assistantStepReading } from '../contract/turn-metrics.ts'
 import { formatCacheHitPercent, formatExactTokens, formatTokens } from './token-format.ts'
 import { MEASURE_STYLE, useStatDialog } from './stat-dialog.ts'
+import { CostRow } from './CostRow.tsx'
+import { estimateTokenCost, formatCost, type TokenCostEstimate } from './token-cost.ts'
+import type { TokenPricing } from '../token-pricing.ts'
 import css from './StatsPills.module.css'
 import dialogCss from './stat-dialog.module.css'
 
@@ -143,14 +146,18 @@ function exactCount(value: number, t: Translate): string {
 }
 
 function joined(first: string, second: string | null): ReactNode {
-  if (second === null) return first
-  return (
-    <>
-      {first}
-      <span className={css.sep} aria-hidden>·</span>
-      {second}
-    </>
-  )
+  return joinedAll(second === null ? [first] : [first, second])
+}
+
+const isText = (text: string | null): text is string => text !== null
+
+function joinedAll(parts: readonly string[]): ReactNode {
+  return parts.map((part, index) => (
+    <Fragment key={index}>
+      {index > 0 && <span className={css.sep} aria-hidden>·</span>}
+      {part}
+    </Fragment>
+  ))
 }
 
 // Every figure rides the durable sessionStats projection, so paging and
@@ -278,28 +285,51 @@ export const ActivityPill = memo(function ActivityPill({ useChat, useProjection,
   )
 })
 
-/** Whole-log token total and cache hit; Compact keeps only the cache hit. */
-export const UsagePill = memo(function UsagePill({ useProjection, usePerformanceUsage, t }: StatPillProps) {
+/**
+ * Session cost at the configured prices, priced per billing model.
+ * @param useProjection - projection read seat.
+ * @param pricing - configured prices and display currency.
+ * @returns the estimate, or undefined while the per-model projection is not served.
+ */
+function useSessionCost(useProjection: UseProjection, pricing: TokenPricing): TokenCostEstimate | undefined {
+  const byRoute = useProjection('tokenUsageByRoute')
+  return useMemo(() => byRoute === undefined ? undefined : estimateTokenCost(byRoute.routes, pricing), [byRoute, pricing])
+}
+
+/** Bucket token count followed by its cost when the session is priced. */
+function bucketValue(tokens: number, cost: number | undefined, pricing: TokenPricing, t: Translate): string {
+  const count = exactCount(tokens, t)
+  return cost === undefined ? count : `${count} · ${formatCost(cost, pricing.costCurrency, t)}`
+}
+
+/** Whole-log token total, estimated cost, and cache hit; Compact keeps cost and cache hit. */
+export const UsagePill = memo(function UsagePill({ useProjection, usePerformanceUsage, useTokenPricing, t }: StatPillProps) {
   const mode = usePerformanceUsage(value => value)
+  const pricing = useTokenPricing(value => value)
   const usage = useProjection('tokenUsage')
+  const estimate = useSessionCost(useProjection, pricing)
   // Gated on actual token activity: a session whose steps all settled without
   // billing (e.g. every request failed) shows no usage pill.
   if (usage === undefined || (billedInputTokens(usage) === 0 && usage.outputTokens === 0)) return null
   const cacheHit = cacheHitPercent(usage)
   const cacheHitText = cacheHit !== null ? t('stats.cacheHit', { percent: cacheHit }) : null
+  const cost = estimate?.kind === 'priced' ? estimate.cost : undefined
+  const costText = cost === undefined ? null : formatCost(cost.total, pricing.costCurrency, t)
   const icon = <IconDatabaseOutlineRegular />
   if (mode === 'compact') {
-    return cacheHitText === null ? null : <PlainPill stat="usage" icon={icon} label={cacheHitText} />
+    const label = [costText, cacheHitText].filter(isText)
+    return label.length === 0 ? null : <PlainPill stat="usage" icon={icon} label={joinedAll(label)} />
   }
   // Same aggregate as the Turn pill's totalTokens: every prompt-side billing bucket plus output.
   const total = billedInputTokens(usage) + usage.outputTokens
   const totalText = t('message.turnUsage.count', { count: formatTokens(total, t) })
+  const summary = [totalText, costText, cacheHitText].filter(isText)
   return (
     <DialogPill
       stat="usage"
       icon={icon}
-      label={joined(totalText, cacheHitText)}
-      ariaLabel={cacheHitText === null ? totalText : `${totalText} · ${cacheHitText}`}
+      label={joinedAll(summary)}
+      ariaLabel={summary.join(' · ')}
       title={t('stats.dialog.usageTitle')}
       titleValue={exactCount(total, t)}
     >
@@ -316,17 +346,18 @@ export const UsagePill = memo(function UsagePill({ useProjection, usePerformance
           </>
         )}
         <dt>{t('message.turnUsage.input')}</dt>
-        <dd>{exactCount(usage.uncachedInputTokens, t)}</dd>
+        <dd>{bucketValue(usage.uncachedInputTokens, cost?.input, pricing, t)}</dd>
         <dt>{t('message.turnUsage.cacheRead')}</dt>
-        <dd>{exactCount(usage.cacheReadTokens, t)}</dd>
+        <dd>{bucketValue(usage.cacheReadTokens, cost?.cacheRead, pricing, t)}</dd>
         {usage.cacheWriteTokens !== 0 && (
           <>
             <dt>{t('message.turnUsage.cacheWrite')}</dt>
-            <dd>{exactCount(usage.cacheWriteTokens, t)}</dd>
+            <dd>{bucketValue(usage.cacheWriteTokens, cost?.cacheWrite, pricing, t)}</dd>
           </>
         )}
         <dt>{t('message.turnUsage.output')}</dt>
-        <dd>{exactCount(usage.outputTokens, t)}</dd>
+        <dd>{bucketValue(usage.outputTokens, cost?.output, pricing, t)}</dd>
+        {estimate !== undefined && <CostRow estimate={estimate} pricing={pricing} t={t} />}
       </dl>
       {/* jscpd:ignore-end */}
     </DialogPill>

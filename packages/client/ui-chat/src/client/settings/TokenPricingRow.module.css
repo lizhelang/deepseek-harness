@@ -1,0 +1,60 @@
+/* Token pricing block: currency row, optional exchange rate, editable price table. */
+
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-bottom: 16px;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l2);
+}
+
+/* The embedded preference row's own divider would split the block. */
+.root > :first-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.rate {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.table {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.headRow,
+.row {
+  display: grid;
+  grid-template-columns: minmax(120px, 2fr) repeat(3, minmax(64px, 1fr)) 28px;
+  align-items: center;
+  gap: 8px;
+}
+
+.row > * {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+}
+
+.headRow {
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.rateField {
+  box-sizing: border-box;
+  width: 96px;
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+}

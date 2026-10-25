@@ -4,6 +4,19 @@ import { createProductionSource } from '../src/client/production-source.ts'
 import { snapshot } from './fixtures.ts'
 
 describe('actual production follow source', () => {
+  it('keeps task blockers in successful snapshots separate from transport failures', async () => {
+    const blocked = { ...snapshot(), error: 'Original native invocation needs a receipt' }
+    const source = createProductionSource({
+      get: async () => blocked,
+      follow: async function* () { yield blocked },
+      subscribeReset: () => () => {},
+    })
+    const release = source.subscribe(() => {})
+    await Promise.resolve(); await Promise.resolve()
+    expect(source.getSnapshot()).toEqual({ snapshot: blocked, loading: false, error: null })
+    release(); source.dispose()
+  })
+
   it('retains a newer stream frame when the initial read settles late and aborts on unmount', async () => {
     let resolveRead!: (value: ProductionSnapshot) => void
     let resolveFollow!: (value: IteratorResult<ProductionSnapshot>) => void

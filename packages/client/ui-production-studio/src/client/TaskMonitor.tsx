@@ -166,6 +166,9 @@ export function TaskMonitor({ read, compact = false, ...props }: TaskMonitorProp
       <Input className={clsx(css.search)} aria-label={t('search')} placeholder={t('search')} value={query} onChange={(event) => { setQuery(event.target.value) }} />
     </div>}
     {read.error !== null && <div className={css.error} role="alert">{read.error}<Button size="sm" variant="ghost" onClick={refresh}>{t('refresh')}</Button></div>}
+    {snapshot.error !== undefined && <div className={css.error} role="alert" data-production-blocker>
+      <strong>{t('task.blocked')}</strong><p>{snapshot.error}</p>
+    </div>}
     {error !== null && <p className={css.error} role="alert">{t('action.failed')}{': '}{error}</p>}
     {snapshot.runs.length === 0 && <div className={css.empty}><p>{t(snapshot.capabilities.conversation === undefined ? 'empty' : 'case.empty')}</p>{snapshot.capabilities.conversation === undefined && <p>{t('empty.detail')}</p>}</div>}
     {snapshot.runs.length > 0 && runs.length === 0 && <p className={css.empty}>{t('search.empty')}</p>}
@@ -195,7 +198,7 @@ export function ProductionDock(props: StudioDockProps) {
   const read = useProduction(value => value)
   const expanded = useStore(state => state.dockExpanded)
   const runs = read.snapshot?.runs ?? []
-  if (runs.length === 0 && read.error === null) return null
+  if (runs.length === 0 && read.error === null && read.snapshot?.error === undefined) return null
   const latest = caseRuns(runs)[0]
   const attention = runs.filter(run => ['critical', 'human'].includes(runGroup(run))).length
   const running = runs.filter(run => runGroup(run) === 'running').length
@@ -203,9 +206,11 @@ export function ProductionDock(props: StudioDockProps) {
   const paused = runs.filter(run => runGroup(run) === 'paused').length
   const done = runs.filter(run => run.phase === 'complete').length
   const summary = read.error !== null ? t('dock.disconnected')
-    : latest !== undefined ? caseSummary(latest.case, t)
-      : t('dock.summary', { attention, running, waiting, paused, done })
-  const alert = read.error !== null || (latest !== undefined ? latest.case.attention !== undefined : attention > 0)
+    : read.snapshot?.error !== undefined ? t('dock.blocked')
+      : latest !== undefined ? caseSummary(latest.case, t)
+        : t('dock.summary', { attention, running, waiting, paused, done })
+  const alert = read.error !== null || read.snapshot?.error !== undefined
+    || (latest !== undefined ? latest.case.attention !== undefined : attention > 0)
   return <section className={css.dock} data-production-dock>
     <button type="button" className={css.dockToggle} aria-expanded={expanded}
       aria-label={t(expanded ? 'dock.collapse' : 'dock.expand')} onClick={() => { actions.expanded(!expanded) }}>

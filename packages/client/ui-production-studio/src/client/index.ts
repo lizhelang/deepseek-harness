@@ -76,17 +76,20 @@ export function apply(ctx: Context): void {
   }
   const injected = (sessionId: SessionId): StudioInjected => {
     const source = sourceFor(sessionId)
-    const settle = async (operation: () => Promise<RemoteResult<ProductionSnapshot>>): Promise<string | null> => {
+    const settle = async (operation: () => Promise<RemoteResult<ProductionSnapshot>>,
+      resultMessage?: (snapshot: ProductionSnapshot) => string | null): Promise<string | null> => {
       const result = await ctx.sessions.using(sessionId, { source: 'productionStudio' }, operation)
       if (!result.ok) return `${result.error.message} (${result.error.code})`
       source.publish(result.value)
-      return null
+      return resultMessage?.(result.value) ?? null
     }
     return {
       hooks: { production: source },
       pause: request => settle(() => remote.pause(sessionId, request)),
       resume: request => settle(() => remote.resume(sessionId, request)),
-      reconcile: request => settle(() => remote.reconcile(sessionId, request)),
+      reconcile: request => settle(() => remote.reconcile(sessionId, request), snapshot =>
+        snapshot.runs.find(run => run.id === request.runId)?.tasks.some(task =>
+          task.nodeId === request.nodeId && task.phase === 'unknown') ? t('branch.reconcileUnresolved') : null),
       async send(text) {
         const scope = ctx.sessions.scope(sessionId)
         if (scope === undefined) return `Session ${sessionId} is not open`

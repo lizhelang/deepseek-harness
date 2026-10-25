@@ -156,6 +156,30 @@ describe('production surfaces', () => {
     expect(screen.getByText(en['dock.disconnected'])).toBeTruthy()
     expect(b.props.send).not.toHaveBeenCalled()
   })
+  it('shows a shared task blocker in an empty session without offering a network reconnect', () => {
+    const b = fixture([])
+    b.read.set({ snapshot: { ...snapshot(), error: 'Original native invocation needs a receipt' }, loading: false, error: null })
+    render(<ProductionDock {...b.props as StudioDockProps} />)
+    expect(screen.getByText(en['dock.blocked'])).toBeTruthy()
+    expect(screen.queryByText(en['dock.disconnected'])).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: en['dock.expand'] }))
+    expect(screen.getByText(en['task.blocked'])).toBeTruthy()
+    expect(screen.getByText('Original native invocation needs a receipt')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: en.refresh })).toBeNull()
+    expect(document.querySelector('[data-production-blocker]')?.textContent).toMatchInlineSnapshot(
+      '"Task cannot continue yetOriginal native invocation needs a receipt"',
+    )
+    expect(b.props.send).not.toHaveBeenCalled()
+  })
+  it('reports when reconciliation retains an unknown result', async () => {
+    const b = fixture([run('unknown', 'unknown')])
+    b.props.reconcile = vi.fn(async () => en['branch.reconcileUnresolved'])
+    render(<TaskMonitor {...b.props} read={b.read.getSnapshot()} />)
+    await act(async () => { fireEvent.click(screen.getByText(en['branch.reconcile'])) })
+    expect(screen.getByRole('alert').textContent).toContain(en['branch.reconcileUnresolved'])
+    expect(screen.queryByText(en['branch.resume'])).toBeNull()
+    expect(b.props.send).not.toHaveBeenCalled()
+  })
   it('summarizes the newest AEA case in the dock and shows its panel ahead of node diagnostics', () => {
     const older = run('older', 'running'); older.case = caseView({ caseId: 'aaaaaaaa1111', observedAt: 1 })
     const newer = run('newer', 'running'); newer.case = caseView({ caseId: 'bbbbbbbb2222', observedAt: 2,

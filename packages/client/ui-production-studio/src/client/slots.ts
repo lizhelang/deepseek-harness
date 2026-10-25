@@ -3,7 +3,7 @@ import type { InjectFace, PropsLocale, PropsRuntime, PropsStore, HostObservable 
 import type { ProductionSnapshot, ProductionRef } from '@deepseek-ai/dsh-production-studio/types'
 import type { createStudioDraftStore } from './stores.ts'
 
-/** Authoritative read status; partial task data is never synthesized by the Client. */
+/** Host reads keep transport failures separate from snapshot task errors; the Client never synthesizes task data. */
 export interface StudioReadState { snapshot: ProductionSnapshot | null; loading: boolean; error: string | null }
 
 /** Session-bound mutations return an error line or null on success. */

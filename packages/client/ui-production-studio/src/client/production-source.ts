@@ -32,7 +32,7 @@ export function createProductionSource(deps: ProductionSourceDeps): ProductionSo
   const emit = (): void => { for (const listener of listeners) listener() }
   const publish = (snapshot: ProductionSnapshot): void => {
     if (state.snapshot !== null && snapshot.revision < state.snapshot.revision) return
-    state = { snapshot, loading: false, error: snapshot.error ?? null }
+    state = { snapshot, loading: false, error: null }
     emit()
   }
   const fail = (error: unknown, generation: number): void => {

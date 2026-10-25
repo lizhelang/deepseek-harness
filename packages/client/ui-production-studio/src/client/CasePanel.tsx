@@ -1,6 +1,7 @@
 /** AEA case progress panel projected from the latest Host receipt of a conversation run. */
 import { useState } from 'react'
 import { Button, writeClipboard } from '@deepseek-ai/dsh-client-ui-primitives'
+import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ProductionCaseCandidate, ProductionCaseView, ProductionRun } from '@deepseek-ai/dsh-production-studio/types'
 import { zh, type ProductionStudioKey } from './locales.ts'
@@ -38,13 +39,30 @@ export type CaseRun = ProductionRun & { case: ProductionCaseView }
  */
 export function hasCase(run: ProductionRun): run is CaseRun { return run.case !== undefined }
 
+function record(value: JsonValue | undefined): { [key: string]: JsonValue } | undefined {
+  return typeof value === 'object' && value !== null && !Array.isArray(value) ? value : undefined
+}
+
+function supersededByNativeSettlement(run: CaseRun): boolean {
+  return run.tasks.some(task => task.settledOperationId !== undefined && task.evidence.some((evidence) => {
+    if (evidence.kind !== 'tool' || evidence.nodeId !== task.nodeId) return false
+    const settlement = record(record(evidence.data)?.nativeReconciliation)
+    const result = record(settlement?.result)
+    return settlement?.runId === run.id && settlement.nodeId === task.nodeId
+      && typeof settlement.preparedAt === 'number' && settlement.preparedAt >= run.case.observedAt
+      && result !== undefined && result.operationId === task.settledOperationId
+      && (result.outcome === 'completed' || result.outcome === 'rejected_before_native')
+  }))
+}
+
 /**
- * Order case runs by their most recent observation, newest first.
+ * Order current case views, excluding projections superseded by an exact native settlement.
  * @param runs - snapshot runs.
- * @returns runs carrying a case view.
+ * @returns current case views, newest first; stale projections remain in the original run history.
  */
 export function caseRuns(runs: readonly ProductionRun[]): CaseRun[] {
-  return runs.filter(hasCase).sort((left, right) => right.case.observedAt - left.case.observedAt)
+  return runs.filter(hasCase).filter(run => !supersededByNativeSettlement(run))
+    .sort((left, right) => right.case.observedAt - left.case.observedAt)
 }
 
 /**

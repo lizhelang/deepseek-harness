@@ -11,7 +11,7 @@ import { en } from '../src/client/locales.ts'
 import type {} from '../src/client/index.ts'
 import { createStudioDraftStore } from '../src/client/stores.ts'
 import { TaskMonitor, ProductionDock } from '../src/client/TaskMonitor.tsx'
-import { CasePanel, caseSummary } from '../src/client/CasePanel.tsx'
+import { CasePanel, caseRuns, caseSummary } from '../src/client/CasePanel.tsx'
 import { ProductionPolicyView } from '../src/client/RunPolicy.tsx'
 import { clampCount, policyMessage, PRESETS } from '../src/client/run-policy.ts'
 import type { StudioReadState, StudioSurfaceProps, StudioViewProps, StudioDockProps } from '../src/client/slots.ts'
@@ -179,6 +179,58 @@ describe('production surfaces', () => {
     expect(screen.getByRole('alert').textContent).toContain(en['branch.reconcileUnresolved'])
     expect(screen.queryByText(en['branch.resume'])).toBeNull()
     expect(b.props.send).not.toHaveBeenCalled()
+  })
+  it('shows the paused workflow when exact native settlement supersedes its case projection', () => {
+    const recovered = run('recovered', 'paused')
+    recovered.case = caseView({ observedAt: 10, attention: { kind: 'unknown', message: 'Old native uncertainty' } })
+    recovered.tasks[0]!.settledOperationId = 'original-call'
+    recovered.tasks[0]!.evidence = [{ kind: 'tool', nodeId: 'baseline', attempt: 1, observedAt: 20,
+      data: { nativeReconciliation: { runId: recovered.id, nodeId: 'baseline', preparedAt: 20,
+        result: { operationId: 'original-call', outcome: 'completed' } } } }]
+    const before = structuredClone(recovered)
+    const b = fixture([recovered])
+    render(<ProductionDock {...b.props as StudioDockProps} />)
+    expect(screen.getByText('0 need attention · 0 running · 0 waiting · 1 paused · 0 complete')).toBeTruthy()
+    expect(screen.queryByText(/Old native uncertainty/)).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: en['dock.expand'] }))
+    expect(document.querySelector('[data-case-panel]')).toBeNull()
+    expect(document.querySelector('[data-production-group="paused"]')).toBeTruthy()
+    expect(recovered).toEqual(before)
+  })
+  it('retains the case when reconciliation is missing, unknown, older or belongs to another invocation', () => {
+    const recovered = run('recovered', 'paused')
+    recovered.case = caseView({ observedAt: 10 })
+    recovered.tasks[0]!.settledOperationId = 'original-call'
+    expect(caseRuns([recovered])).toEqual([recovered])
+    const settlement = { runId: recovered.id, nodeId: 'baseline', preparedAt: 10,
+      result: { operationId: 'original-call', outcome: 'completed' } }
+    for (const invalid of [
+      { ...settlement, runId: 'another-run' }, { ...settlement, nodeId: 'another-node' },
+      { ...settlement, preparedAt: 9 }, { ...settlement, result: null },
+      { ...settlement, result: { ...settlement.result, outcome: 'unknown' } },
+      { ...settlement, result: { ...settlement.result, operationId: 'another-call' } },
+    ]) {
+      recovered.tasks[0]!.evidence = [{ kind: 'tool', nodeId: 'baseline', attempt: 1, observedAt: 10,
+        data: { nativeReconciliation: invalid } }]
+      expect(caseRuns([recovered])).toEqual([recovered])
+    }
+    recovered.tasks[0]!.evidence = [{ kind: 'tool', nodeId: 'another-node', attempt: 1, observedAt: 10,
+      data: { nativeReconciliation: settlement } }]
+    expect(caseRuns([recovered])).toEqual([recovered])
+    recovered.tasks[0]!.evidence[0]!.nodeId = 'baseline'
+    delete recovered.tasks[0]!.settledOperationId
+    expect(caseRuns([recovered])).toEqual([recovered])
+  })
+  it('shows a newly observed case after settlement without synthesizing verification results', () => {
+    const recovered = run('recovered', 'paused')
+    recovered.case = caseView({ observedAt: 10 })
+    recovered.tasks[0]!.settledOperationId = 'original-call'
+    recovered.tasks[0]!.evidence = [{ kind: 'tool', nodeId: 'baseline', attempt: 1, observedAt: 10,
+      data: { nativeReconciliation: { runId: recovered.id, nodeId: 'baseline', preparedAt: 10,
+        result: { operationId: 'original-call', outcome: 'rejected_before_native' } } } }]
+    expect(caseRuns([recovered])).toEqual([])
+    recovered.case = caseView({ observedAt: 11, stage: 'verification_pending' })
+    expect(caseRuns([recovered])).toEqual([recovered])
   })
   it('summarizes the newest AEA case in the dock and shows its panel ahead of node diagnostics', () => {
     const older = run('older', 'running'); older.case = caseView({ caseId: 'aaaaaaaa1111', observedAt: 1 })

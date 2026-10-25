@@ -58,6 +58,36 @@ export type LinkOpening = 'sidebar' | 'new-tab'
 /** Preserve the built-in browser for users without an explicit preference. */
 export const DEFAULT_LINK_OPENING: LinkOpening = 'sidebar'
 
+/** Currencies the usage displays can show an estimated cost in. */
+export const COST_CURRENCIES = ['CNY', 'USD'] as const
+
+/** Display currency for estimated cost. */
+export type CostCurrency = typeof COST_CURRENCIES[number]
+
+/** Show cost in the currency DeepSeek bills in unless the user chooses otherwise. */
+export const DEFAULT_COST_CURRENCY: CostCurrency = 'CNY'
+
+/** Yuan per US dollar used to convert the yuan prices for USD display. */
+export const DEFAULT_CNY_PER_USD = 7.1
+
+/** Yuan price per million tokens of one model's billing buckets. */
+export interface ModelTokenPrice {
+  /** Provider-owned model id the price applies to, matched exactly. */
+  model: string
+  /** Cached (cache-hit) prompt input. */
+  cacheHit: number
+  /** Uncached prompt input; cache writes are charged at this rate too. */
+  input: number
+  /** Output, including reasoning. */
+  output: number
+}
+
+/** DeepSeek's published peak-hour prices, effective 2026-08-17. */
+export const DEFAULT_MODEL_PRICES: readonly ModelTokenPrice[] = [
+  { model: 'deepseek-flash', cacheHit: 0.1, input: 3, output: 9 },
+  { model: 'deepseek-v4-pro', cacheHit: 0.3, input: 9, output: 27 },
+]
+
 /** Durable Chat section shared by the Host schema and browser scope. */
 export interface ChatSettings {
   /** Work-details preference; absence uses the client default, and legacy saved values remain accepted. */
@@ -68,6 +98,12 @@ export interface ChatSettings {
   performanceUsage: PerformanceUsageMode
   /** Default destination for Chat HTTP(S) links. */
   linkOpening: LinkOpening
+  /** Currency of the estimated cost shown beside token usage. */
+  costCurrency: CostCurrency
+  /** Yuan per US dollar for USD display. */
+  cnyPerUsd: number
+  /** Yuan prices per million tokens; a model without an entry shows no cost. */
+  modelPrices: ModelTokenPrice[]
 }
 
 /** Durable Chat schema; also the wire envelope the browser scope validates against. */
@@ -75,6 +111,14 @@ export const ChatSettingsFields = {
   [COLLAPSE_TIMING_FIELD]: z.union([...COLLAPSE_TIMINGS]).default(DEFAULT_COLLAPSE_TIMING),
   linkOpening: z.union(['sidebar', 'new-tab']).default(DEFAULT_LINK_OPENING),
   performanceUsage: z.union([...PERFORMANCE_USAGE_MODES]).default(DEFAULT_PERFORMANCE_USAGE),
+  costCurrency: z.union([...COST_CURRENCIES]).default(DEFAULT_COST_CURRENCY),
+  cnyPerUsd: z.number().min(0).default(DEFAULT_CNY_PER_USD),
+  modelPrices: z.array(z.object({
+    model: z.string().required(),
+    cacheHit: z.number().min(0).required(),
+    input: z.number().min(0).required(),
+    output: z.number().min(0).required(),
+  })).default(DEFAULT_MODEL_PRICES.map(price => ({ ...price }))),
   // Missing and unrecognized modes defer to the client's default.
   [TRANSCRIPT_VIEW_FIELD]: z.union([...TRANSCRIPT_VIEW_SETTING_VALUES]).loose(),
 }

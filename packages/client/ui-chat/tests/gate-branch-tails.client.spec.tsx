@@ -12,6 +12,7 @@ import { useSearchableHidden } from '../src/client/chat/searchable-hidden.ts'
 import { ActivityPill, UsagePill, type StatPillProps } from '../src/client/chat/StatsPills.tsx'
 import { zh } from '../src/client/locale.ts'
 import { chatSnapshotFixture } from './chat-snapshot-fixture.client.ts'
+import { DEFAULT_TOKEN_PRICING } from '../src/client/token-pricing.ts'
 
 const t: AssistantMarkdownProps['t'] = makeTranslate(zh, commonZh)
 
@@ -50,6 +51,7 @@ describe('render branch tails', () => {
     const source = { getSnapshot: () => snap, subscribe: () => () => {} }
     const pillProps: StatPillProps = {
       usePerformanceUsage: selector => selector('detailed'),
+      useTokenPricing: selector => selector(DEFAULT_TOKEN_PRICING),
       t,
       useChat: bindSnapshotSelector(source),
       useProjection: () => undefined,

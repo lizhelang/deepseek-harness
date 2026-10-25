@@ -6,11 +6,16 @@ import type { TurnTokenUsage } from '../contract/chat-nodes.ts'
 import type { ChatViewSlotProps } from '../contract/slots.ts'
 import { formatCacheHitPercent, formatExactTokens, formatTokens } from './token-format.ts'
 import { MEASURE_STYLE, useStatDialog } from './stat-dialog.ts'
+import { CostRow } from './CostRow.tsx'
+import { estimateTokenCost, formatCost, type TokenCostEstimate } from './token-cost.ts'
+import type { TokenPricing } from '../token-pricing.ts'
 import css from './TurnUsagePanel.module.css'
 import dialogCss from './stat-dialog.module.css'
 
 export interface TurnUsagePanelProps {
   usage: TurnTokenUsage
+  /** Configured prices and display currency. */
+  pricing: TokenPricing
   /** The owning view's locale seat, passed down as a plain prop. */
   t: ChatViewSlotProps['t']
 }
@@ -24,17 +29,37 @@ function formatExactCount(value: number, t: ChatViewSlotProps['t']): string {
 }
 
 /**
+ * Price a Turn billed by exactly one model; a multi-model Turn's buckets cannot be split per model.
+ * @param usage - Turn usage buckets.
+ * @param pricing - configured prices.
+ * @returns the estimate, or undefined when the Turn has no single attributed model.
+ */
+function turnCost(usage: TurnTokenUsage, pricing: TokenPricing): TokenCostEstimate | undefined {
+  const route = usage.routes?.length === 1 ? usage.routes[0] : undefined
+  if (route === undefined) return undefined
+  return estimateTokenCost([{
+    model: route.model,
+    uncachedInputTokens: usage.uncachedInputTokens,
+    outputTokens: usage.outputTokens,
+    cacheReadTokens: usage.cacheReadTokens ?? 0,
+    cacheWriteTokens: usage.cacheWriteTokens ?? 0,
+  }], pricing)
+}
+
+/**
  * Turn-usage IconActions pill with a click-open Turn-usage details dialog.
  * @param props - Turn usage buckets and locale seat.
  * @returns The trigger and, while open, its portaled dialog anchored above the trigger.
  */
-export function TurnUsagePanel({ usage, t }: TurnUsagePanelProps) {
+export function TurnUsagePanel({ usage, pricing, t }: TurnUsagePanelProps) {
   const { open, setOpen, rootRef, panelRef, pos } = useStatDialog()
 
   const cacheHit = usage.cacheReadTokens === undefined
     ? null
     : formatCacheHitPercent(usage.cacheReadTokens, usage.totalTokens - usage.outputTokens, 1)
   const total = formatCompactCount(usage.totalTokens, t)
+  const estimate = turnCost(usage, pricing)
+  const consumed = t('message.turnUsage.consumed', { total })
   const routes = usage.routes?.map(route => `${route.provider}/${route.model}`).join(', ') ?? ''
 
   return (
@@ -47,7 +72,9 @@ export function TurnUsagePanel({ usage, t }: TurnUsagePanelProps) {
         onClick={() => { setOpen(!open) }}
       >
         <IconDatabaseOutlineRegular />
-        <span className={css.label}>{t('message.turnUsage.consumed', { total })}</span>
+        <span className={css.label}>
+          {estimate?.kind === 'priced' ? `${consumed} · ${formatCost(estimate.cost.total, pricing.costCurrency, t)}` : consumed}
+        </span>
       </button>
       {open && createPortal(
         <div
@@ -101,6 +128,7 @@ export function TurnUsagePanel({ usage, t }: TurnUsagePanelProps) {
                 </span>
               )}
             </dd>
+            {estimate !== undefined && <CostRow estimate={estimate} pricing={pricing} t={t} />}
           </dl>
         </div>,
         document.body,

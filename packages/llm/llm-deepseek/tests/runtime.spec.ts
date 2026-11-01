@@ -1829,7 +1829,8 @@ describe('plugin registration and config', () => {
       context: { contextWindow: 1_000_000 },
       defaultMaxTokens: 256_000,
     })
-    expect(info?.systemPromptUpdate).toBeUndefined()
+    expect(info?.systemPromptUpdate).toBe('in-history')
+    expect(info?.toolUpdate).toBe('addition-only')
   })
 
   it.each(['off', 'low', 'max'] as const)('uses the configured %s reasoning default', async (effort) => {
